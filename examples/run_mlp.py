@@ -12,16 +12,17 @@ from orion.core.utils import (
 # Set seed for reproducibility
 torch.manual_seed(42)
 
-# Initialize model and data
-scheme = orion.init_scheme("test_parameters.yaml")
+# Initialize the Orion scheme, model, and data
+scheme = orion.init_scheme("../configs/mlp.yaml")
 batch_size = scheme.get_batch_size()
-trainloader, testloader = get_mnist_datasets(data_dir="../data", batch_size=batch_size)
+trainloader, testloader = get_mnist_datasets(
+    data_dir="../data", batch_size=batch_size)
 net = models.MLP()
 
 # Train model (optional)
 train_on_mnist(net, data_dir="../data", epochs=1, device="cuda")
 
-# Get test batch for inference comparison
+# Get a test batch to pass through our network
 inp, _ = next(iter(testloader))
 
 # Run cleartext inference
@@ -29,9 +30,9 @@ net.eval()
 out_clear = net(inp)
 
 # Prepare for FHE inference. 
-# We'll determine the ranges with which to fit each polynomial activation
-# function to by gathering these statistics from the training set and 
-# applying a tolerance factor = margin.
+# Certain polynomial activation functions require us to know the precise range
+# of possible input values. We'll determine these ranges by aggregating
+# statistics from the training set and applying a tolerance factor = margin.
 orion.fit(net, trainloader, batch_size=128, margin=2)
 input_level = orion.compile(net)
 
