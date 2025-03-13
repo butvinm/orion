@@ -1,0 +1,71 @@
+name: 'Setup environment'
+description: 'Sets up Go, HDF5, and other build dependencies'
+
+inputs:
+  python-version:
+    required: true
+    description: 'Python version to use'
+  architecture:
+    required: false
+    description: 'CPU architecture (arm64 or x64)'
+    default: 'x64'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        python-version: ${{ inputs.python-version }}
+        channels: conda-forge
+        architecture: ${{ inputs.architecture }}
+        miniconda-version: "latest"
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21.x'
+    
+    - name: Configure platform-specific settings
+      shell: bash -l {0}
+      run: |
+        # macOS-specific Go configuration
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          echo "CGO_ENABLED=1" >> $GITHUB_ENV
+          if [[ "${{ inputs.architecture }}" == "arm64" ]]; then
+            echo "GOARCH=arm64" >> $GITHUB_ENV
+          else
+            echo "GOARCH=amd64" >> $GITHUB_ENV
+          fi
+        fi
+        
+        # Windows-specific Poetry path
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          echo "$HOME/.poetry/bin" >> $GITHUB_PATH
+        fi
+      
+    - name: Setup HDF5
+      shell: bash -l {0}
+      run: |
+        # Install HDF5 with conda
+        conda install -y -c conda-forge hdf5 compilers
+        conda list
+        
+        # Configure HDF5 for Go
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          HDF5_PREFIX="$(conda info --base)/envs/test/Library"
+        else # macOS and Linux
+          HDF5_PREFIX="$(conda info --base)/envs/test"
+        fi
+        
+        # Export environment variables
+        echo "CGO_CFLAGS=-I${HDF5_PREFIX}/include" >> $GITHUB_ENV
+        echo "CGO_LDFLAGS=-L${HDF5_PREFIX}/lib" >> $GITHUB_ENV
+        
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          echo "PATH=${HDF5_PREFIX}/bin:$PATH" >> $GITHUB_ENV
+        fi
+        
+        # Debugging
+        go env
