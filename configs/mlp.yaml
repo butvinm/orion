@@ -9,7 +9,6 @@ ckks_params:
   RingType: ConjugateInvariant
 
 orion:
-  batch_size: 1
   margin: 2 # >= 1
   embedding_method: hybrid # [hybrid, square]
   backend: lattigo # [lattigo, openfhe, heaan]

@@ -2,7 +2,7 @@ import time
 import math
 import torch
 import orion
-import models
+import orion.models as models
 from orion.core.utils import (
     get_mnist_datasets,
     mae, 
@@ -14,9 +14,7 @@ torch.manual_seed(42)
 
 # Initialize the Orion scheme, model, and data
 scheme = orion.init_scheme("../configs/mlp.yaml")
-batch_size = scheme.get_batch_size()
-trainloader, testloader = get_mnist_datasets(
-    data_dir="../data", batch_size=batch_size)
+trainloader, testloader = get_mnist_datasets(data_dir="../data", batch_size=1)
 net = models.MLP()
 
 # Train model (optional)
@@ -33,7 +31,7 @@ out_clear = net(inp)
 # Certain polynomial activation functions require us to know the precise range
 # of possible input values. We'll determine these ranges by aggregating
 # statistics from the training set and applying a tolerance factor = margin.
-orion.fit(net, inp, batch_size=128, margin=2)
+orion.fit(net, inp, batch_size=128)
 input_level = orion.compile(net)
 
 # Encode and encrypt the input vector 

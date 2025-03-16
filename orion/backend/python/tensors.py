@@ -14,8 +14,8 @@ class PlainTensor:
         try:
             for idx in self.ids:
                 self.backend.DeletePlaintext(idx)
-        except ImportError:
-            pass
+        except (AttributeError, TypeError):
+            pass # avoids errors for GC at program termination
 
     def __len__(self):
         return len(self.ids)
@@ -68,8 +68,8 @@ class CipherTensor:
         try:
             for ctxt in self.ids:
                 self.backend.DeleteCiphertext(ctxt)
-        except ImportError:
-            pass
+        except (AttributeError, TypeError):
+            pass # avoids errors for GC at program termination
 
     def __len__(self):
         return len(self.ids)
