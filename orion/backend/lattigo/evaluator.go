@@ -4,10 +4,45 @@ import (
 	"C"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
+	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 )
 
 var liveRotKeys = make(map[uint64]*rlwe.GaloisKey)
 var savedRotKeys = []uint64{}
+
+//export NewEvaluator
+func NewEvaluator() {
+	scheme.Evaluator = ckks.NewEvaluator(
+		*scheme.Params, rlwe.NewMemEvaluationKeySet(scheme.RelinKey))
+
+	// After declaring the evaluator, we'll also just generate and
+	// store in memory all power of two rotation keys. This will ensure
+	// all keys needed for the rotations and summations in the hyrid
+	// method remain alive.
+	AddPo2RotationKeys()
+}
+
+func AddPo2RotationKeys() {
+	maxSlots := scheme.Params.MaxSlots()
+	// Generate all positive power-of-two rotation keys
+	for i := 1; i < maxSlots; i *= 2 {
+		AddRotationKey(i)
+	}
+}
+
+func AddRotationKey(rotation int) {
+	galEl := scheme.Params.GaloisElement(rotation)
+
+	// Generate the required rotation key if it doesn't exist
+	if _, exists := liveRotKeys[galEl]; !exists {
+		rotKey := scheme.KeyGen.GenGaloisKeyNew(galEl, scheme.SecretKey)
+		liveRotKeys[galEl] = rotKey
+
+		allKeysList := GetValuesFromMap(liveRotKeys)
+		keys := rlwe.NewMemEvaluationKeySet(scheme.RelinKey, allKeysList...)
+		scheme.Evaluator = scheme.Evaluator.WithKey(keys)
+	}
+}
 
 //export Negate
 func Negate(ciphertextID C.int) C.int {
@@ -42,20 +77,6 @@ func RotateNew(ciphertextID, amount C.int) C.int {
 
 	idx := PushCiphertext(ctOut)
 	return C.int(idx)
-}
-
-func AddRotationKey(rotation int) {
-	galEl := scheme.Params.GaloisElement(rotation)
-
-	// Generate the required rotation key if it doesn't exist
-	if _, exists := liveRotKeys[galEl]; !exists {
-		rotKey := scheme.KeyGen.GenGaloisKeyNew(galEl, scheme.SecretKey)
-		liveRotKeys[galEl] = rotKey
-
-		allKeysList := GetValuesFromMap(liveRotKeys)
-		keys := rlwe.NewMemEvaluationKeySet(scheme.RelinKey, allKeysList...)
-		scheme.Evaluator = scheme.Evaluator.WithKey(keys)
-	}
 }
 
 //export Rescale

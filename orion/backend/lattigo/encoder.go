@@ -7,6 +7,11 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 )
 
+//export NewEncoder
+func NewEncoder() {
+	scheme.Encoder = ckks.NewEncoder(*scheme.Params)
+}
+
 //export Encode
 func Encode(
 	valuesPtr *C.float,

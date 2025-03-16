@@ -12,6 +12,7 @@ from orion.nn.linear import LinearTransform
 from orion.backend.lattigo import bindings as lgo
 from orion.backend.python import (
     parameters, 
+    key_generator,
     encoder, 
     encryptor,
     evaluator, 
@@ -46,6 +47,7 @@ class Scheme:
         self.params = parameters.NewParameters(config)
         self.backend = self.setup_backend(self.params)
         
+        self.keygen = key_generator.NewKeyGenerator(self)
         self.encoder = encoder.NewEncoder(self)
         self.encryptor = encryptor.NewEncryptor(self)
         self.evaluator = evaluator.NewEvaluator(self)

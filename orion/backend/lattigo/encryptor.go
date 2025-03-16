@@ -6,6 +6,16 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 )
 
+//export NewEncryptor
+func NewEncryptor() {
+	scheme.Encryptor = ckks.NewEncryptor(*scheme.Params, scheme.PublicKey)
+}
+
+//export NewDecryptor
+func NewDecryptor() {
+	scheme.Decryptor = ckks.NewDecryptor(*scheme.Params, scheme.SecretKey)
+}
+
 //export Encrypt
 func Encrypt(plaintextID C.int) C.int {
 	plaintext := RetrievePlaintext(int(plaintextID))

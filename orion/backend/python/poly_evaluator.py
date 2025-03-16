@@ -7,6 +7,10 @@ class NewEvaluator:
     def __init__(self, scheme):
         self.scheme = scheme 
         self.backend = scheme.backend
+        self.new_polynomial_evaluator()
+
+    def new_polynomial_evaluator(self):
+        self.backend.NewPolynomialEvaluator()
 
     def generate_monomial(self, coeffs):
         if isinstance(coeffs, (torch.Tensor, np.ndarray)):

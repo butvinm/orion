@@ -9,6 +9,7 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/ring"
 	"github.com/baahl-nyu/lattigo/v6/ring/ringqp"
+	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 )
 
 var ltHeap = NewHeapAllocator()
@@ -24,6 +25,12 @@ func RetrieveLinearTransform(id int) lintrans.LinearTransformation {
 //export DeleteLinearTransform
 func DeleteLinearTransform(id C.int) {
 	ltHeap.Delete(int(id))
+}
+
+//export NewLinearTransformEvaluator
+func NewLinearTransformEvaluator() {
+	scheme.LinEvaluator = lintrans.NewEvaluator(
+		ckks.NewEvaluator(*scheme.Params, scheme.EvalKeys))
 }
 
 //export GenerateLinearTransform

@@ -1,5 +1,4 @@
 import torch
-
 from .tensors import PlainTensor
 
 class NewEncoder:
@@ -7,6 +6,10 @@ class NewEncoder:
         self.scheme = scheme
         self.params = scheme.params
         self.backend = scheme.backend 
+        self.setup_encoder()
+
+    def setup_encoder(self):
+        self.backend.NewEncoder()
 
     def encode(self, values, level=None, scale=None):
         if isinstance(values, list):

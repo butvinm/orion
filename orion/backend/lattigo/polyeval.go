@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/minimax"
+	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/polynomial"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
@@ -26,6 +27,11 @@ func RetrievePoly(polyID int) bignum.Polynomial {
 
 func DeletePoly(polyID int) {
 	polyHeap.Delete(polyID)
+}
+
+//export NewPolynomialEvaluator
+func NewPolynomialEvaluator() {
+	scheme.PolyEvaluator = polynomial.NewEvaluator(*scheme.Params, scheme.Evaluator)
 }
 
 //export GenerateMonomial

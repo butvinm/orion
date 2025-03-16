@@ -2,10 +2,7 @@ module github.com/baahl-nyu/orion
 
 go 1.23.0
 
-require (
-	github.com/baahl-nyu/lattigo/v6 v6.2.0
-	gonum.org/v1/hdf5 v0.0.0-20210714002203-8c5d23bc6946
-)
+require github.com/baahl-nyu/lattigo/v6 v6.2.0
 
 require (
 	github.com/ALTree/bigfloat v0.0.0-20220102081255-38c8b72a9924 // indirect

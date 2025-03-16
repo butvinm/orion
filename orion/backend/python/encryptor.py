@@ -4,6 +4,14 @@ class NewEncryptor:
     def __init__(self, scheme):
         self.scheme = scheme
         self.backend = scheme.backend
+        self.new_encryptor()
+        self.new_decryptor()
+
+    def new_encryptor(self):
+        self.backend.NewEncryptor()
+
+    def new_decryptor(self):
+        self.backend.NewDecryptor()
 
     def encrypt(self, plaintensor):
         ciphertext_ids = []

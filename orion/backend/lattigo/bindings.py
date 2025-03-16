@@ -124,6 +124,7 @@ class LattigoLibrary:
         """
         self.setup_scheme(orion_params)
         self.setup_tensor_binds()
+        self.setup_key_generator()
         self.setup_encoder()
         self.setup_encryptor()
         self.setup_evaluator()
@@ -262,7 +263,56 @@ class LattigoLibrary:
             restype=ArrayResultInt
         )
 
+    def setup_key_generator(self):
+        self.NewKeyGenerator = LattigoFunction(
+            self.lib.NewKeyGenerator,
+            argtypes=[],
+            restype=None
+        )
+
+        self.GenerateSecretKey = LattigoFunction(
+            self.lib.GenerateSecretKey,
+            argtypes=[], 
+            restype=None
+        )
+
+        self.GeneratePublicKey = LattigoFunction(
+            self.lib.GeneratePublicKey,
+            argtypes=[], 
+            restype=None
+        )
+
+        self.GenerateRelinearizationKey = LattigoFunction(
+            self.lib.GenerateRelinearizationKey,
+            argtypes=[], 
+            restype=None
+        )
+
+        self.GenerateEvaluationKeys = LattigoFunction(
+            self.lib.GenerateEvaluationKeys,
+            argtypes=[], 
+            restype=None
+        )
+
+        self.SerializeSecretKey = LattigoFunction(
+            self.lib.SerializeSecretKey,
+            argtypes=[],
+            restype=ArrayResultByte
+        )
+
+        self.LoadSecretKey = LattigoFunction(
+            self.lib.LoadSecretKey,
+            argtypes=[ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong],
+            restype=None
+        )
+
     def setup_encoder(self):
+        self.NewEncoder = LattigoFunction(
+            self.lib.NewEncoder,
+            argtypes=[],
+            restype=None
+        )
+
         self.Encode = LattigoFunction(
             self.lib.Encode,
             argtypes=[
@@ -279,6 +329,18 @@ class LattigoLibrary:
         )
 
     def setup_encryptor(self):
+        self.NewEncryptor = LattigoFunction(
+            self.lib.NewEncryptor,
+            argtypes=[],
+            restype=None
+        )
+
+        self.NewDecryptor = LattigoFunction(
+            self.lib.NewDecryptor,
+            argtypes=[],
+            restype=None
+        )
+
         self.Encrypt = LattigoFunction(
             self.lib.Encrypt,
             argtypes=[ctypes.c_int],
@@ -291,6 +353,12 @@ class LattigoLibrary:
         )
 
     def setup_evaluator(self):
+        self.NewEvaluator = LattigoFunction(
+            self.lib.NewEvaluator,
+            argtypes=[],
+            restype=None
+        )
+
         self.Negate = LattigoFunction(
             self.lib.Negate,
             argtypes=[ctypes.c_int],
@@ -508,6 +576,12 @@ class LattigoLibrary:
         )
 
     def setup_poly_evaluator(self):
+        self.NewPolynomialEvaluator = LattigoFunction(
+            self.lib.NewPolynomialEvaluator,
+            argtypes=[],
+            restype=None
+        )
+
         self.GenerateMonomial = LattigoFunction(
             self.lib.GenerateMonomial,
             argtypes=[ctypes.POINTER(ctypes.c_float), ctypes.c_int],
@@ -543,6 +617,12 @@ class LattigoLibrary:
         )
 
     def setup_lt_evaluator(self):
+        self.NewLinearTransformEvaluator = LattigoFunction(
+            self.lib.NewLinearTransformEvaluator,
+            argtypes=[],
+            restype=None
+        )
+
         self.GenerateLinearTransform = LattigoFunction(
             self.lib.GenerateLinearTransform,
             argtypes=[

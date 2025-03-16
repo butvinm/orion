@@ -18,6 +18,10 @@ class NewEvaluator:
         self.keys_path = self.params.get_keys_path()
 
         self.saved_rotation_keys = set()
+        self.new_evaluator()
+
+    def new_evaluator(self):
+        self.backend.NewLinearTransformEvaluator()
 
     def generate_transforms(self, linear_layer):
         layer_name = linear_layer.name

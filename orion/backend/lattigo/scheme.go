@@ -67,40 +67,22 @@ func NewScheme(
 	}
 
 	keyGen := rlwe.NewKeyGenerator(params)
-	secretKey := GenSecretKeyNew(keyGen, keysPath, ioMode)
-	publicKey := keyGen.GenPublicKeyNew(secretKey)
-
-	relinKey := keyGen.GenRelinearizationKeyNew(secretKey)
-	encoder := ckks.NewEncoder(params)
-	encryptor := ckks.NewEncryptor(params, publicKey)
-	decryptor := ckks.NewDecryptor(params, secretKey)
-	evaluator := ckks.NewEvaluator(params, rlwe.NewMemEvaluationKeySet(relinKey))
-	polyeval := polynomial.NewEvaluator(params, evaluator)
-
-	// We'll instantiate a different evaluator for linear transforms so that
-	// they can freely manipulate rotation keys
-	evalKeys := rlwe.NewMemEvaluationKeySet(relinKey)
-	lineval := lintrans.NewEvaluator(ckks.NewEvaluator(params, evalKeys))
 
 	scheme = Scheme{
 		Params:        &params,
 		KeyGen:        keyGen,
-		SecretKey:     secretKey,
-		PublicKey:     publicKey,
-		RelinKey:      relinKey,
-		EvalKeys:      evalKeys,
-		Encoder:       encoder,
-		Encryptor:     encryptor,
-		Decryptor:     decryptor,
-		Evaluator:     evaluator,
-		PolyEvaluator: polyeval,
-		LinEvaluator:  lineval,
+		SecretKey:     nil,
+		PublicKey:     nil,
+		RelinKey:      nil,
+		EvalKeys:      nil,
+		Encoder:       nil,
+		Encryptor:     nil,
+		Decryptor:     nil,
+		Evaluator:     nil,
+		PolyEvaluator: nil,
+		LinEvaluator:  nil,
 		Bootstrapper:  nil,
 	}
-
-	// We'll add the power-of-two rotation keys to our evaluator,
-	// and they'll be kept in RAM for the duration of the program.
-	AddPo2RotationKeys()
 }
 
 //export DeleteScheme
@@ -115,13 +97,4 @@ func DeleteScheme() {
 	polyHeap.Reset()
 	ptHeap.Reset()
 	ctHeap.Reset()
-}
-
-func AddPo2RotationKeys() {
-	maxSlots := scheme.Params.MaxSlots()
-
-	// Generate all positive power-of-two rotation keys
-	for i := 1; i < maxSlots; i *= 2 {
-		AddRotationKey(i)
-	}
 }

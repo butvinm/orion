@@ -1,6 +1,10 @@
 class NewEvaluator:
     def __init__(self, scheme):
         self.backend = scheme.backend
+        self.new_evaluator()
+
+    def new_evaluator(self):
+        self.backend.NewEvaluator()
 
     def negate(self, ctxt):
         return self.backend.Negate(ctxt)
