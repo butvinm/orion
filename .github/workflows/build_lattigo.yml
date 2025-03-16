@@ -99,6 +99,7 @@ jobs:
       - name: Run tests with Tox
         shell: bash -l {0}
         run: tox
+        working-directory: . 
 
   publish:
     needs: [test]
