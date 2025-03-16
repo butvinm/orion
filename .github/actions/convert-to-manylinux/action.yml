@@ -9,7 +9,7 @@ inputs:
   platform:
     description: 'Target manylinux platform'
     required: false
-    default: 'manylinux2014_x86_64'
+    default: 'manylinux_2_28_x86_64'
 
 runs:
   using: composite
@@ -29,33 +29,16 @@ runs:
           exit 0
         fi
         
-        # Debug wheel information
-        echo "===== WHEEL INFORMATION ====="
-        auditwheel show "$WHEEL_PATH" -v
-        
         # Convert to manylinux
-        echo "===== CONVERTING TO ${{ inputs.platform }} ====="
+        echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
         TMP_DIR="${{ inputs.wheel-dir }}/manylinux"
-        mkdir -p "$TMP_DIR"
         
-        # Try repair with platform flag and fallback
-        if ! auditwheel repair "$WHEEL_PATH" --plat ${{ inputs.platform }} -w "$TMP_DIR" -v; then
-          echo "===== FALLBACK TO NEWER PLATFORM ====="
-          if [[ "${{ inputs.platform }}" == "manylinux2014_x86_64" ]]; then
-            echo "Attempting fallback to manylinux_2_17_x86_64"
-            auditwheel repair "$WHEEL_PATH" --plat manylinux_2_17_x86_64 -w "$TMP_DIR" -v
-          fi
-        fi
+        # Repair wheel to manylinux standard
+        auditwheel repair "$WHEEL_PATH" \
+          --plat ${{ inputs.platform }} \
+          -w "$TMP_DIR"
         
-        # Check if any repaired wheel was created
-        REPAIRED_WHEELS=$(find "$TMP_DIR" -name "*.whl")
-        if [ -z "$REPAIRED_WHEELS" ]; then
-          echo "Failed to repair wheel, keeping original"
-        else
-          # Replace original wheel with manylinux version
-          mv "$TMP_DIR"/*.whl ${{ inputs.wheel-dir }}/
-          rm "$WHEEL_PATH"
-        fi
-        
-        # Clean up
-        rm -rf "$TMP_DIR"
+        # Replace original wheel with manylinux version
+        mv "$TMP_DIR"/*.whl ${{ inputs.wheel-dir }}/
+        rm "$WHEEL_PATH"
+        rmdir "$TMP_DIR"
