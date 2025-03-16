@@ -47,7 +47,6 @@ jobs:
         uses: ./.github/actions/convert-to-manylinux
         with:
           wheel-dir: dist
-          platform: manylinux2014_x86_64
       
       - name: Upload wheels
         uses: actions/upload-artifact@v4
