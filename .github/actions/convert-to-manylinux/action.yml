@@ -31,21 +31,19 @@ runs:
         
         # Debug wheel information
         echo "===== WHEEL INFORMATION ====="
-        auditwheel show "$WHEEL_PATH" --verbose
+        auditwheel show "$WHEEL_PATH" -v
         
         # Convert to manylinux
-        echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
+        echo "===== CONVERTING TO ${{ inputs.platform }} ====="
         TMP_DIR="${{ inputs.wheel-dir }}/manylinux"
         mkdir -p "$TMP_DIR"
         
-        # Try manylinux repair with verbose output
-        echo "===== REPAIR ATTEMPT ====="
-        if ! auditwheel repair "$WHEEL_PATH" --plat ${{ inputs.platform }} -w "$TMP_DIR" --verbose; then
+        # Try repair with platform flag and fallback
+        if ! auditwheel repair "$WHEEL_PATH" --plat ${{ inputs.platform }} -w "$TMP_DIR" -v; then
           echo "===== FALLBACK TO NEWER PLATFORM ====="
-          # If manylinux2014 fails, try with manylinux_2_17
           if [[ "${{ inputs.platform }}" == "manylinux2014_x86_64" ]]; then
             echo "Attempting fallback to manylinux_2_17_x86_64"
-            auditwheel repair "$WHEEL_PATH" --plat manylinux_2_17_x86_64 -w "$TMP_DIR" --verbose
+            auditwheel repair "$WHEEL_PATH" --plat manylinux_2_17_x86_64 -w "$TMP_DIR" -v
           fi
         fi
         
