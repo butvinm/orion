@@ -66,6 +66,16 @@ func Rescale(ciphertextID C.int) C.int {
 	return ciphertextID
 }
 
+//export RescaleNew
+func RescaleNew(ciphertextID C.int) C.int {
+	ctIn := RetrieveCiphertext(int(ciphertextID))
+	scheme.Evaluator.Rescale(ctIn, ctIn)
+	ctOut := ctIn.CopyNew()
+
+	idx := PushCiphertext(ctOut)
+	return C.int(idx)
+}
+
 //export AddScalar
 func AddScalar(ciphertextID C.int, scalar C.float) C.int {
 	ctIn := RetrieveCiphertext(int(ciphertextID))

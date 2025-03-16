@@ -15,8 +15,8 @@ class LinearTransform(Module):
         self.set_depth(1)
         self.set_level(level)
 
-        self.diagonals = {}
-        self.transform_ids = {}
+        self.diagonals = {} # diags[(row, col)] = {0: [...], 1: [...], ...}
+        self.transform_ids = {} # ids[(row, col)] = int
         self.output_rotations = 0
 
     def __del__(self):

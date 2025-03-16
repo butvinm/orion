@@ -19,7 +19,7 @@ type Scheme struct {
 	SecretKey     *rlwe.SecretKey
 	PublicKey     *rlwe.PublicKey
 	RelinKey      *rlwe.RelinearizationKey
-	EvalKey       *rlwe.MemEvaluationKeySet
+	EvalKeys      *rlwe.MemEvaluationKeySet
 	Encoder       *ckks.Encoder
 	Encryptor     *rlwe.Encryptor
 	Decryptor     *rlwe.Decryptor
@@ -71,14 +71,16 @@ func NewScheme(
 	publicKey := keyGen.GenPublicKeyNew(secretKey)
 
 	relinKey := keyGen.GenRelinearizationKeyNew(secretKey)
-	evalKey := rlwe.NewMemEvaluationKeySet(relinKey)
-
 	encoder := ckks.NewEncoder(params)
 	encryptor := ckks.NewEncryptor(params, publicKey)
 	decryptor := ckks.NewDecryptor(params, secretKey)
-	evaluator := ckks.NewEvaluator(params, evalKey)
+	evaluator := ckks.NewEvaluator(params, rlwe.NewMemEvaluationKeySet(relinKey))
 	polyeval := polynomial.NewEvaluator(params, evaluator)
-	lineval := lintrans.NewEvaluator(evaluator)
+
+	// We'll instantiate a different evaluator for linear transforms so that
+	// they can freely manipulate rotation keys
+	evalKeys := rlwe.NewMemEvaluationKeySet(relinKey)
+	lineval := lintrans.NewEvaluator(ckks.NewEvaluator(params, evalKeys))
 
 	scheme = Scheme{
 		Params:        &params,
@@ -86,6 +88,7 @@ func NewScheme(
 		SecretKey:     secretKey,
 		PublicKey:     publicKey,
 		RelinKey:      relinKey,
+		EvalKeys:      evalKeys,
 		Encoder:       encoder,
 		Encryptor:     encryptor,
 		Decryptor:     decryptor,

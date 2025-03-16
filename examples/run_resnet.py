@@ -4,23 +4,21 @@ import torch
 import orion
 import models
 from orion.core.utils import (
-    get_mnist_datasets,
+    get_cifar_datasets,
     mae, 
-    train_on_mnist
+    train_on_cifar
 )
 
 # Set seed for reproducibility
 torch.manual_seed(42)
 
 # Initialize the Orion scheme, model, and data
-scheme = orion.init_scheme("../configs/mlp.yaml")
-batch_size = scheme.get_batch_size()
-trainloader, testloader = get_mnist_datasets(
-    data_dir="../data", batch_size=batch_size)
-net = models.MLP()
+scheme = orion.init_scheme("../configs/resnet.yaml")
+trainloader, testloader = get_cifar_datasets(data_dir="../data", batch_size=1)
+net = models.ResNet20()
 
 # Train model (optional)
-#train_on_mnist(net, data_dir="../data", epochs=1, device="cuda")
+train_on_cifar(net, data_dir="../data", epochs=1, device="cuda")
 
 # Get a test batch to pass through our network
 inp, _ = next(iter(testloader))
@@ -30,10 +28,10 @@ net.eval()
 out_clear = net(inp)
 
 # Prepare for FHE inference. 
-# Certain polynomial activation functions require us to know the precise range
-# of possible input values. We'll determine these ranges by aggregating
-# statistics from the training set and applying a tolerance factor = margin.
-orion.fit(net, inp, batch_size=128, margin=2)
+# Some polynomial activation functions require knowing the range of possible 
+# input values. We'll estimate these ranges using training set statistics, 
+# adjusted to be wider by a tolerance factor (margin).
+orion.fit(net, inp)
 input_level = orion.compile(net)
 
 # Encode and encrypt the input vector 

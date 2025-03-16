@@ -1,5 +1,6 @@
 import h5py
 import torch
+import numpy as np
 
 from orion.backend.python.tensors import CipherTensor
 
@@ -9,17 +10,20 @@ class NewEvaluator:
         self.scheme = scheme 
         self.params = scheme.params
         self.backend = scheme.backend
+        self.evaluator = scheme.evaluator
 
         self.embed_method = self.params.get_embedding_method()
         self.io_mode = self.params.get_io_mode()
         self.diags_path = self.params.get_diags_path()
         self.keys_path = self.params.get_keys_path()
 
+        self.saved_rotation_keys = set()
+
     def generate_transforms(self, linear_layer):
+        layer_name = linear_layer.name
         diagonals = linear_layer.diagonals 
         level = linear_layer.level
         bsgs_ratio = linear_layer.bsgs_ratio
-        name = linear_layer.name
 
         # Generate all linear transforms block by block.
         lintransf_ids = {}        
@@ -30,13 +34,50 @@ class NewEvaluator:
                 diags_data.extend(diag)
 
             lintransf_id = self.backend.GenerateLinearTransform(
-                diags_idxs, diags_data, level, bsgs_ratio, row, col, 
-                name, self.diags_path, self.keys_path, self.io_mode
+                diags_idxs, diags_data, level, bsgs_ratio, self.io_mode
             )
             lintransf_ids[(row, col)] = lintransf_id
 
+            # Now we can generate any new rotation keys needed for
+            # this linear transform.
+            self.generate_rotation_keys(lintransf_id)
+            if self.io_mode == "save":
+                self.save_plaintext_diagonals(
+                    layer_name, lintransf_id, row, col, diags_idxs
+                )
+
         return lintransf_ids
     
+    def get_required_rotation_keys(self, transform_id):
+        return self.backend.GetLinearTransformRotationKeys(transform_id)
+
+    def generate_rotation_keys(self, transform_id):
+        curr_keys = self.get_required_rotation_keys(transform_id)
+
+        # Only generate keys that don't exist yet. Depending on the I/O
+        # mode, we may also save these keys immediately rather than keep
+        # them in RAM.
+        keys_to_gen = set(curr_keys).difference(self.saved_rotation_keys)
+        self.saved_rotation_keys.update(keys_to_gen)
+
+        if self.io_mode == "none":
+            for key in keys_to_gen:
+                self.backend.GenerateRotationKey(key)
+
+        elif self.io_mode == "save":
+            with h5py.File(self.keys_path, "a") as f:
+                for key in keys_to_gen:
+                    key_str = str(key)
+                    if key_str in f: # don't regenerate the key
+                        continue
+                    
+                    # We'll generate, serialize, and then save the key
+                    serial_key, ptr = self.backend.GenerateAndSerializeRotationKey(key)
+                    try:
+                        f.create_dataset(key_str, data=serial_key)
+                    finally:
+                        self.backend.FreeCArray(ptr)
+
     def save_transforms(self, linear_layer):
         layer_name = linear_layer.name
         diagonals = linear_layer.diagonals 
@@ -63,16 +104,14 @@ class NewEvaluator:
             layer.create_dataset("output_min", data=output_min.item())
             layer.create_dataset("output_max", data=output_max.item())
 
-            # Set up groups for cleartext diagonals and plaintexts
             diags_group = layer.require_group("diagonals")
-            layer.require_group("plaintexts")
-
             for (row, col), diags in diagonals.items():
                 block_idx = f"{row}_{col}"
-                block_group = diags_group.create_group(block_idx)
+                block_diags_group = diags_group.create_group(block_idx)
+                
+                # Iterate over all diagonals in the block and save
                 for diag_idx, diag_data in diags.items():
-                    block_group.create_dataset(str(diag_idx), data=diag_data,
-                                               compression="gzip", chunks=True)
+                    block_diags_group.create_dataset(str(diag_idx), data=diag_data)
                     diags[diag_idx] = [] # delete after saving
 
         print("done!")
@@ -108,15 +147,37 @@ class NewEvaluator:
 
         # Order-preserving flatten that can be mapped back to 
         # (row, col) format in backend via len(in_ctensor.ids)
-        transform_ids = list(linear_layer.transform_ids.values())
-        
-        out_ctensor_ids = self.backend.EvaluateLinearTransforms(
-            transform_ids, in_ctensor.ids, layer_name,
-            self.diags_path, self.keys_path, self.io_mode)
+        transform_ids = np.array(list(linear_layer.transform_ids.values()))
+        cols = len(in_ctensor)
+        rows = len(transform_ids) // cols
 
-        return CipherTensor(
-            self.scheme, out_ctensor_ids, out_shape, fhe_out_shape
-        )
+        # Now we can perform a blocked linear transform
+        transform_ids = transform_ids.reshape(rows, cols)
+        cts_out = []
+        for i in range(rows):
+            ct_out = None
+            for j in range(cols):
+                t_id = transform_ids[i][j]
+
+                if self.io_mode != "none":
+                    self.load_rotation_keys(t_id)
+                    self.load_plaintext_diagonals(layer_name, i, j, t_id)
+
+                res = self.backend.EvaluateLinearTransform(t_id, in_ctensor.ids[j]) 
+                ct = CipherTensor(self.scheme, res, out_shape, fhe_out_shape)
+
+                # Accumulate results across a row of blocks
+                ct_out = ct if j == 0 else ct_out + ct
+                    
+                if self.io_mode != "none":
+                    self.remove_rotation_keys()
+                    self.remove_plaintext_diagonals(t_id)
+            
+            # We know the output of this accumulation will just be one ciphertext
+            ct_out_rescaled = self.evaluator.rescale(ct_out.ids[0], in_place=False)
+            cts_out.append(ct_out_rescaled)
+
+        return CipherTensor(self.scheme, cts_out, out_shape, fhe_out_shape)
             
     def delete_transforms(self, transform_ids: dict):
         for tid in transform_ids.values():
@@ -201,3 +262,43 @@ class NewEvaluator:
                 error_msg += "override existing data. Then loading will work."
                 
                 raise ValueError(error_msg)
+            
+    def save_plaintext_diagonals(self, layer_name, lintransf_id, row, col, diag_idxs):
+        with h5py.File(self.diags_path, "a") as f:
+            layer = f[layer_name]
+            plaintext_group = layer.require_group("plaintexts")
+            block_idx = f"{row}_{col}"
+            block_group = plaintext_group.create_group(block_idx)
+
+            for diag_idx in diag_idxs:
+                diag_serial, diag_ptr = self.backend.SerializeDiagonal(lintransf_id, diag_idx)
+                block_group.create_dataset(str(diag_idx), data=diag_serial)
+
+                # Now that it's saved, we'll free the memory
+                self.backend.FreeCArray(diag_ptr)
+
+    def load_plaintext_diagonals(self, layer_name, row, col, transform_id):
+        with h5py.File(self.diags_path, "r") as f:
+            layer = f[layer_name]
+            ptxt_group = layer["plaintexts"]
+            block = ptxt_group[f"{row}_{col}"]
+
+            for diag_idx in block:
+                serial_diag = block[diag_idx][()]
+                self.backend.LoadPlaintextDiagonal(
+                    serial_diag, transform_id, int(diag_idx)
+                )
+    
+    def load_rotation_keys(self, transform_id):
+        keys = self.get_required_rotation_keys(transform_id)
+
+        with h5py.File(self.keys_path, "r") as f:
+            for key in keys:
+                serial_key = f[str(key)][()]
+                self.backend.LoadRotationKey(serial_key, int(key))
+
+    def remove_rotation_keys(self):
+        self.backend.RemoveRotationKeys() 
+
+    def remove_plaintext_diagonals(self, transform_id):
+        self.backend.RemovePlaintextDiagonals(transform_id)

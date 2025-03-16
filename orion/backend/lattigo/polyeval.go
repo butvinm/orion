@@ -88,7 +88,7 @@ func GenerateMinimaxSignCoeffs(
 	logalpha C.int,
 	logerr C.int,
 	debug C.int,
-) (*C.double, C.int) {
+) (*C.double, C.ulong) {
 	degrees := CArrayToSlice(degreesPtr, lenDegrees, convertCIntToInt)
 
 	// We'll eventually return this flattened list of coefficients

@@ -10,12 +10,15 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 )
 
-
 func convertCIntToInt(v C.int) int {
 	return int(v)
 }
 func convertCFloatToFloat(v C.float) float64 {
 	return float64(v)
+}
+
+func CArrayToByteSlice(dataPtr unsafe.Pointer, length uint64) []byte {
+	return unsafe.Slice((*byte)(dataPtr), length)
 }
 
 func convertFloatToCFloat(v float64) C.float {
@@ -34,6 +37,14 @@ func convertULongtoCULong(v uint64) C.ulong {
 	return C.ulong(v)
 }
 
+func convertULongtoInt(v uint64) C.int {
+	return C.int(v)
+}
+
+func convertByteToCChar(b byte) C.char {
+	return C.char(b)
+}
+
 func CArrayToSlice[T, U any](ptr *U, length C.int, conv func(U) T) []T {
 	cSlice := unsafe.Slice(ptr, int(length))
 	result := make([]T, int(length))
@@ -43,7 +54,7 @@ func CArrayToSlice[T, U any](ptr *U, length C.int, conv func(U) T) []T {
 	return result
 }
 
-func SliceToCArray[T, U any](slice []T, conv func(T) U) (*U, C.int) {
+func SliceToCArray[T, U any](slice []T, conv func(T) U) (*U, C.ulong) {
 	n := len(slice)
 	if n == 0 {
 		return nil, 0
@@ -57,7 +68,7 @@ func SliceToCArray[T, U any](slice []T, conv func(T) U) (*U, C.int) {
 	for i, v := range slice {
 		cArray[i] = conv(v)
 	}
-	return (*U)(ptr), C.int(n)
+	return (*U)(ptr), C.ulong(n)
 }
 
 // Keys returns a slice of keys from the provided map.

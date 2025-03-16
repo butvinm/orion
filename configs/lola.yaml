@@ -9,7 +9,6 @@ ckks_params:
   RingType: ConjugateInvariant
 
 orion:
-  batch_size: 1
   margin: 2 # >= 1
   embedding_method: hybrid # [hybrid, square]
   backend: lattigo # [lattigo, openfhe, heaan]
@@ -19,4 +18,4 @@ orion:
 
   diags_path: ../data/diagonals.h5 # "path/to/diags" | ""
   keys_path: ../data/keys.h5 # "path/to/keys" | ""
-  io_mode: none # "load" | "save" | "none"
+  io_mode: save # "load" | "save" | "none"

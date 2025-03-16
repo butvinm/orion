@@ -39,15 +39,16 @@ class CKKSParameters:
         if self.ringtype.lower() == "standard":
             ring_type_display = "Standard"
         else:
-            ring_type_display = "Conjugate Invariant"
+            ring_type_display = "Conjugate invariant"
         
         output = [
             "CKKS Parameters:",
-            f"  Ring Degree (N): {1 << self.logn} (LogN = {self.logn})",
-            f"  Number of Slots (n): {1 << self.logslots}",
-            f"  Ring Type: {ring_type_display}",
+            f"  Ring degree (N): {1 << self.logn} (LogN = {self.logn})",
+            f"  Number of slots (n): {1 << self.logslots}",
+            f"  Effective levels (L_eff): {len(self.logq) - 1}"
+            f"  Ring type: {ring_type_display}",
             f"  Scale: 2^{self.logscale}",
-            f"  Hamming Weight: {self.h}"
+            f"  Hamming weight: {self.h}"
         ]
         
         # Format LogQ values
@@ -68,7 +69,6 @@ class CKKSParameters:
 
 @dataclass
 class OrionParameters:
-    batch_size: int
     margin: int = 2
     fuse_modules: bool = True
     debug: bool = True
@@ -82,7 +82,6 @@ class OrionParameters:
         output = [
             "Orion Parameters:",
             f"  Backend: {self.backend}",
-            f"  Batch Size: {self.batch_size}",
             f"  Margin: {self.margin}",
             f"  Embedding Method: {self.embedding_method}",
             f"  Fuse Modules: {self.fuse_modules}",
@@ -169,9 +168,6 @@ class NewParameters:
 
     def get_ring_degree(self):
         return int(1 << self.ckks_params.logn)
-
-    def get_batch_size(self):
-        return self.orion_params.batch_size
 
     def get_embedding_method(self):
         return self.orion_params.embedding_method.lower()

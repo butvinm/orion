@@ -9,11 +9,16 @@ def build(setup_kwargs=None):
     
     # Determine the output filename based on platform
     if platform.system() == "Windows":
-        output_file = "lattigo-win.dll"
+        output_file = "lattigo-windows.dll"
     elif platform.system() == "Darwin":  # macOS
-        output_file = "lattigo-mac.dylib"
-    else:  
+        if platform.machine().lower() in ("arm64", "aarch64"):
+            output_file = "lattigo-mac-arm64.dylib"
+        else:
+            output_file = "lattigo-mac.dylib"
+    elif platform.system() == "Linux":
         output_file = "lattigo-linux.so"
+    else:
+        raise RuntimeError("Unsupported platform")
     
     # Set up paths
     root_dir = Path(__file__).parent.parent

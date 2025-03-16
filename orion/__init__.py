@@ -5,7 +5,6 @@ from .core import (
     decode, 
     encrypt, 
     decrypt, 
-    get_batch_size,
     fit, 
     compile
 )

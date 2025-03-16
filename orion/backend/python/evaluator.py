@@ -70,6 +70,11 @@ class NewEvaluator:
         
         return self.backend.Rescale(ct_out)
     
+    def rescale(self, ctxt, in_place):
+        if in_place:
+            return self.backend.Rescale(ctxt)
+        return self.backend.RescaleNew(ctxt)
+    
     def get_live_plaintexts(self):
         return self.backend.GetLivePlaintexts() 
 

@@ -27,7 +27,7 @@ func Encode(
 //export Decode
 func Decode(
 	plaintextID C.int,
-) (*C.float, C.int) {
+) (*C.float, C.ulong) {
 	plaintext := RetrievePlaintext(int(plaintextID))
 	result := make([]float64, scheme.Params.MaxSlots())
 	scheme.Encoder.Decode(plaintext, result)

@@ -6,6 +6,5 @@ encode = scheme.encode
 decode = scheme.decode
 encrypt = scheme.encrypt
 decrypt = scheme.decrypt
-get_batch_size = scheme.get_batch_size
 fit = scheme.fit 
 compile = scheme.compile

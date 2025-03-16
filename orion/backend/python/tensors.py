@@ -6,13 +6,16 @@ class PlainTensor:
         self.backend = scheme.backend
         self.encoder = scheme.encoder
         
-        self.ids = ptxt_ids 
+        self.ids = [ptxt_ids] if isinstance(ptxt_ids, int) else ptxt_ids
         self.shape = shape 
         self.on_shape = on_shape or shape
 
     def __del__(self):
-        for idx in self.ids:
-            self.backend.DeletePlaintext(idx)
+        try:
+            for idx in self.ids:
+                self.backend.DeletePlaintext(idx)
+        except ImportError:
+            pass
 
     def __len__(self):
         return len(self.ids)
@@ -57,13 +60,16 @@ class CipherTensor:
         self.evaluator = scheme.evaluator
         self.bootstrapper = scheme.bootstrapper
 
-        self.ids = ctxt_ids 
+        self.ids = [ctxt_ids] if isinstance(ctxt_ids, int) else ctxt_ids 
         self.shape = shape 
         self.on_shape = on_shape or shape
 
     def __del__(self):
-        for ctxt in self.ids:
-            self.backend.DeleteCiphertext(ctxt)
+        try:
+            for ctxt in self.ids:
+                self.backend.DeleteCiphertext(ctxt)
+        except ImportError:
+            pass
 
     def __len__(self):
         return len(self.ids)

@@ -1,7 +1,9 @@
 import os 
-import sys
 import ctypes
 import platform
+
+import torch
+import numpy as np
 
 
 class LattigoFunction:
@@ -20,18 +22,21 @@ class LattigoFunction:
                 c_args.extend(c_arg)
             else:
                 c_args.append(c_arg)
-        
+                
         c_result = self.func(*c_args)
         py_result = self.convert_from_ctypes(c_result)
         
         # If the result is a list, then we'll need to manually free the
-        # memory we allocated for this list in Go with the below.
+        # memory we allocated for this list in Go with the below. We'll
+        # defer freeing byte data (from serialization) until after that
+        # data has been saved to HDF5.
         if isinstance(py_result, list):
             LattigoFunction.FreeCArray(
                 ctypes.cast(c_result.Data, ctypes.c_void_p))
 
         return py_result
 
+    @torch._dynamo.disable
     def convert_to_ctypes(self, arg, typ):
         if isinstance(arg, int) and typ == ctypes.c_int:
             return ctypes.c_int(arg)
@@ -41,6 +46,11 @@ class LattigoFunction:
             return ctypes.c_float(arg)
         elif isinstance(arg, str):
             return arg.encode('utf-8')
+        elif (isinstance(arg, np.ndarray) and 
+            arg.dtype == np.uint8 and 
+            typ == ctypes.POINTER(ctypes.c_ubyte)):
+            ptr = arg.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+            return (ptr, len(arg))
         elif isinstance(arg, list):
             if typ == ctypes.POINTER(ctypes.c_int):
                 return ((ctypes.c_int * len(arg))(*arg), len(arg))
@@ -48,6 +58,8 @@ class LattigoFunction:
                 return ((ctypes.c_float * len(arg))(*arg), len(arg))
             elif typ == ctypes.POINTER(ctypes.c_ulong):
                 return ((ctypes.c_ulong * len(arg))(*arg), len(arg))
+            elif typ == ctypes.POINTER(ctypes.c_ubyte):
+                return ((ctypes.c_ubyte * len(arg))(*arg), len(arg))
             else:
                 raise ValueError("Unexpected list type to convert.")
         else:
@@ -64,6 +76,14 @@ class LattigoFunction:
             return [int(res.Data[i]) for i in range(res.Length)]
         elif type(res) == ArrayResultDouble:
             return [float(res.Data[i]) for i in range(res.Length)]
+        elif type(res) == ArrayResultByte:
+            # Create numpy array directly from the C buffer
+            buffer = ctypes.cast(
+                res.Data, 
+                ctypes.POINTER(ctypes.c_ubyte * res.Length)
+            ).contents
+            array = np.frombuffer(buffer, dtype=np.uint8)
+            return array, res.Data
         else:
             return res
 
@@ -75,15 +95,15 @@ class LattigoLibrary:
 
     def _load_library(self):
         try:
-            if sys.platform.startswith("linux"):
+            if platform.system() == "Linux":
                 lib_name = "lattigo-linux.so"
-            elif sys.platform == "darwin":
+            elif platform.system() == "Darwin":  # macOS
                 # Check for Apple Silicon vs Intel
                 if platform.machine().lower() in ("arm64", "aarch64"):
                     lib_name = "lattigo-mac-arm64.dylib"
                 else:
                     lib_name = "lattigo-mac.dylib"
-            elif sys.platform == "win32":
+            elif platform.system() == "Windows":
                 lib_name = "lattigo-windows.dll"
             else:
                 raise RuntimeError("Unsupported platform")
@@ -297,6 +317,12 @@ class LattigoLibrary:
 
         self.Rescale = LattigoFunction(
             self.lib.Rescale,
+            argtypes=[ctypes.c_int],
+            restype=ctypes.c_int
+        )
+
+        self.RescaleNew = LattigoFunction(
+            self.lib.RescaleNew,
             argtypes=[ctypes.c_int],
             restype=ctypes.c_int
         )
@@ -524,33 +550,82 @@ class LattigoLibrary:
                 ctypes.POINTER(ctypes.c_float), ctypes.c_int, # diags_data
                 ctypes.c_int, # level
                 ctypes.c_float, # bsgs_ratio
-                ctypes.c_int, # block_row
-                ctypes.c_int, # block_col
-                ctypes.c_char_p, # module_name
-                ctypes.c_char_p, # diags_path
-                ctypes.c_char_p, # keys_path
                 ctypes.c_char_p, # io_mode
             ],
             restype=ctypes.c_int
         )
 
-        self.EvaluateLinearTransforms = LattigoFunction(
-            self.lib.EvaluateLinearTransforms,
+        self.EvaluateLinearTransform = LattigoFunction(
+            self.lib.EvaluateLinearTransform,
             argtypes=[
-                ctypes.POINTER(ctypes.c_int), ctypes.c_int, # transform IDs
-                ctypes.POINTER(ctypes.c_int), ctypes.c_int, # ctxt IDs
-                ctypes.c_char_p,
-                ctypes.c_char_p,
-                ctypes.c_char_p,
-                ctypes.c_char_p,
+                ctypes.c_int, # transform ID
+                ctypes.c_int, # ctxt ID
             ],
-            restype=ArrayResultInt
+            restype=ctypes.c_int
         )
 
         self.DeleteLinearTransform = LattigoFunction(
             self.lib.DeleteLinearTransform,
             argtypes=[ctypes.c_int],
             restype=None
+        )
+
+        self.GetLinearTransformRotationKeys = LattigoFunction(
+            self.lib.GetLinearTransformRotationKeys,
+            argtypes=[ctypes.c_int],
+            restype=ArrayResultInt
+        )
+
+        self.GenerateRotationKey = LattigoFunction(
+            self.lib.GenerateRotationKey,
+            argtypes=[ctypes.c_int],
+            restype=None
+        )
+
+        self.GenerateAndSerializeRotationKey = LattigoFunction(
+            self.lib.GenerateAndSerializeRotationKey,
+            argtypes=[ctypes.c_int],
+            restype=ArrayResultByte
+        )
+        
+        self.LoadRotationKey = LattigoFunction(
+            self.lib.LoadRotationKey,
+            argtypes=[
+                ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong,
+                ctypes.c_ulong,
+            ],
+            restype=None
+        )
+
+        self.SerializeDiagonal = LattigoFunction(
+            self.lib.SerializeDiagonal,
+            argtypes=[
+                ctypes.c_int, # transform id
+                ctypes.c_int, # diag index
+            ],
+            restype=ArrayResultByte
+        )
+
+        self.LoadPlaintextDiagonal = LattigoFunction(
+            self.lib.LoadPlaintextDiagonal,
+            argtypes=[
+                ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong,
+                ctypes.c_int,
+                ctypes.c_ulong,
+            ],
+            restype=None
+        )
+
+        self.RemovePlaintextDiagonals = LattigoFunction(
+            self.lib.RemovePlaintextDiagonals,
+            argtypes=[ctypes.c_int],
+            restype=None
+        )
+
+        self.RemoveRotationKeys = LattigoFunction(
+            self.lib.RemoveRotationKeys,
+            argtypes=[],
+            restype=None,
         )
 
     def setup_bootstrapper(self):
@@ -580,13 +655,16 @@ class LattigoLibrary:
 
 
 class ArrayResultInt(ctypes.Structure):
-    _fields_ = [("Data", ctypes.POINTER(ctypes.c_int)), ("Length", ctypes.c_int)]
+    _fields_ = [("Data", ctypes.POINTER(ctypes.c_int)), ("Length", ctypes.c_ulong)]
 
 class ArrayResultFloat(ctypes.Structure):
-    _fields_ = [("Data", ctypes.POINTER(ctypes.c_float)), ("Length", ctypes.c_int)]
+    _fields_ = [("Data", ctypes.POINTER(ctypes.c_float)), ("Length", ctypes.c_ulong)]
 
 class ArrayResultDouble(ctypes.Structure):
-    _fields_ = [("Data", ctypes.POINTER(ctypes.c_double)), ("Length", ctypes.c_int)]
+    _fields_ = [("Data", ctypes.POINTER(ctypes.c_double)), ("Length", ctypes.c_ulong)]
 
 class ArrayResultUInt64(ctypes.Structure):
-    _fields_ = [("Data", ctypes.POINTER(ctypes.c_ulong)), ("Length", ctypes.c_int)]
+    _fields_ = [("Data", ctypes.POINTER(ctypes.c_ulong)), ("Length", ctypes.c_ulong)]
+
+class ArrayResultByte(ctypes.Structure):
+    _fields_ = [("Data", ctypes.POINTER(ctypes.c_char)), ("Length", ctypes.c_ulong)]

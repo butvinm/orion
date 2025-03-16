@@ -95,14 +95,11 @@ class Scheme:
         self._check_initialization()
         return self.encryptor.decrypt(ctxt)
     
-    def get_batch_size(self):
-        return self.params.get_batch_size()
-
-    def fit(self, net, input_data, batch_size=128, margin=2):
+    def fit(self, net, input_data, batch_size=128):
         self._check_initialization()
 
         net.set_scheme(self)
-        net.set_margin(margin)
+        net.set_margin(self.params.get_margin())
         
         tracer = OrionTracer()
         traced = tracer.trace_model(net)
@@ -122,13 +119,17 @@ class Scheme:
               flush=True)
         start = time.time()
         if isinstance(input_data, DataLoader):
-            # Create a new DataLoader with the desired batch size
-            if batch_size != input_data.batch_size:
+            # Users often specify small batch sizes for FHE operations.
+            # However, fitting statistics with large datasets would take 
+            # unnecessarily long with small batches. To speed this up, we'll 
+            # temporarily increase the batch size during the statistics-fitting 
+            # step, and then restore the original batch size afterward.
+            user_batch_size = input_data.batch_size
+            if batch_size > user_batch_size:
                 dataset = input_data.dataset
                 shuffle = input_data.sampler is None or isinstance(input_data.sampler, RandomSampler)
                 
-                # Create a new DataLoader with the updated batch size
-                rebatched_loader = DataLoader(
+                input_data = DataLoader(
                     dataset=dataset,
                     batch_size=batch_size,
                     shuffle=shuffle,
@@ -136,15 +137,15 @@ class Scheme:
                     pin_memory=input_data.pin_memory,
                     drop_last=input_data.drop_last
                 )
-                # Use the rebatched loader
-                for batch in tqdm(rebatched_loader, desc="Processing input data",
-                        unit="batch", leave=True):
-                    stats_tracker.propagate(batch[0].to(device))
-            else:
-                # Use the original loader if batch sizes match
-                for batch in tqdm(input_data, desc="Processing input data",
-                        unit="batch", leave=True):
-                    stats_tracker.propagate(batch[0].to(device))
+
+            # Use this (potentially new) dataloader
+            for batch in tqdm(input_data, desc="Processing input data",
+                    unit="batch", leave=True):
+                stats_tracker.propagate(batch[0].to(device))
+
+            # Now we'll reset the batch size back to what the user specified.
+            stats_tracker.update_batch_size(user_batch_size)
+
         elif isinstance(input_data, torch.Tensor):
             stats_tracker.propagate(input_data.to(device)) 
         else:

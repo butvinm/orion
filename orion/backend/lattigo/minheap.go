@@ -5,9 +5,6 @@ import (
 	"fmt"
 )
 
-// MinHeap is a priority queue that implements heap.Interface. The goal
-// is to use this queue to keep track of "pointers" as they're passed
-// between Go and Python.
 type MinHeap []int
 
 func (h MinHeap) Len() int           { return len(h) }
@@ -26,11 +23,11 @@ func (h *MinHeap) Pop() interface{} {
 	return x
 }
 
-// HeapAllocator manages the allocation and freeing of integers.
+// HeapAllocator updated to store pointers
 type HeapAllocator struct {
-	nextInt       int                 // The next integer to allocate
-	freedIntegers MinHeap             // Min-heap to store freed integers
-	InterfaceMap  map[int]interface{} // Map to store/retrieve structs
+	nextInt       int                  // The next integer to allocate
+	freedIntegers MinHeap              // Min-heap to store freed integers
+	InterfaceMap  map[int]*interface{} // Map to store/retrieve pointers to structs
 }
 
 // NewHeapAllocator initializes and returns a new HeapAllocator.
@@ -38,14 +35,14 @@ func NewHeapAllocator() *HeapAllocator {
 	allocator := &HeapAllocator{
 		nextInt:       0,
 		freedIntegers: MinHeap{},
-		InterfaceMap:  make(map[int]interface{}),
+		InterfaceMap:  make(map[int]*interface{}),
 	}
 	heap.Init(&allocator.freedIntegers)
 	return allocator
 }
 
 // Add assigns the lowest available integer to the provided object and
-// returns the integer.
+// returns the integer. Now ensures we're storing a pointer.
 func (ha *HeapAllocator) Add(obj interface{}) int {
 	var allocated int
 	if len(ha.freedIntegers) > 0 {
@@ -56,15 +53,21 @@ func (ha *HeapAllocator) Add(obj interface{}) int {
 		allocated = ha.nextInt
 		ha.nextInt++
 	}
-	// Store the object in the map
-	ha.InterfaceMap[allocated] = obj
+
+	// Create a pointer to the interface value
+	objCopy := obj
+	objPtr := &objCopy
+
+	// Store the pointer in the map
+	ha.InterfaceMap[allocated] = objPtr
 	return allocated
 }
 
-// Retrieve returns the associated object with ingeter.
+// Retrieve returns the associated object with integer.
 func (ha *HeapAllocator) Retrieve(integer int) interface{} {
-	if obj, exists := ha.InterfaceMap[integer]; exists {
-		return obj
+	if objPtr, exists := ha.InterfaceMap[integer]; exists {
+		// Dereference the pointer to get the original interface value
+		return *objPtr
 	}
 	panic(fmt.Sprintf("Heap object not found for integer: %d", integer))
 }
@@ -83,7 +86,7 @@ func (ha *HeapAllocator) Reset() {
 	ha.nextInt = 0
 	ha.freedIntegers = MinHeap{} // Reinitialize the slice
 	heap.Init(&ha.freedIntegers) // Reinitialize the heap properties
-	ha.InterfaceMap = make(map[int]interface{})
+	ha.InterfaceMap = make(map[int]*interface{})
 }
 
 func (ha *HeapAllocator) GetLiveKeys() []int {

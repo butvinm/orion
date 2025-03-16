@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.fx as fx
 
 import orion.nn as on
+from orion.nn.module import Module
 from orion.nn.linear import LinearTransform
 from orion.nn.normalization import BatchNormNd
 
@@ -76,7 +77,9 @@ class StatsTracker(fx.Interpreter):
         self.update_output_stats(result, node)
         
         if node.op == "call_module":
-            self.sync_module_attributes(node)
+            module = self.module.get_submodule(node.target)
+            if isinstance(module, Module):
+                self.sync_module_attributes(node)
 
         return result
     
@@ -212,7 +215,6 @@ class StatsTracker(fx.Interpreter):
         # Sync tracked node statistics to the corresponding module
         module = self.module.get_submodule(node.target)
         module.name = node.name
-        batch_size = module.scheme.params.get_batch_size()
 
         # Min/max values
         module.input_min = node.input_min
@@ -220,15 +222,33 @@ class StatsTracker(fx.Interpreter):
         module.output_min = node.output_min
         module.output_max = node.output_max
         
-        # Shapes - replace first dimension with correct FHE batch_size
-        module.input_shape = torch.Size([batch_size] + list(node.input_shape[1:]))
-        module.output_shape = torch.Size([batch_size] + list(node.output_shape[1:]))
-        module.fhe_input_shape = torch.Size([batch_size] + list(node.fhe_input_shape[1:]))
-        module.fhe_output_shape = torch.Size([batch_size] + list(node.fhe_output_shape[1:]))
+        # Shapes
+        module.input_shape = node.input_shape 
+        module.output_shape = node.output_shape 
+        module.fhe_input_shape = node.fhe_input_shape
+        module.fhe_output_shape = node.fhe_output_shape
         
-        # Gaps
+        # Multiplexed aps
         module.input_gap = node.input_gap
         module.output_gap = node.output_gap
+
+    def update_batch_size(self, batch_size):
+        for node in self.module.graph.nodes:        
+            if node.op == "call_module":
+                module = self.module.get_submodule(node.target)
+
+                shape_attrs = [
+                    'input_shape', 
+                    'output_shape', 
+                    'fhe_input_shape', 
+                    'fhe_output_shape'
+                ]
+                
+                # Update only batch dimension
+                for attr in shape_attrs:
+                    current_shape = getattr(module, attr)
+                    new_shape = torch.Size([batch_size] + list(current_shape[1:]))
+                    setattr(module, attr, new_shape)
 
     def propagate(self, *args) -> None:
         # Run the graph with the provided inputs
