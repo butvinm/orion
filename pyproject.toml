@@ -11,7 +11,7 @@ readme = "README.md"
 packages = [{include = "orion"}]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 PyYAML = "^6.0"
 torch = "^2.2.0"
 torchvision = "^0.17.0"

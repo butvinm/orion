@@ -109,10 +109,10 @@ class LattigoLibrary:
                 raise RuntimeError("Unsupported platform")
             
             # Full path to the library file
-            lib_path = os.path.join(
+            lib_path = os.path.abspath(os.path.join(
                 os.path.dirname(os.path.realpath(__file__)),
                 lib_name
-            )
+            ))
             return ctypes.CDLL(lib_path)
         except OSError as e:
             raise RuntimeError(f"Failed to load Lattigo library: {e}")

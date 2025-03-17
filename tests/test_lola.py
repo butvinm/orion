@@ -1,5 +1,5 @@
-import time
 import math
+import time
 import torch
 import orion
 import models
@@ -9,53 +9,59 @@ from orion.core.utils import (
     train_on_mnist
 )
 
-# Set seed for reproducibility
-torch.manual_seed(42)
+def test_lola_inference():
+    """Test LoLA model inference in both cleartext and FHE modes."""
+    # Set seed for reproducibility
+    torch.manual_seed(42)
 
-# Initialize the Orion scheme, model, and data
-scheme = orion.init_scheme("configs/lola.yaml")
-trainloader, testloader = get_mnist_datasets(
-    data_dir="data", batch_size=1, test_samples=20)
-net = models.LoLA()
+    # Initialize the Orion scheme, model, and data
+    scheme = orion.init_scheme("configs/lola.yaml")
+    trainloader, testloader = get_mnist_datasets(
+        data_dir="data", batch_size=1, test_samples=20)
+    net = models.LoLA()
 
-# Train model (optional)
-#train_on_mnist(net, data_dir="../data", epochs=1, device="cuda")
+    # Train model (optional)
+    #train_on_mnist(net, data_dir="../data", epochs=1, device="cuda")
 
-# Get a test batch to pass through our network
-inp, _ = next(iter(testloader))
+    # Get a test batch to pass through our network
+    inp, _ = next(iter(testloader))
 
-# Run cleartext inference
-net.eval()
-out_clear = net(inp)
+    # Run cleartext inference
+    net.eval()
+    out_clear = net(inp)
 
-# Prepare for FHE inference. 
-# Certain polynomial activation functions require us to know the precise range
-# of possible input values. We'll determine these ranges by aggregating
-# statistics from the training set and applying a tolerance factor = margin.
-orion.fit(net, trainloader)
-input_level = orion.compile(net)
+    # Prepare for FHE inference. 
+    # Certain polynomial activation functions require us to know the precise range
+    # of possible input values. We'll determine these ranges by aggregating
+    # statistics from the training set and applying a tolerance factor = margin.
+    orion.fit(net, trainloader)
+    input_level = orion.compile(net)
 
-# Encode and encrypt the input vector 
-vec_ptxt = orion.encode(inp, input_level)
-vec_ctxt = orion.encrypt(vec_ptxt)
-net.he()  # Switch to FHE mode
+    # Encode and encrypt the input vector 
+    vec_ptxt = orion.encode(inp, input_level)
+    vec_ctxt = orion.encrypt(vec_ptxt)
+    net.he()  # Switch to FHE mode
 
-# Run FHE inference
-print("\nStarting FHE inference", flush=True)
-start = time.time()
-out_ctxt = net(vec_ctxt)
-end = time.time()
+    # Run FHE inference
+    print("\nStarting FHE inference", flush=True)
+    start = time.time()
+    out_ctxt = net(vec_ctxt)
+    end = time.time()
 
-# Get the FHE results and decrypt + decode.
-out_ptxt = out_ctxt.decrypt()
-out_fhe = out_ptxt.decode()
+    # Get the FHE results and decrypt + decode.
+    out_ptxt = out_ctxt.decrypt()
+    out_fhe = out_ptxt.decode()
 
-# Compare the cleartext and FHE results.
-print()
-print(out_clear)
-print(out_fhe)
+    # Compare the cleartext and FHE results.
+    print()
+    print(out_clear)
+    print(out_fhe)
 
-dist = mae(out_clear, out_fhe)
-print(f"\nMAE: {dist:.4f}")
-print(f"Precision: {-math.log2(dist):.4f}")
-print(f"Runtime: {end-start:.4f} secs.\n")
+    dist = mae(out_clear, out_fhe)
+    print(f"\nMAE: {dist:.4f}")
+    print(f"Precision: {-math.log2(dist):.4f}")
+    print(f"Runtime: {end-start:.4f} secs.\n")
+
+    # Add assertions to make this a proper test
+    assert dist < 0.1, f"MAE between cleartext and FHE results too high: {dist}"
+    assert -math.log2(dist) > 3, f"Precision too low: {-math.log2(dist)}"
