@@ -6,7 +6,7 @@ channels:
 variables:
   CGO_ENABLED: 1
 dependencies:
-  - python>=3.9,<=3.12  
+  - python>=3.9,<3.13  
   - go>=1.21
   - gcc 
   - pyyaml>=6.0
