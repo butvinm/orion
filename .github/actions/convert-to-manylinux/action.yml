@@ -22,22 +22,23 @@ runs:
       run: |
         mkdir -p converted_wheels
         for whl in ${{ inputs.wheel-dir }}/*.whl; do
-          # Need to save original filename to handle renaming
+          # Need to save original filename
           FILENAME=$(basename "$whl")
           
-          # If already has manylinux in name but not manylinux2014
-          if [[ "$whl" == *"manylinux"* && "$whl" != *"manylinux2014"* ]]; then
-            # Create a temporary copy with non-manylinux name so auditwheel will process it
-            TEMP_NAME=${FILENAME/manylinux_*/linux_}
-            cp "$whl" "${{ inputs.wheel-dir }}/$TEMP_NAME"
+          # If already manylinux but not manylinux2014
+          if [[ "$FILENAME" == *"manylinux"* && "$FILENAME" != *"manylinux2014"* ]]; then
             echo "Converting newer manylinux format to ${{ inputs.platform }}: $FILENAME"
-            auditwheel repair "${{ inputs.wheel-dir }}/$TEMP_NAME" --plat "${{ inputs.platform }}" -w converted_wheels/
-            rm "${{ inputs.wheel-dir }}/$TEMP_NAME"
-          elif [[ "$whl" != *"manylinux"* ]]; then
-            echo "Converting $whl to ${{ inputs.platform }}"
+            # Create a temporary file with linux tag instead of manylinux
+            TEMP_NAME=${FILENAME/manylinux_[0-9]*/linux}
+            echo "Using temporary name: $TEMP_NAME"
+            cp "$whl" "/tmp/$TEMP_NAME"
+            auditwheel repair "/tmp/$TEMP_NAME" --plat "${{ inputs.platform }}" -w converted_wheels/
+            rm "/tmp/$TEMP_NAME"
+          elif [[ "$FILENAME" != *"manylinux"* ]]; then
+            echo "Converting $FILENAME to ${{ inputs.platform }}"
             auditwheel repair "$whl" --plat "${{ inputs.platform }}" -w converted_wheels/
           else
-            echo "Wheel already in target format: $whl"
+            echo "Wheel already in target format: $FILENAME"
             cp "$whl" converted_wheels/
           fi
         done
