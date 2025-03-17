@@ -4,14 +4,14 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "orion-fhe"
-version = "0.1.20"
+version = "0.1.21"
 description = "A Fully Homomorphic Encryption Framework for Deep Learning"
 authors = ["Austin Ebel <abe5240@nyu.edu>"]
 readme = "README.md"
 packages = [{include = "orion"}]
 
 [tool.poetry.dependencies]
-python = ">=3.9"
+python = ">=3.9, <=3.12"
 PyYAML = ">=6.0"
 torch = ">=2.2.0"
 torchvision = ">=0.17.0"
