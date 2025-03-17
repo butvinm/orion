@@ -28,7 +28,10 @@ from .auto_bootstrap import BootstrapSolver, BootstrapPlacer
 
 
 class Scheme:
-    """The core Orion scheme encapsulates all """
+    """
+    This Scheme class drives most of the functionality in Orion. It 
+    aggregates all the 
+    """
     
     def __init__(self):
         self.backend = None
