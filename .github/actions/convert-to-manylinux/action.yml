@@ -1,51 +1,45 @@
+
 name: 'Convert to manylinux'
-description: 'Converts Linux wheels to manylinux format for compatibility'
+description: 'Converts a Linux wheel to a manylinux-compatible wheel'
 
 inputs:
   wheel-dir:
-    required: true
-    description: 'Directory containing wheels'
-  platform:
+    description: 'Directory containing the wheel files'
     required: false
-    description: 'Manylinux platform (e.g., manylinux2014_x86_64)'
+    default: 'dist'
+  platform:
+    description: 'Target manylinux platform'
+    required: false
     default: 'manylinux2014_x86_64'
 
 runs:
   using: composite
   steps:
-    - name: Install auditwheel
-      shell: bash
-      run: pip install auditwheel
-    
-    - name: Convert wheels to manylinux
-      shell: bash
+    - name: Convert to manylinux wheel
+      shell: bash -l {0}
       run: |
-        mkdir -p converted_wheels
-        for whl in ${{ inputs.wheel-dir }}/*.whl; do
-          # Need to save original filename
-          FILENAME=$(basename "$whl")
-          
-          # If already manylinux but not manylinux2014
-          if [[ "$FILENAME" == *"manylinux"* && "$FILENAME" != *"manylinux2014"* ]]; then
-            echo "Converting newer manylinux format to ${{ inputs.platform }}: $FILENAME"
-            # Create a temporary file with linux tag instead of manylinux
-            TEMP_NAME=${FILENAME/manylinux_[0-9]*/linux}
-            echo "Using temporary name: $TEMP_NAME"
-            cp "$whl" "/tmp/$TEMP_NAME"
-            auditwheel repair "/tmp/$TEMP_NAME" --plat "${{ inputs.platform }}" -w converted_wheels/
-            rm "/tmp/$TEMP_NAME"
-          elif [[ "$FILENAME" != *"manylinux"* ]]; then
-            echo "Converting $FILENAME to ${{ inputs.platform }}"
-            auditwheel repair "$whl" --plat "${{ inputs.platform }}" -w converted_wheels/
-          else
-            echo "Wheel already in target format: $FILENAME"
-            cp "$whl" converted_wheels/
-          fi
-        done
+        # Install tool
+        pip install auditwheel
         
-        # Replace original wheels with converted ones
-        rm -f ${{ inputs.wheel-dir }}/*.whl
-        cp converted_wheels/*.whl ${{ inputs.wheel-dir }}/
+        # Find any Linux wheel
+        WHEEL_PATH=$(find ${{ inputs.wheel-dir }} -name "*linux*.whl")
         
-        echo "Converted wheels:"
-        ls -la ${{ inputs.wheel-dir }}/*.whl
+        # Skip if no Linux wheel found
+        if [ -z "$WHEEL_PATH" ]; then
+          echo "No Linux wheel found, skipping manylinux conversion"
+          exit 0
+        fi
+        
+        # Convert to manylinux
+        echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
+        TMP_DIR="${{ inputs.wheel-dir }}/manylinux"
+        
+        # Repair wheel to manylinux standard
+        auditwheel repair "$WHEEL_PATH" \
+          --plat ${{ inputs.platform }} \
+          -w "$TMP_DIR"
+        
+        # Replace original wheel with manylinux version
+        mv "$TMP_DIR"/*.whl ${{ inputs.wheel-dir }}/
+        rm "$WHEEL_PATH"
+        rmdir "$TMP_DIR"
