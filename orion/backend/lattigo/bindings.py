@@ -113,6 +113,8 @@ class LattigoLibrary:
                 os.path.dirname(os.path.realpath(__file__)),
                 lib_name
             ))
+
+            print(f"Looking for Lattigo library at: {lib_path}")
             return ctypes.CDLL(lib_path)
         except OSError as e:
             raise RuntimeError(f"Failed to load Lattigo library: {e}")
