@@ -2,29 +2,25 @@
 requires = ["poetry-core>=1.0.0", "setuptools>=61.0"]
 build-backend = "poetry.core.masonry.api"
 
-[project]
+[tool.poetry]
 name = "orion-fhe"
 version = "0.1.18"
 description = "A Fully Homomorphic Encryption Framework for Deep Learning"
-authors = [
-    {name = "Austin Ebel", email = "abe5240@nyu.edu"}
-]
+authors = ["Austin Ebel <abe5240@nyu.edu>"]
 readme = "README.md"
-requires-python = ">=3.8"
-dependencies = [
-    "PyYAML>=6.0",
-    "torch>=2.2.0",
-    "torchvision>=0.17.0",
-    "tqdm>=4.30.0",
-    "numpy>=1.21.0",
-    "scipy>=1.7.0",
-    "matplotlib>=3.1.0",
-    "h5py>=3.5.0"
-]
+packages = [{include = "orion"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+PyYAML = "^6.0"
+torch = "^2.2.0"
+torchvision = "^0.17.0"
+tqdm = "^4.30.0"
+numpy = "^1.21.0"
+scipy = "^1.7.0"
+matplotlib = "^3.1.0"
+h5py = "^3.5.0"
 
 [tool.poetry.build]
 script = "tools/build_lattigo.py"
 generate-setup-file = true
-
-[tool.poetry]
-packages = [{include = "orion"}]
