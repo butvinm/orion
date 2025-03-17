@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "orion-fhe"
-version = "0.1.18"
+version = "0.1.19"
 description = "A Fully Homomorphic Encryption Framework for Deep Learning"
 authors = ["Austin Ebel <abe5240@nyu.edu>"]
 readme = "README.md"
