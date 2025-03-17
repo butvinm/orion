@@ -28,7 +28,7 @@ from .auto_bootstrap import BootstrapSolver, BootstrapPlacer
 
 
 class Scheme:
-    """Test"""
+    """The core Orion scheme """
     def __init__(self):
         self.backend = None
         self.traced = None
