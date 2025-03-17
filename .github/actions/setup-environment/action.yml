@@ -1,5 +1,5 @@
 name: 'Setup environment'
-description: 'Sets up build dependencies and manylinux Docker build for Linux'
+description: 'Sets up Go, HDF5, and other build dependencies'
 
 inputs:
   python-version:
@@ -9,16 +9,11 @@ inputs:
     required: false
     description: 'CPU architecture (arm64 or x64)'
     default: 'x64'
-  manylinux-platform:
-    required: false
-    description: 'Manylinux platform to use for Linux builds'
-    default: 'manylinux2014_x86_64'
 
 runs:
   using: composite
   steps:
-    - name: Setup Miniconda (Non-Linux)
-      if: runner.os != 'Linux'
+    - name: Setup Miniconda
       uses: conda-incubator/setup-miniconda@v2
       with:
         auto-update-conda: true
@@ -27,14 +22,12 @@ runs:
         architecture: ${{ inputs.architecture }}
         miniconda-version: "latest"
     
-    - name: Set up Go (Non-Linux)
-      if: runner.os != 'Linux'
+    - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: '1.21.x'
     
-    - name: Configure platform-specific settings (Non-Linux)
-      if: runner.os != 'Linux'
+    - name: Configure platform-specific settings
       shell: bash -l {0}
       run: |
         # macOS-specific Go configuration
@@ -51,34 +44,3 @@ runs:
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           echo "$HOME/.poetry/bin" >> $GITHUB_PATH
         fi
-    
-    - name: Build in manylinux Docker container (Linux)
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        # Setup Docker volume mounts
-        REPO_DIR=$(pwd)
-        
-        # Run build in manylinux container
-        docker run --rm \
-          -v "${REPO_DIR}:/io" \
-          -w /io \
-          quay.io/pypa/${{ inputs.manylinux-platform }} \
-          /bin/bash -c "
-            # Install Go
-            curl -OL https://golang.org/dl/go1.21.0.linux-amd64.tar.gz
-            tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
-            export PATH=\$PATH:/usr/local/go/bin
-            
-            # Configure Go to disable VCS stamping
-            export GOFLAGS='-buildvcs=false'
-            
-            # Install Python dependencies
-            /opt/python/cp${{ inputs.python-version }}-cp${{ inputs.python-version }}*/bin/pip install poetry
-            
-            # Build the package
-            /opt/python/cp${{ inputs.python-version }}-cp${{ inputs.python-version }}*/bin/poetry build
-            
-            # Fix permissions of generated files
-            chown -R $(id -u):$(id -g) /io/dist
-          "

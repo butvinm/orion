@@ -30,19 +30,47 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
-          manylinux-platform: manylinux2014_x86_64
       
-      - name: Install Poetry (Non-Linux)
-        if: matrix.config.os != 'ubuntu-latest'
+      - name: Install Poetry
         shell: bash -l {0}
         run: |
           pip install poetry
       
-      - name: Build package (Non-Linux)
+      - name: Build package (non-Linux)
         if: matrix.config.os != 'ubuntu-latest'
         shell: bash -l {0}
         run: |
           poetry build
+
+      - name: Build manylinux wheel (Linux)
+        if: matrix.config.os == 'ubuntu-latest'
+        run: |
+          # Setup Docker volume mounts
+          REPO_DIR=$(pwd)
+          
+          # Run build in manylinux container
+          docker run --rm \
+            -v "${REPO_DIR}:/io" \
+            -w /io \
+            quay.io/pypa/manylinux2014_x86_64 \
+            /bin/bash -c "
+              # Install Go
+              curl -OL https://golang.org/dl/go1.21.0.linux-amd64.tar.gz
+              tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+              export PATH=\$PATH:/usr/local/go/bin
+              
+              # Configure Go to disable VCS stamping
+              export GOFLAGS="-buildvcs=false"
+              
+              # Install Python dependencies
+              /opt/python/cp310-cp310/bin/pip install poetry
+              
+              # Build the package
+              /opt/python/cp310-cp310/bin/poetry build
+              
+              # Fix permissions of generated files
+              chown -R $(id -u):$(id -g) /io/dist
+            "
       
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -73,7 +101,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
-          manylinux-platform: manylinux2014_x86_64
       
       - name: Install Tox
         shell: bash -l {0}
