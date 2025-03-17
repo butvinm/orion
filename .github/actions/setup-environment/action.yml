@@ -59,6 +59,11 @@ runs:
         # Setup Docker volume mounts
         REPO_DIR=$(pwd)
         
+        # Map Python version to cp tag
+        PY_VERSION="${{ inputs.python-version }}"
+        PY_VERSION_NO_DOT="${PY_VERSION//./}"
+        CP_TAG="cp${PY_VERSION_NO_DOT:0:2}${PY_VERSION_NO_DOT:0:2}"
+        
         # Run build in manylinux container
         docker run --rm \
           -v "${REPO_DIR}:/io" \
@@ -73,11 +78,18 @@ runs:
             # Configure Go to disable VCS stamping
             export GOFLAGS='-buildvcs=false'
             
+            # Find the Python binary for the specified version
+            PYTHON_BIN=\$(find /opt/python/${CP_TAG}* -name python -type f | head -n 1)
+            PIP_BIN=\$(find /opt/python/${CP_TAG}* -name pip -type f | head -n 1)
+            
+            echo \"Using Python: \$PYTHON_BIN\"
+            echo \"Using pip: \$PIP_BIN\"
+            
             # Install Python dependencies
-            /opt/python/cp310-cp310*/bin/pip install poetry
+            \$PIP_BIN install poetry
             
             # Build the package
-            /opt/python/cp310-cp310*/bin/poetry build
+            \$PYTHON_BIN -m poetry build
             
             # Fix permissions of generated files
             chown -R $(id -u):$(id -g) /io/dist
