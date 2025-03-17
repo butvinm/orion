@@ -1,17 +1,17 @@
 import os
-from typing import Literal
+from typing import Literal, List
 from dataclasses import dataclass, field
 
 
 @dataclass
 class CKKSParameters:
     logn: int
-    logq: list[int]
-    logp: list[int]
+    logq: List[int]
+    logp: List[int]
     logscale: int = field(default=None)
     h: int = 192
     ringtype: str = "standard"
-    boot_logp: list[int] = field(default=None)
+    boot_logp: List[int] = field(default=None)
 
     def __post_init__(self):
         if self.logq and self.logp and len(self.logp) > len(self.logq):
