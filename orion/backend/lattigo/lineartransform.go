@@ -121,8 +121,8 @@ func GetLinearTransformRotationKeys(transformID C.int) (*C.int, C.ulong) {
 	return arrPtr, length
 }
 
-//export GenerateRotationKey
-func GenerateRotationKey(galEl C.int) {
+//export GenerateLinearTransformRotationKey
+func GenerateLinearTransformRotationKey(galEl C.int) {
 	rotKey := scheme.KeyGen.GenGaloisKeyNew(uint64(galEl), scheme.SecretKey)
 	scheme.EvalKeys.GaloisKeys[uint64(galEl)] = rotKey
 }

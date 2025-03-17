@@ -66,7 +66,7 @@ class NewEvaluator:
 
         if self.io_mode == "none":
             for key in keys_to_gen:
-                self.backend.GenerateRotationKey(key)
+                self.backend.GenerateLinearTransformRotationKey(key)
 
         elif self.io_mode == "save":
             with h5py.File(self.keys_path, "a") as f:

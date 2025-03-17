@@ -683,8 +683,8 @@ class LattigoLibrary:
             restype=ArrayResultInt
         )
 
-        self.GenerateRotationKey = LattigoFunction(
-            self.lib.GenerateRotationKey,
+        self.GenerateLinearTransformRotationKey = LattigoFunction(
+            self.lib.GenerateLinearTransformRotationKey,
             argtypes=[ctypes.c_int],
             restype=None
         )
