@@ -22,11 +22,22 @@ runs:
       run: |
         mkdir -p converted_wheels
         for whl in ${{ inputs.wheel-dir }}/*.whl; do
-          if [[ "$whl" != *"manylinux"* ]]; then
+          # Need to save original filename to handle renaming
+          FILENAME=$(basename "$whl")
+          
+          # If already has manylinux in name but not manylinux2014
+          if [[ "$whl" == *"manylinux"* && "$whl" != *"manylinux2014"* ]]; then
+            # Create a temporary copy with non-manylinux name so auditwheel will process it
+            TEMP_NAME=${FILENAME/manylinux_*/linux_}
+            cp "$whl" "${{ inputs.wheel-dir }}/$TEMP_NAME"
+            echo "Converting newer manylinux format to ${{ inputs.platform }}: $FILENAME"
+            auditwheel repair "${{ inputs.wheel-dir }}/$TEMP_NAME" --plat "${{ inputs.platform }}" -w converted_wheels/
+            rm "${{ inputs.wheel-dir }}/$TEMP_NAME"
+          elif [[ "$whl" != *"manylinux"* ]]; then
             echo "Converting $whl to ${{ inputs.platform }}"
             auditwheel repair "$whl" --plat "${{ inputs.platform }}" -w converted_wheels/
           else
-            echo "Skipping already-converted wheel: $whl"
+            echo "Wheel already in target format: $whl"
             cp "$whl" converted_wheels/
           fi
         done
