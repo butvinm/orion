@@ -3,7 +3,7 @@ name: Build and Publish
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
 
 permissions:
@@ -20,7 +20,7 @@ jobs:
           # - {os: windows-latest, arch: "x64"}
           # - {os: macos-latest, arch: "x64"}
           # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.10"] #, "3.10", "3.11", "3.12"]
+        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
@@ -64,10 +64,10 @@ jobs:
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.10"] #, "3.10", "3.11", "3.12"]
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
@@ -99,7 +99,6 @@ jobs:
       - name: Run tests with Tox
         shell: bash -l {0}
         run: tox
-        working-directory: . 
 
   publish:
     needs: [test]

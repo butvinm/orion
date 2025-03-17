@@ -1,4 +1,3 @@
-
 name: 'Setup environment'
 description: 'Sets up Go, HDF5, and other build dependencies'
 

@@ -28,7 +28,6 @@ def build(setup_kwargs=None):
     # Build command with VCS flag disabled
     build_cmd = [
         "go", "build", 
-        "-buildvcs=false",
         "-buildmode=c-shared",
         "-o", str(output_path),
         str(backend_dir)
