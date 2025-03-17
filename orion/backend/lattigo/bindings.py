@@ -110,24 +110,9 @@ class LattigoLibrary:
             
             # Standard path
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            lib_path = os.path.join(current_dir, lib_name)
-            
-            # If file doesn't exist at standard path, search recursively
-            if not os.path.exists(lib_path):
-                print(f"Library not found at standard path: {lib_path}")
-                # Determine search root
-                if os.path.exists("/home/runner/work/orion"):
-                    search_root = "/home/runner/work/orion"
-                    print(f"Searching CI environment recursively: {search_root}")
-                    lib_path = self._find_library(search_root, lib_name)
-                else:
-                    # Local dev environment - search up to project root
-                    project_root = os.path.abspath(os.path.join(current_dir, "../.."))
-                    print(f"Searching local environment recursively: {project_root}")
-                    lib_path = self._find_library(project_root, lib_name)
-            
-            print(f"Loading library from: {lib_path}")
+            lib_path = os.path.join(current_dir, lib_name)            
             return ctypes.CDLL(lib_path)
+        
         except OSError as e:
             raise RuntimeError(f"Failed to load Lattigo library: {e}")
 

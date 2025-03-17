@@ -2,7 +2,7 @@ import time
 import math
 import torch
 import orion
-import models
+import orion.models as models
 from orion.core.utils import (
     get_cifar_datasets,
     mae, 
@@ -13,7 +13,7 @@ from orion.core.utils import (
 torch.manual_seed(42)
 
 # Initialize the Orion scheme, model, and data
-scheme = orion.init_scheme("../configs/resnet.yaml")
+scheme = orion.init_scheme("../configs/resnet.yml")
 trainloader, testloader = get_cifar_datasets(data_dir="../data", batch_size=1)
 net = models.ResNet20()
 

@@ -2,7 +2,7 @@ import time
 import math
 import torch
 import orion
-import models
+import orion.models as models
 from orion.core.utils import (
     get_mnist_datasets,
     mae, 
@@ -13,9 +13,8 @@ from orion.core.utils import (
 torch.manual_seed(42)
 
 # Initialize the Orion scheme, model, and data
-scheme = orion.init_scheme("../configs/lola.yaml")
-trainloader, testloader = get_mnist_datasets(
-    data_dir="../data", batch_size=1, test_samples=20)
+scheme = orion.init_scheme("../configs/lola.yml")
+trainloader, testloader = get_mnist_datasets(data_dir="../data", batch_size=1)
 net = models.LoLA()
 
 # Train model (optional)
