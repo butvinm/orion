@@ -101,6 +101,12 @@ jobs:
         run: tox
         working-directory: .
 
+      - name: Upload pytest logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-logs
+          path: .tox/*/log/test_output.log
+
   publish:
     needs: [test]
     runs-on: ubuntu-latest
