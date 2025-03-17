@@ -10,80 +10,94 @@ permissions:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest] # Add windows-latest, macos-latest when ready
-        python-version: ["3.10"] # Add 3.11, 3.12, 3.13 when ready
+        config:
+          - {os: ubuntu-latest, arch: "x64"}
+          # - {os: windows-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.10"] #, "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup build environment
+        uses: ./.github/actions/setup-environment
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.config.arch }}
       
-      - name: Install cibuildwheel
-        run: pip install cibuildwheel
+      - name: Install Poetry
+        shell: bash -l {0}
+        run: |
+          pip install poetry
       
-      - name: Build wheels
-        env:
-          CIBW_BUILD: cp${{ matrix.python-version == '3.10' && '310' || matrix.python-version == '3.11' && '311' || matrix.python-version == '3.12' && '312' || '313' }}-*
-          CIBW_ARCHS_LINUX: x86_64
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
-          GOFLAGS: '-buildvcs=false'
-          # Install Go in the build environment before running the build script
-          CIBW_BEFORE_BUILD: >
-            curl -OL https://golang.org/dl/go1.21.0.linux-amd64.tar.gz &&
-            tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz &&
-            export PATH=$PATH:/usr/local/go/bin &&
-            go version
-          # Make Go available in PATH during build
-          CIBW_ENVIRONMENT: PATH=$PATH:/usr/local/go/bin
-        run: python -m cibuildwheel --output-dir dist
+      - name: Build package
+        shell: bash -l {0}
+        run: |
+          poetry build
+      
+      - name: Convert to manylinux wheel
+        if: matrix.config.os == 'ubuntu-latest'
+        uses: ./.github/actions/convert-to-manylinux
+        with:
+          wheel-dir: dist
+          platform: manylinux2014_x86_64
       
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: >-
+            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
           path: dist/*.whl
 
   test:
     needs: build
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest] # Add windows-latest, macos-latest when ready
-        python-version: ["3.10"] # Add 3.11, 3.12, 3.13 when ready
+        config:
+          - {os: ubuntu-latest, arch: "x64"}
+          # - {os: windows-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.10"] #, "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup test environment
+        uses: ./.github/actions/setup-environment
         with:
           python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.config.arch }}
       
       - name: Install Tox
-        run: pip install tox tox-conda tox-gh-actions
+        shell: bash -l {0}
+        run: |
+          pip install tox tox-conda tox-gh-actions
       
       - name: Download wheels
         uses: actions/download-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
+          name: >-
+            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
           path: dist
       
       - name: Install wheel
-        run: pip install --find-links=dist orion-fhe
+        shell: bash -l {0}
+        run: |
+          pip install --find-links=dist orion-fhe
       
       - name: Run tests with Tox
+        shell: bash -l {0}
         run: tox
-        working-directory: .
 
   publish:
     needs: [test]
@@ -93,11 +107,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
       
       - name: Install Poetry
         uses: snok/install-poetry@v1

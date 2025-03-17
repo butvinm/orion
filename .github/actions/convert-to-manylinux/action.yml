@@ -1,44 +1,39 @@
 name: 'Convert to manylinux'
-description: 'Converts a Linux wheel to a manylinux-compatible wheel'
+description: 'Converts Linux wheels to manylinux format for compatibility'
 
 inputs:
   wheel-dir:
-    description: 'Directory containing the wheel files'
-    required: false
-    default: 'dist'
+    required: true
+    description: 'Directory containing wheels'
   platform:
-    description: 'Target manylinux platform'
     required: false
+    description: 'Manylinux platform (e.g., manylinux2014_x86_64)'
     default: 'manylinux2014_x86_64'
 
 runs:
   using: composite
   steps:
-    - name: Convert to manylinux wheel
-      shell: bash -l {0}
+    - name: Install auditwheel
+      shell: bash
+      run: pip install auditwheel
+    
+    - name: Convert wheels to manylinux
+      shell: bash
       run: |
-        # Install tool
-        pip install auditwheel
+        mkdir -p converted_wheels
+        for whl in ${{ inputs.wheel-dir }}/*.whl; do
+          if [[ "$whl" != *"manylinux"* ]]; then
+            echo "Converting $whl to ${{ inputs.platform }}"
+            auditwheel repair "$whl" --plat "${{ inputs.platform }}" -w converted_wheels/
+          else
+            echo "Skipping already-converted wheel: $whl"
+            cp "$whl" converted_wheels/
+          fi
+        done
         
-        # Find any Linux wheel
-        WHEEL_PATH=$(find ${{ inputs.wheel-dir }} -name "*linux*.whl")
+        # Replace original wheels with converted ones
+        rm -f ${{ inputs.wheel-dir }}/*.whl
+        cp converted_wheels/*.whl ${{ inputs.wheel-dir }}/
         
-        # Skip if no Linux wheel found
-        if [ -z "$WHEEL_PATH" ]; then
-          echo "No Linux wheel found, skipping manylinux conversion"
-          exit 0
-        fi
-        
-        # Convert to manylinux
-        echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
-        TMP_DIR="${{ inputs.wheel-dir }}/manylinux"
-        
-        # Repair wheel to manylinux standard
-        auditwheel repair "$WHEEL_PATH" \
-          --plat ${{ inputs.platform }} \
-          -w "$TMP_DIR"
-        
-        # Replace original wheel with manylinux version
-        mv "$TMP_DIR"/*.whl ${{ inputs.wheel-dir }}/
-        rm "$WHEEL_PATH"
-        rmdir "$TMP_DIR"
+        echo "Converted wheels:"
+        ls -la ${{ inputs.wheel-dir }}/*.whl
