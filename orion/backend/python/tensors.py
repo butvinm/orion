@@ -1,3 +1,4 @@
+import sys
 import math
 
 class PlainTensor:
@@ -11,11 +12,12 @@ class PlainTensor:
         self.on_shape = on_shape or shape
 
     def __del__(self):
-        try:
-            for idx in self.ids:
-                self.backend.DeletePlaintext(idx)
-        except (AttributeError, TypeError):
-            pass # avoids errors for GC at program termination
+        if 'sys' in globals() and sys.modules and self.scheme:
+            try:
+                for idx in self.ids:
+                    self.backend.DeletePlaintext(idx)
+            except Exception: 
+                pass # avoids errors for GC at program termination
 
     def __len__(self):
         return len(self.ids)
@@ -65,11 +67,12 @@ class CipherTensor:
         self.on_shape = on_shape or shape
 
     def __del__(self):
-        try:
-            for ctxt in self.ids:
-                self.backend.DeleteCiphertext(ctxt)
-        except (AttributeError, TypeError):
-            pass # avoids errors for GC at program termination
+        if 'sys' in globals() and sys.modules and self.scheme:
+            try:
+                for idx in self.ids:
+                    self.backend.DeleteCiphertext(idx)
+            except Exception: 
+                pass # avoids errors for GC at program termination
 
     def __len__(self):
         return len(self.ids)
