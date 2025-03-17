@@ -26,12 +26,13 @@ func AddPo2RotationKeys() {
 	maxSlots := scheme.Params.MaxSlots()
 	// Generate all positive power-of-two rotation keys
 	for i := 1; i < maxSlots; i *= 2 {
-		AddRotationKey(i)
+		AddRotationKey(C.int(i))
 	}
 }
 
-func AddRotationKey(rotation int) {
-	galEl := scheme.Params.GaloisElement(rotation)
+//export AddRotationKey
+func AddRotationKey(rotation C.int) {
+	galEl := scheme.Params.GaloisElement(int(rotation))
 
 	// Generate the required rotation key if it doesn't exist
 	if _, exists := liveRotKeys[galEl]; !exists {
@@ -59,7 +60,7 @@ func Negate(ciphertextID C.int) C.int {
 //export Rotate
 func Rotate(ciphertextID, amount C.int) C.int {
 	ctIn := RetrieveCiphertext(int(ciphertextID))
-	AddRotationKey(int(amount))
+	AddRotationKey(amount)
 	scheme.Evaluator.Rotate(ctIn, int(amount), ctIn)
 
 	return ciphertextID
@@ -68,7 +69,7 @@ func Rotate(ciphertextID, amount C.int) C.int {
 //export RotateNew
 func RotateNew(ciphertextID, amount C.int) C.int {
 	ctIn := RetrieveCiphertext(int(ciphertextID))
-	AddRotationKey(int(amount))
+	AddRotationKey(amount)
 
 	ctOut, err := scheme.Evaluator.RotateNew(ctIn, int(amount))
 	if err != nil {

@@ -6,6 +6,9 @@ class NewEvaluator:
     def new_evaluator(self):
         self.backend.NewEvaluator()
 
+    def add_rotation_key(self, amount: int):
+        self.backend.AddRotationKey(amount)
+
     def negate(self, ctxt):
         return self.backend.Negate(ctxt)
     

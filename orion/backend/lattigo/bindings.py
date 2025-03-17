@@ -380,6 +380,12 @@ class LattigoLibrary:
             restype=None
         )
 
+        self.AddRotationKey = LattigoFunction(
+            self.lib.AddRotationKey,
+            argtypes=[ctypes.c_int],
+            restype=None
+        )
+
         self.Negate = LattigoFunction(
             self.lib.Negate,
             argtypes=[ctypes.c_int],

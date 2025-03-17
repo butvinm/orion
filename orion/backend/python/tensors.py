@@ -24,6 +24,30 @@ class PlainTensor:
     
     def __str__(self):
         return str(self.decode())
+    
+    def mul(self, other, in_place=False):
+        if not isinstance(other, CipherTensor):
+            raise ValueError(f"Multiplication between PlainTensor and "
+                             f"{type(other)} is not supported.")
+
+        mul_ids = []
+        for i in range(len(self.ids)):
+            mul_id = self.evaluator.mul_ciphertext(
+                other.ids[i], self.ids[i], in_place)
+            mul_ids.append(mul_id)
+
+        if in_place:
+            return other
+        return CipherTensor(self.scheme, mul_ids, self.shape, self.on_shape) 
+
+    def __mul__(self, other):
+        return self.mul(other, in_place=False)     
+
+    def __imul__(self, other):
+        return self.mul(other, in_place=True)
+    
+    def _check_valid(self, other):
+        return 
         
     def get_ids(self):
         return self.ids
