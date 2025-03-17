@@ -20,7 +20,7 @@ jobs:
           # - {os: windows-latest, arch: "x64"}
           # - {os: macos-latest, arch: "x64"}
           # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.11"] #, "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11"] #, "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
@@ -67,7 +67,7 @@ jobs:
           # - {os: windows-latest, arch: "x64"}
           # - {os: macos-latest, arch: "x64"}
           # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.11"] #, "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11"] #, "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
@@ -104,7 +104,7 @@ jobs:
   publish:
     needs: [test]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' # && github.ref == 'refs/heads/main'
     
     steps:
       - name: Checkout repository
