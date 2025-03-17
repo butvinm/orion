@@ -10,92 +10,77 @@ permissions:
 
 jobs:
   build:
-    runs-on: ${{ matrix.config.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.10"] #, "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest] # Add windows-latest, macos-latest when ready
+        python-version: ["3.10"] # Add 3.11, 3.12, 3.13 when ready
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Setup build environment
-        uses: ./.github/actions/setup-environment
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
-          manylinux-platform: manylinux2014_x86_64
       
-      - name: Install Poetry (Non-Linux)
-        if: matrix.config.os != 'ubuntu-latest'
-        shell: bash -l {0}
-        run: |
-          pip install poetry
+      - name: Install cibuildwheel
+        run: pip install cibuildwheel
       
-      - name: Build package (Non-Linux)
-        if: matrix.config.os != 'ubuntu-latest'
-        shell: bash -l {0}
-        run: |
-          poetry build
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.x'
+      
+      - name: Build wheels
+        env:
+          CIBW_BUILD: cp${{ matrix.python-version == '3.10' && '310' || matrix.python-version == '3.11' && '311' || matrix.python-version == '3.12' && '312' || '313' }}-*
+          CIBW_ARCHS_LINUX: x86_64
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+          GOFLAGS: '-buildvcs=false'
+        run: python -m cibuildwheel --output-dir dist
       
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: >-
-            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
           path: dist/*.whl
 
   test:
     needs: build
-    runs-on: ${{ matrix.config.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.10"] #, "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest] # Add windows-latest, macos-latest when ready
+        python-version: ["3.10"] # Add 3.11, 3.12, 3.13 when ready
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Setup test environment
-        uses: ./.github/actions/setup-environment
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
-          manylinux-platform: manylinux2014_x86_64
       
       - name: Install Tox
-        shell: bash -l {0}
-        run: |
-          pip install tox tox-conda tox-gh-actions
+        run: pip install tox tox-conda tox-gh-actions
       
       - name: Download wheels
         uses: actions/download-artifact@v4
         with:
-          name: >-
-            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
           path: dist
       
       - name: Install wheel
-        shell: bash -l {0}
-        run: |
-          pip install --find-links=dist orion-fhe
+        run: pip install --find-links=dist orion-fhe
       
       - name: Run tests with Tox
-        shell: bash -l {0}
         run: tox
-        working-directory: . 
+        working-directory: .
 
   publish:
     needs: [test]
@@ -105,6 +90,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
       
       - name: Install Poetry
         uses: snok/install-poetry@v1
