@@ -10,6 +10,10 @@ inputs:
     description: 'Target manylinux platform'
     required: false
     default: 'manylinux2014_x86_64'
+  keep-original:
+    description: 'Keep the original wheel file'
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -19,27 +23,52 @@ runs:
       run: |
         # Install tool
         pip install auditwheel
-        
-        # Find any wheel 
-        WHEEL_PATH=$(find ${{ inputs.wheel-dir }} -name "*.whl" | grep -v "manylinux")
+
+        # Find any wheel that is not already manylinux
+        WHEEL_PATHS=$(find ${{ inputs.wheel-dir }} -name "*.whl" | grep -v "manylinux" || echo "")
         
         # Skip if no wheel found
-        if [ -z "$WHEEL_PATH" ]; then
-          echo "No wheel found, skipping manylinux conversion"
+        if [ -z "$WHEEL_PATHS" ]; then
+          echo "No non-manylinux wheels found, skipping conversion"
           exit 0
         fi
         
-        # Convert to manylinux
-        echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
+        # Create temporary directory for manylinux wheels
         TMP_DIR="${{ inputs.wheel-dir }}/manylinux"
         mkdir -p "$TMP_DIR"
         
-        # Repair wheel to manylinux standard
-        auditwheel repair "$WHEEL_PATH" \
-          --plat ${{ inputs.platform }} \
-          -w "$TMP_DIR"
+        # Process each wheel
+        for WHEEL_PATH in $WHEEL_PATHS; do
+          echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
+          
+          # Repair wheel to manylinux standard
+          auditwheel repair "$WHEEL_PATH" \
+            --plat ${{ inputs.platform }} \
+            -w "$TMP_DIR" || {
+              echo "Warning: auditwheel repair failed for $WHEEL_PATH"
+              continue
+            }
+            
+          # Check if conversion was successful
+          MANYLINUX_WHEEL=$(find "$TMP_DIR" -name "*.whl" -newer "$WHEEL_PATH" | head -1)
+          if [ -n "$MANYLINUX_WHEEL" ]; then
+            echo "Successfully converted to: $MANYLINUX_WHEEL"
+            # Move the manylinux wheel to the original directory
+            mv "$MANYLINUX_WHEEL" ${{ inputs.wheel-dir }}/
+            
+            # Remove the original wheel if not keeping it
+            if [ "${{ inputs.keep-original }}" != "true" ]; then
+              echo "Removing original wheel: $WHEEL_PATH"
+              rm "$WHEEL_PATH"
+            fi
+          else
+            echo "No manylinux wheel was produced for $WHEEL_PATH"
+          fi
+        done
         
-        # Replace original wheel with manylinux version
-        mv "$TMP_DIR"/*.whl ${{ inputs.wheel-dir }}/
-        rm "$WHEEL_PATH"
-        rmdir "$TMP_DIR"
+        # Clean up
+        rmdir "$TMP_DIR" 2>/dev/null || true
+        
+        # List final wheels
+        echo "Final wheels in ${{ inputs.wheel-dir }}:"
+        ls -la ${{ inputs.wheel-dir }}/*.whl || echo "No wheels found"
