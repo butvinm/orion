@@ -63,6 +63,5 @@ class BuildLattigo(build_py):
 
 setup(
     cmdclass={'build_py': BuildLattigo},
-    packages=find_namespace_packages(include=['orion*']),
-
+    include_package_data=True
 )
