@@ -55,6 +55,7 @@ jobs:
       - name: setup python
         uses: conda-incubator/setup-miniconda@v2
         with:
+          miniconda-version: "latest"
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
           auto-activate-base: true
