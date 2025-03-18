@@ -49,35 +49,33 @@ jobs:
         python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
     
     steps:
-      - name: Checkout repository
+      - name: checkout orion repository
         uses: actions/checkout@v4
 
-      - name: setup mac 
+      - name: add required mac directories
         run: |
-          if [ "${{ runner.os }}" == "Darwin" ]; then
+          if [ "${{ runner.os }}" == "macOS" ]; then
             mkdir -p /Users/runner/hostedtoolcache
             chmod 777 /Users/runner/hostedtoolcache
-
-      - name: Set up Python
+          fi
+          
+      - name: set up python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
       
-      - name: Set up Go
+      - name: set up golang
         uses: actions/setup-go@v5
         with:
           go-version: '1.21.x'
       
-      - name: Install UV
+      - name: install uv and build orion package
         run: |
           pip install uv
-      
-      - name: Build package
-        run: |
           uv build --sdist --wheel --out-dir dist
       
-      - name: Upload wheels
+      - name: upload other wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
