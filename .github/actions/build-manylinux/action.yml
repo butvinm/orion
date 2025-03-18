@@ -20,15 +20,15 @@ runs:
       shell: bash
       run: |
         yum install -y python3-pip
-        python3 -m pip install uv
+        python${{ inputs.python-version }} -m pip install uv
         uv --version
     
-    # - name: build package 
-    #   shell: bash
-    #   run: |
-    #     uv venv --python ${{ inputs.python-version }}
-    #     source .venv/bin/activate
-    #     uv pip install setuptools wheel build auditwheel
+    - name: build package 
+      shell: bash
+      run: |
+        uv venv --python ${{ inputs.python-version }}
+        source .venv/bin/activate
+        uv pip install setuptools wheel build auditwheel
         
     #     python setup.py build # generates .so/dylib/dll file first
     #     uv build --sdist --wheel --out-dir dist
