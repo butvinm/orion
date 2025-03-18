@@ -64,15 +64,20 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.21.x'
-      
-      - name: install uv and build orion package
+
+      - name: install uv and create venv
+        shell: bash
         run: |
           pip install uv
           uv venv --python ${{ matrix.python-version }}
-          source .venv/bin/activate
-          
-          uv build --sdist --wheel --out-dir dist
 
+      - name: activate venv
+        uses: ./.github/actions/activate-venv
+
+      - name: build orion package
+        run: |     
+          eval "${{ env.GITHUB_ENV }}" 
+          uv build --sdist --wheel --out-dir dist
           echo "Contents of the wheel file:"
           unzip -l dist/*.whl
       
