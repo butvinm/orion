@@ -70,8 +70,8 @@ jobs:
           pip install uv
           uv venv --python ${{ matrix.python-version }}
 
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            . .\.venv\Scripts\activate
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            . .venv/Scripts/activate
           else
             source .venv/bin/activate
           fi
@@ -127,8 +127,8 @@ jobs:
       - name: install packages
         shell: bash
         run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            . .\.venv\Scripts\activate
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            . .venv/Scripts/activate
           else
             source .venv/bin/activate
           fi
@@ -138,8 +138,8 @@ jobs:
       - name: run pytest
         shell: bash
         run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            . .\.venv\Scripts\activate
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            . .venv/Scripts/activate
           else
             source .venv/bin/activate
           fi
