@@ -38,10 +38,7 @@ jobs:
       - name: Build package
         shell: bash -l {0}
         run: |
-          # Install the package first to ensure the Go library is built
-          # uv pip install -e .
-          # Then build the distributions
-          uv build --sdist --wheel --out-dir dist
+          uv pip install -e .
       
       - name: Convert to manylinux wheel
         if: matrix.config.os == 'ubuntu-latest'
