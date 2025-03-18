@@ -4,6 +4,9 @@ inputs:
   python-version:
     description: 'python version to use'
     required: true
+  manylinux:
+    description: 'manylinux version to use'
+    required: true
 
 runs:
   using: 'composite'
