@@ -11,7 +11,7 @@ permissions:
 jobs:
   # In order to build general manylinux wheels that support older Linux
   # distributions, we'll need to use Docker. 
-  build-linux:
+  build-manylinux:
     runs-on: ubuntu-latest
     container:
       image: quay.io/pypa/manylinux_2_28_x86_64
@@ -115,8 +115,10 @@ jobs:
           source .venv/bin/activate
           uv pip install --find-links=dist orion-fhe pytest pytest-cov
                   
-      - name: Run tests
-        run: pytest tests/
+      - name: run pytest
+        run: |
+          source .venv/bin/activate
+          pytest tests/
 
   # publish:
   #   needs: [test]
