@@ -1,5 +1,5 @@
 name: 'activate python venv'
-description: 'pulls out difference between windows and mac 
+description: 'pulls out difference between windows and mac'
 
 runs:
   using: "composite"
