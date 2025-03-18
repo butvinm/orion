@@ -47,6 +47,7 @@ class BuildLattigo(build_py):
         build_cmd = [
             "go", "build", 
             "-buildmode=c-shared",
+            "-buildvcs=false", 
             "-o", str(output_path),
             str(backend_dir)
         ]
