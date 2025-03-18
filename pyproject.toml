@@ -24,3 +24,6 @@ dependencies = [
 
 [tool.setuptools]
 packages = ["orion"]
+
+[tool.setuptools.bdist_wheel]
+plat_name = "manylinux2014_x86_64" 
