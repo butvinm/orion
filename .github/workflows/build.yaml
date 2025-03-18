@@ -111,7 +111,7 @@ jobs:
       - name: install, uv, pytest, and wheels
         run: |
           pip install uv
-          uv venv --python ${{ inputs.python-version }}
+          uv venv --python ${{ matrix.python-version }}
           source .venv/bin/activate
           uv pip install --find-links=dist orion-fhe pytest pytest-cov
                   
