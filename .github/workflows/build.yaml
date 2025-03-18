@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            echo "VENV_PYTHON=.venv/Scripts/python" >> $GITHUB_ENV
+            echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
           else
             echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
           fi
@@ -125,7 +125,7 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            echo "VENV_PYTHON=.venv/Scripts/python" >> $GITHUB_ENV
+            echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
           else
             echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
           fi
