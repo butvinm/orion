@@ -27,7 +27,7 @@ runs:
         source .venv/bin/activate
         uv pip install setuptools wheel build auditwheel
         
-        python setup.py build # generates .so/dylib/dll file first
+        # python setup.py build # generates .so/dylib/dll file first
         uv build --sdist --wheel --out-dir dist
 
         echo "Contents of the wheel file:"
