@@ -38,7 +38,7 @@ jobs:
       - name: Build package
         shell: bash -l {0} 
         run: |
-          uv python setup.py build
+          python setup.py build
           uv build 
       
       - name: Convert to manylinux wheel
