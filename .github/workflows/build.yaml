@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: &python_versions ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,7 +40,7 @@ jobs:
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: *python_versions
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
@@ -84,7 +84,7 @@ jobs:
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: *python_versions
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
@@ -131,8 +131,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          # Use the first Python version from our list
-          python-version: *python_versions
+          # For publishing, we only need one Python version
+          python-version: "3.9"
       
       - name: Install UV
         run: pip install uv

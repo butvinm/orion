@@ -20,7 +20,7 @@ runs:
     - name: Build manylinux wheel for Python ${{ inputs.python-version }}
       shell: bash
       run: |
-        # Replace python path using version (e.g "3.9" -> "cp39-cp39")
+        # Map Python version to manylinux (e.g. 3.9 -> cp39-cp39)
         PYVER="${{ inputs.python-version }}"
         PYVER_NO_DOT="${PYVER//./}"
         PYBIN="/opt/python/cp${PYVER_NO_DOT}-cp${PYVER_NO_DOT}/bin"
