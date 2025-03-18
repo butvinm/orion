@@ -1,0 +1,15 @@
+name: 'activate python venv'
+description: 'pulls out difference between windows and mac 
+
+runs:
+  using: "composite"
+  steps:
+    - name: activate venv (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: echo ". ./.venv/Scripts/activate" >> $GITHUB_ENV
+
+    - name: activate venv (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: echo "source .venv/bin/activate" >> $GITHUB_ENV

@@ -43,9 +43,9 @@ jobs:
       fail-fast: false
       matrix:
         config:
-         # - {os: windows-latest, arch: "x64"}
-         #- {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
+          - {os: windows-latest, arch: "x64"}
+          #- {os: macos-latest, arch: "x64"}
+          #- {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
     
     steps:
@@ -68,7 +68,13 @@ jobs:
       - name: install uv and build orion package
         run: |
           pip install uv
+          uv venv --python ${{ matrix.python-version }}
+          source .venv/bin/activate
+          
           uv build --sdist --wheel --out-dir dist
+
+          echo "Contents of the wheel file:"
+          unzip -l dist/*.whl
       
       - name: upload other wheels
         uses: actions/upload-artifact@v4
@@ -86,9 +92,9 @@ jobs:
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-         # - {os: windows-latest, arch: "x64"}
-         # - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
+          - {os: windows-latest, arch: "x64"}
+          #- {os: macos-latest, arch: "x64"}
+          #- {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
     
     steps:
@@ -106,31 +112,26 @@ jobs:
           pattern: wheels-*
           path: dist/
           merge-multiple: true
-            
-      - name: install, uv, pytest, and wheels
+
+      - name: install uv and create venv
         shell: bash
         run: |
           pip install uv
           uv venv --python ${{ matrix.python-version }}
 
-          # Windows needs different venv activate
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            . .\.venv\Scripts\activate
-          else
-            source .venv/bin/activate
-          fi
-
+      - name: activate venv
+        uses: ./.github/actions/activate-venv
+            
+      - name: install packages
+        shell: bash
+        run: |
+          eval "${{ env.GITHUB_ENV }}"
           uv pip install --find-links=dist orion-fhe pytest pytest-cov
-                  
+
       - name: run pytest
         shell: bash
         run: |
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            . .\.venv\Scripts\activate
-          else
-            source .venv/bin/activate
-          fi
-
+          eval "${{ env.GITHUB_ENV }}"
           pytest tests/
 
   # publish:
