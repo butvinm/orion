@@ -8,97 +8,119 @@ on:
 permissions:
   contents: write
 
+env:
+  python_versions: '["3.9", "3.10", "3.11", "3.12"]'
+
 jobs:
-  build:
-    runs-on: ${{ matrix.config.os }}
+  build-manylinux:
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - {os: ubuntu-latest, arch: "x64"}
-          - {os: windows-latest, arch: "x64"}
-          - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
-    
+        python-version: ${{ fromJson(env.python_versions) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Setup build environment
-        uses: ./.github/actions/setup-environment
+      - name: Build manylinux wheel
+        uses: ./.github/actions/build-manylinux
         with:
           python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
-      
-      - name: Install Poetry
-        shell: bash -l {0}
-        run: |
-          pip install poetry
-      
-      - name: Build package
-        shell: bash -l {0}
-        run: |
-          poetry build
-
-      - name: Convert to manylinux wheel
-        if: matrix.config.os == 'ubuntu-latest'
-        uses: ./.github/actions/convert-to-manylinux
-        with:
-          wheel-dir: dist
-          platform: manylinux2014_x86_64
       
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: >-
-            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+          name: wheels-manylinux2014-py${{ matrix.python-version }}
           path: dist/*.whl
 
+  # build-other:
+  #   runs-on: ${{ matrix.config.os }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       config:
+  #         - {os: windows-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "arm64"}
+  #       python-version: ${{ fromJson(env.python_versions) }}
+    
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+      
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #         architecture: ${{ matrix.config.arch }}
+      
+  #     - name: Set up Go
+  #       uses: actions/setup-go@v5
+  #       with:
+  #         go-version: '1.21.x'
+      
+  #     - name: Install UV
+  #       run: |
+  #         pip install uv
+      
+  #     - name: Build package
+  #       run: |
+  #         uv pip install build
+  #         python -m build
+      
+  #     - name: Upload wheels
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: >-
+  #           wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+  #         path: dist/*.whl
+
   test:
-    needs: build
+    needs: [build-manylinux, build-other]
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          - {os: windows-latest, arch: "x64"}
-          - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+          # - {os: windows-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "arm64"}
+        python-version: ${{ fromJson(env.python_versions) }}
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Setup test environment
-        uses: ./.github/actions/setup-environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
       
-      - name: Install Tox
-        shell: bash -l {0}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.x'
+      
+      - name: Install UV and pytest
         run: |
-          pip install tox tox-conda tox-gh-actions
+          pip install uv pytest pytest-cov
       
       - name: Download wheels
         uses: actions/download-artifact@v4
         with:
-          name: >-
-            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
-          path: dist
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
       
       - name: Install wheel
-        shell: bash -l {0}
         run: |
-          pip install --find-links=dist orion-fhe
+          uv pip install --find-links=dist orion-fhe
       
-      - name: Run tests with Tox
-        shell: bash -l {0}
-        run: tox
-        working-directory: .
+      - name: Run tests
+        run: pytest tests/
 
   publish:
     needs: [test]
@@ -109,10 +131,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          version: 1.7.1
+          python-version: "3.9"
+      
+      - name: Install UV
+        run: pip install uv
       
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -126,6 +151,5 @@ jobs:
       
       - name: Publish to TestPyPI
         run: |
-          poetry config repositories.testpypi https://test.pypi.org/legacy/
-          poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
-          poetry publish --repository testpypi --skip-existing
+          uv pip install twine
+          python -m twine upload --repository testpypi --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*

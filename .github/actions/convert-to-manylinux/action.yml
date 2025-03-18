@@ -1,44 +1,35 @@
-name: 'Convert to manylinux'
-description: 'Converts a Linux wheel to a manylinux-compatible wheel'
+name: Build manylinux wheels
+
+description: Builds Python 3.[x] wheels for manylinux2014.
 
 inputs:
-  wheel-dir:
-    description: 'Directory containing the wheel files'
-    required: false
-    default: 'dist'
-  platform:
-    description: 'Target manylinux platform'
-    required: false
-    default: 'manylinux2014_x86_64'
+  python-version:
+    description: 'Python version to build for (e.g. 3.9, 3.10)'
+    required: true
 
 runs:
-  using: composite
+  using: 'composite'
   steps:
-    - name: Convert to manylinux wheel
-      shell: bash -l {0}
+    - name: Install Go
+      shell: bash
       run: |
-        # Install tool
-        pip install auditwheel
+        curl -L https://go.dev/dl/go1.21.6.linux-amd64.tar.gz -o go.tar.gz
+        tar -C /usr/local -xzf go.tar.gz
+        echo "PATH=/usr/local/go/bin:$PATH" >> $GITHUB_ENV
+    
+    - name: Build manylinux wheel for Python ${{ inputs.python-version }}
+      shell: bash
+      run: |
+        # Replace python path using version (e.g "3.9" -> "cp39-cp39")
+        PYVER="${{ inputs.python-version }}"
+        PYVER_NO_DOT="${PYVER//./}"
+        PYBIN="/opt/python/cp${PYVER_NO_DOT}-cp${PYVER_NO_DOT}/bin"
         
-        # Find any Linux wheel
-        WHEEL_PATH=$(find ${{ inputs.wheel-dir }} -name "*linux*.whl")
-        
-        # Skip if no Linux wheel found
-        if [ -z "$WHEEL_PATH" ]; then
-          echo "No Linux wheel found, skipping manylinux conversion"
-          exit 0
+        if [ ! -d "$PYBIN" ]; then
+          echo "Python path not found: $PYBIN"
+          echo "Unsupported Python version: $PYVER"
+          exit 1
         fi
         
-        # Convert to manylinux
-        echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
-        TMP_DIR="${{ inputs.wheel-dir }}/manylinux"
-        
-        # Repair wheel to manylinux standard
-        auditwheel repair "$WHEEL_PATH" \
-          --plat ${{ inputs.platform }} \
-          -w "$TMP_DIR"
-        
-        # Replace original wheel with manylinux version
-        mv "$TMP_DIR"/*.whl ${{ inputs.wheel-dir }}/
-        rm "$WHEEL_PATH"
-        rmdir "$TMP_DIR"
+        "${PYBIN}/pip" install build
+        "${PYBIN}/python" -m build --wheel
