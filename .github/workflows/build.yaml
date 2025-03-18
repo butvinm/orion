@@ -24,12 +24,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Setup build environment
-        uses: ./.github/actions/setup-environment
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
+          go-version: '1.21.x'
+      
+      # - name: Setup build environment
+      #   uses: ./.github/actions/setup-environment
+      #   with:
+      #     python-version: ${{ matrix.python-version }}
+      #     architecture: ${{ matrix.config.arch }}
       
       - name: Install uv
         shell: bash -l {0}
