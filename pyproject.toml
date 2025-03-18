@@ -28,3 +28,8 @@ packages = [{include = "orion"}]
 [tool.poetry.build]
 generate-setup-file = false
 script = "tools/build_lattigo.py"
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
