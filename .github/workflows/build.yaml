@@ -47,11 +47,6 @@ jobs:
           - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
-        exclude:
-          - config: {os: macos-latest, arch: "arm64"}
-            python-version: "3.9"
-          - config: {os: macos-latest, arch: "arm64"}
-            python-version: "3.10"
     
     steps:
       - name: checkout orion repository
@@ -65,11 +60,14 @@ jobs:
           fi
         shell: bash
 
-      - name: set up python
-        uses: actions/setup-python@v5
+      - name: setup python
+        uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
+          auto-update-conda: true
+          python-version: ${{ inputs.python-version }}
+          channels: conda-forge
+          architecture: ${{ inputs.architecture }}
+          miniconda-version: "latest"
       
       - name: set up golang
         uses: actions/setup-go@v5
