@@ -70,7 +70,7 @@ jobs:
           path: dist/*.whl
 
   test:
-    needs: [build-manylinux, build-other]
+    needs: [build-other]
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
