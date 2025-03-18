@@ -38,9 +38,7 @@ jobs:
       - name: Build package
         shell: bash -l {0}
         run: |
-          uv venv 
-          uv pip install build 
-          python -m build
+          uv build --sdist --wheel --out-dir dist
       
       - name: Convert to manylinux wheel
         if: matrix.config.os == 'ubuntu-latest'
@@ -82,7 +80,7 @@ jobs:
       - name: Install Tox
         shell: bash -l {0}
         run: |
-          pip install tox tox-conda tox-gh-actions
+          uv pip install tox tox-conda tox-gh-actions
       
       - name: Download wheels
         uses: actions/download-artifact@v4
@@ -94,7 +92,7 @@ jobs:
       - name: Install wheel
         shell: bash -l {0}
         run: |
-          pip install --find-links=dist orion-fhe
+          uv pip install --find-links=dist orion-fhe
       
       - name: Run tests with Tox
         shell: bash -l {0}
@@ -126,4 +124,5 @@ jobs:
       
       - name: Publish to TestPyPI
         run: |
-          uv pip publish --repository https://test.pypi.org/legacy/ --api-token ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*
+          uv pip install twine
+          python -m twine upload --repository-url https://test.pypi.org/legacy/ --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*
