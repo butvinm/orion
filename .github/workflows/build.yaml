@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  python_versions: '["3.9", "3.10", "3.11", "3.12"]'
-
 jobs:
   build-manylinux:
     runs-on: ubuntu-latest
@@ -18,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ fromJson(env.python_versions) }}
+        python-version: &python_versions ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,47 +31,47 @@ jobs:
           name: wheels-manylinux2014-py${{ matrix.python-version }}
           path: dist/*.whl
 
-  # build-other:
-  #   runs-on: ${{ matrix.config.os }}
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       config:
-  #         - {os: windows-latest, arch: "x64"}
-  #         - {os: macos-latest, arch: "x64"}
-  #         - {os: macos-latest, arch: "arm64"}
-  #       python-version: ${{ fromJson(env.python_versions) }}
+  build-other:
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
+        python-version: *python_versions
     
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: ${{ matrix.python-version }}
-  #         architecture: ${{ matrix.config.arch }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.config.arch }}
       
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: '1.21.x'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.x'
       
-  #     - name: Install UV
-  #       run: |
-  #         pip install uv
+      - name: Install UV
+        run: |
+          pip install uv
       
-  #     - name: Build package
-  #       run: |
-  #         uv pip install build
-  #         python -m build
+      - name: Build package
+        run: |
+          uv pip install build
+          python -m build
       
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: >-
-  #           wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
-  #         path: dist/*.whl
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: >-
+            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+          path: dist/*.whl
 
   test:
     needs: [build-manylinux, build-other]
@@ -84,10 +81,10 @@ jobs:
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
-        python-version: ${{ fromJson(env.python_versions) }}
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
+        python-version: *python_versions
     
     steps:
       - name: Checkout repository
@@ -134,7 +131,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          # Use the first Python version from our list
+          python-version: *python_versions
       
       - name: Install UV
         run: pip install uv
