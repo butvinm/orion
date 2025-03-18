@@ -1,4 +1,4 @@
-name: Build and Publish Orion
+name: Build and Publish
 
 on:
   push:
@@ -7,60 +7,45 @@ on:
 
 permissions:
   contents: write
-
 jobs:
-  # build-manylinux:
-  #   runs-on: ubuntu-latest
-  #   container: quay.io/pypa/manylinux2014_x86_64
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-      
-  #     - name: Build manylinux wheel
-  #       uses: ./.github/actions/build-manylinux
-  #       with:
-  #         python-version: ${{ matrix.python-version }}
-      
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: wheels-manylinux2014-py${{ matrix.python-version }}
-  #         path: dist/*.whl
-
-  build-other:
+  build:
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
         config:
-          - {os: windows-latest, arch: "x64"}
+          - {os: ubuntu-latest, arch: "x64"}
+          # - {os: windows-latest, arch: "x64"}
           # - {os: macos-latest, arch: "x64"}
           # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Setup build environment
+        uses: ./.github/actions/setup-environment
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
       
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21.x'
-      
-      - name: Install dependencies and build
+      - name: Install uv
+        shell: bash -l {0}
         run: |
-          pip install build
-          python -m build
+          pip install uv
+      
+      - name: Build package
+        shell: bash -l {0}
+        run: |
+          uv pip build . --wheel --sdist --outdir dist
+      
+      - name: Convert to manylinux wheel
+        if: matrix.config.os == 'ubuntu-latest'
+        uses: ./.github/actions/convert-to-manylinux
+        with:
+          wheel-dir: dist
+          platform: manylinux2014_x86_64
       
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -70,50 +55,49 @@ jobs:
           path: dist/*.whl
 
   test:
-    needs: [build-other]
+    needs: build
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
         config:
-          # - {os: ubuntu-latest, arch: "x64"}
-          - {os: windows-latest, arch: "x64"}
+          - {os: ubuntu-latest, arch: "x64"}
+          # - {os: windows-latest, arch: "x64"}
           # - {os: macos-latest, arch: "x64"}
           # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Setup test environment
+        uses: ./.github/actions/setup-environment
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
       
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21.x'
-      
-      - name: Install testing dependencies
+      - name: Install Tox
+        shell: bash -l {0}
         run: |
-          pip install pytest pytest-cov
+          pip install tox tox-conda tox-gh-actions
       
       - name: Download wheels
         uses: actions/download-artifact@v4
         with:
-          pattern: wheels-*
-          path: dist/
-          merge-multiple: true
+          name: >-
+            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+          path: dist
       
       - name: Install wheel
+        shell: bash -l {0}
         run: |
           pip install --find-links=dist orion-fhe
       
-      - name: Run tests
-        run: pytest tests/
+      - name: Run tests with Tox
+        shell: bash -l {0}
+        run: tox
+        working-directory: .
 
   publish:
     needs: [test]
@@ -124,15 +108,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-      
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: 1.7.1
+      - name: Install uv
+        run: |
+          pip install uv
       
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -146,6 +124,4 @@ jobs:
       
       - name: Publish to TestPyPI
         run: |
-          poetry config repositories.testpypi https://test.pypi.org/legacy/
-          poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
-          poetry publish --repository testpypi --skip-existing
+          uv pip publish --repository https://test.pypi.org/legacy/ --api-token ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*

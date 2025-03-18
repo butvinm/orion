@@ -1,0 +1,44 @@
+name: 'Convert to manylinux'
+description: 'Converts a Linux wheel to a manylinux-compatible wheel'
+
+inputs:
+  wheel-dir:
+    description: 'Directory containing the wheel files'
+    required: false
+    default: 'dist'
+  platform:
+    description: 'Target manylinux platform'
+    required: false
+    default: 'manylinux2014_x86_64'
+
+runs:
+  using: composite
+  steps:
+    - name: Convert to manylinux wheel
+      shell: bash -l {0}
+      run: |
+        # Install tool
+        pip install auditwheel
+        
+        # Find any Linux wheel
+        WHEEL_PATH=$(find ${{ inputs.wheel-dir }} -name "*linux*.whl")
+        
+        # Skip if no Linux wheel found
+        if [ -z "$WHEEL_PATH" ]; then
+          echo "No Linux wheel found, skipping manylinux conversion"
+          exit 0
+        fi
+        
+        # Convert to manylinux
+        echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
+        TMP_DIR="${{ inputs.wheel-dir }}/manylinux"
+        
+        # Repair wheel to manylinux standard
+        auditwheel repair "$WHEEL_PATH" \
+          --plat ${{ inputs.platform }} \
+          -w "$TMP_DIR"
+        
+        # Replace original wheel with manylinux version
+        mv "$TMP_DIR"/*.whl ${{ inputs.wheel-dir }}/
+        rm "$WHEEL_PATH"
+        rmdir "$TMP_DIR"
