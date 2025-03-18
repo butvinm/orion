@@ -1,11 +1,15 @@
-include CONTRIBUTING.md
+# Include Go shared libraries
+include orion/backend/lattigo/*.so
+include orion/backend/lattigo/*.dll
+include orion/backend/lattigo/*.dylib
+
+# Include other necessary files
 include LICENSE
 include README.md
 
-recursive-include orion/backend/lattigo *.so *.dylib *.dll
-
-recursive-exclude * __pycache__
-recursive-exclude * *.py[co]
-
-exclude tests
-exclude tests/*
+# Exclude common Python cache files
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.so.dSYM
+global-exclude .git*
+global-exclude .DS_Store

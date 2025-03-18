@@ -15,9 +15,9 @@ jobs:
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
@@ -38,6 +38,9 @@ jobs:
       - name: Build package
         shell: bash -l {0}
         run: |
+          # Install the package first to ensure the Go library is built
+          uv pip install -e .
+          # Then build the distributions
           uv build --sdist --wheel --out-dir dist
       
       - name: Convert to manylinux wheel
@@ -62,9 +65,9 @@ jobs:
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
