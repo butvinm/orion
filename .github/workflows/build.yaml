@@ -78,6 +78,7 @@ jobs:
         run: |     
           eval "${{ env.GITHUB_ENV }}" 
           uv build --sdist --wheel --out-dir dist
+          
           echo "Contents of the wheel file:"
           unzip -l dist/*.whl
       
