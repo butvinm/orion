@@ -9,8 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build_wheels:
-    name: Build wheels
+  build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -21,25 +20,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build and run Docker image
+        uses: docker/build-push-action@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          context: .github/docker
+          file: .github/docker/Dockerfile
+          push: false
+          load: true
+          tags: wheel-builder:latest
       
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.16.5
-        env:
-          # Correctly format Python version for cibuildwheel
-          # For example, "3.11" needs to become "311" for cp311
-          CIBW_BUILD: "cp$(echo ${{ matrix.python-version }} | tr -d '.')-manylinux_x86_64"
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-          # Skip building PyPy wheels
-          CIBW_SKIP: "pp*"
-          # Skip testing the built wheels (if you want to test, you can remove this)
-          CIBW_TEST_SKIP: "*"
-      
+      - name: Run wheel build
+        run: |
+          docker run --rm \
+            -e PYTHON_VERSION=${{ matrix.python-version }} \
+            -v ${{ github.workspace }}:/workspace \
+            wheel-builder:latest
+            
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: python${{ matrix.python-version }}-manylinux-wheels
-          path: ./wheelhouse/*.whl
+          path: dist/
