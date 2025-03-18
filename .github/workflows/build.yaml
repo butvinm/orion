@@ -1,4 +1,4 @@
-name: Build and Publish
+name: Build and Publish Orion
 
 on:
   push:
@@ -8,86 +8,64 @@ on:
 permissions:
   contents: write
 
-# Orion currently supports Python 3.9 - 3.12. Future versions will
-# be added when they become available. We also support the OS's below
-# which includes most Linux distributions, Windows, and MacOS Intel/ARM.
-env:
-  PYTHON_VERSIONS: '["3.9", "3.10", "3.11", "3.12"]'
-  CONFIGS: '[
-    {"os": "ubuntu-latest", "arch": "x64", "container": "quay.io/pypa/manylinux2014_x86_64"},
-    {"os": "windows-latest", "arch": "x64"},
-    {"os": "macos-latest", "arch": "x64"},
-    {"os": "macos-latest", "arch": "arm64"}
-  ]'
-
 jobs:
-  check-commit-message:
+  build-manylinux:
     runs-on: ubuntu-latest
-    outputs:
-      fast-mode: ${{ steps.parse-commit.outputs.fast-mode }}
-      python-matrix: ${{ steps.parse-commit.outputs.python-matrix }}
-      config-matrix: ${{ steps.parse-commit.outputs.config-matrix }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install jq
-        run: sudo apt-get install jq -y
-
-      - name: Parse commit flags
-        id: parse-commit
-        uses: ./.github/actions/parse-commit-flags
-        with:
-          python-versions: ${{ env.PYTHON_VERSIONS }}
-          configs: ${{ env.CONFIGS }}
-
-  build:
-    needs: [check-commit-message]
-    runs-on: ${{ matrix.config.os }}
-    container: ${{ matrix.config.container || null }}
+    container: quay.io/pypa/manylinux2014_x86_64
     strategy:
       fail-fast: false
       matrix:
-        config: ${{ fromJSON(needs.check-commit-message.outputs.config-matrix) }}
-        python-version: ${{ fromJSON(needs.check-commit-message.outputs.python-matrix) }}
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Build manylinux wheel
+        uses: ./.github/actions/build-manylinux
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-manylinux2014-py${{ matrix.python-version }}
+          path: dist/*.whl
+
+  build-other:
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      # For manylinux, use special build step
-      - name: Build manylinux wheel
-        if: matrix.config.container != null
-        uses: ./.github/actions/build-manylinux
-        with:
-          python-version: ${{ matrix.python-version }}
-      
-      # For non-manylinux builds, use standard Python setup
       - name: Set up Python
-        if: matrix.config.container == null
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
       
       - name: Set up Go
-        if: matrix.config.container == null
         uses: actions/setup-go@v5
         with:
           go-version: '1.21.x'
       
       - name: Install UV
-        if: matrix.config.container == null
         run: |
           pip install uv
       
       - name: Build package
-        if: matrix.config.container == null
         run: |
           uv pip install build
           python -m build
       
-      # Upload wheels for both manylinux and standard builds
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -96,13 +74,17 @@ jobs:
           path: dist/*.whl
 
   test:
-    needs: [build, check-commit-message]
+    needs: [build-manylinux, build-other]
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
-        config: ${{ fromJSON(needs.check-commit-message.outputs.config-matrix) }}
-        python-version: ${{ fromJSON(needs.check-commit-message.outputs.python-matrix) }}
+        config:
+          - {os: ubuntu-latest, arch: "x64"}
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
@@ -145,7 +127,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+            
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
