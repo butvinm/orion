@@ -1,44 +1,34 @@
-name: 'Build manylinux2014 wheel'
-description: 'Builds a Python package as a manylinux2014 wheel using Docker'
+name: 'Manylinux Builder with Go'
+description: 'Builds Python packages with manylinux and includes Go installation'
 inputs:
   python-version:
-    description: 'Python version to build for (e.g., 3.9, 3.10)'
+    description: 'Python version to use'
     required: true
-  output-dir:
-    description: 'Directory to output wheels to'
-    required: false
-    default: 'dist'
-outputs:
-  wheel-path:
-    description: 'Path to the built manylinux wheel'
-    value: ${{ steps.find-wheel.outputs.wheel-path }}
+    default: '3.9'
 
 runs:
-  using: composite
+  using: 'composite'
   steps:
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Build manylinux wheel
-      uses: docker/build-push-action@v6
+    - name: Set up Go
+      uses: actions/setup-go@v5
       with:
-        context: ${{ github.workspace }}
-        file: ${{ github.workspace }}/.github/docker/Dockerfile
-        push: false
-        outputs: type=local,dest=${{ github.workspace }}/manylinux-output
-        build-args: |
-          PYTHON_VERSION=${{ inputs.python-version }}
+        go-version: '1.21.x'
     
-    - name: Copy wheels to output directory
+    - name: Set up Python
       shell: bash
       run: |
-        mkdir -p ${{ inputs.output-dir }}
-        cp -r ${{ github.workspace }}/manylinux-output/* ${{ inputs.output-dir }}/
+        # Use the proper Python version based on input
+        PYTHON_BIN="/opt/python/cp$(echo ${{ inputs.python-version }} | sed 's/\.//')/bin/python"
+        echo "Using Python: $PYTHON_BIN"
+        $PYTHON_BIN -m pip install --upgrade pip
     
-    - name: Find built wheel
-      id: find-wheel
+    - name: Install UV
       shell: bash
       run: |
-        WHEEL_PATH=$(find ${{ inputs.output-dir }} -name "*manylinux*.whl" | head -n 1)
-        echo "wheel-path=$WHEEL_PATH" >> $GITHUB_OUTPUT
-        echo "Built manylinux wheel: $WHEEL_PATH"
+        $PYTHON_BIN -m pip install uv
+    
+    - name: Build package
+      shell: bash
+      run: |
+        $PYTHON_BIN setup.py build # generates .so/dylib/dll file first
+        $PYTHON_BIN -m uv build --sdist --wheel --out-dir dist

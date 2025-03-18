@@ -11,7 +11,6 @@ permissions:
 jobs:
   build-manylinux:
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
     strategy:
       fail-fast: false
       matrix:
@@ -20,52 +19,57 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      - name: Set up Docker container
+        uses: docker://quay.io/pypa/manylinux_2_28_x86_64
+        with:
+          entrypoint: /bin/bash
+      
       - name: Build with manylinux action
-        uses: ./.github/actions/manylinux-builder
+        uses: ./.github/actions/build-manylinux
         with:
           python-version: ${{ matrix.python-version }}
 
-  build-other:
-    runs-on: ${{ matrix.config.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - {os: windows-latest, arch: "x64"}
-          - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+  # build-other:
+  #   runs-on: ${{ matrix.config.os }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       config:
+  #         - {os: windows-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "arm64"}
+  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #         architecture: ${{ matrix.config.arch }}
       
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21.x'
+  #     - name: Set up Go
+  #       uses: actions/setup-go@v5
+  #       with:
+  #         go-version: '1.21.x'
       
-      - name: Install UV
-        run: |
-          pip install uv
+  #     - name: Install UV
+  #       run: |
+  #         pip install uv
       
-      - name: Build package
-        run: |
-          python setup.py build # generates .so/dylib/dll file first
-          uv build --sdist --wheel --out-dir dist
+  #     - name: Build package
+  #       run: |
+  #         python setup.py build # generates .so/dylib/dll file first
+  #         uv build --sdist --wheel --out-dir dist
       
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
-        with:
-          name: >-
-            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
-          path: dist/*.whl
+  #     - name: Upload wheels
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: >-
+  #           wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+  #         path: dist/*.whl
 
   # test:
   #   needs: [build-manylinux, build-other]
