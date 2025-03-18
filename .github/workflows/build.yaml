@@ -38,7 +38,9 @@ jobs:
       - name: Build package
         shell: bash -l {0}
         run: |
-          uv pip build . --wheel --sdist --outdir dist
+          uv venv 
+          uv pip install build 
+          python -m build
       
       - name: Convert to manylinux wheel
         if: matrix.config.os == 'ubuntu-latest'
