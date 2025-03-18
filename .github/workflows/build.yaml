@@ -45,8 +45,13 @@ jobs:
         config:
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.11"] #, "3.10", "3.11", "3.12"]
+          - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
+        exclude:
+          - config: {os: macos-latest, arch: "arm64"}
+            python-version: "3.9"
+          - config: {os: macos-latest, arch: "arm64"}
+            python-version: "3.10"
     
     steps:
       - name: checkout orion repository
@@ -94,8 +99,13 @@ jobs:
           - {os: ubuntu-latest, arch: "x64"}
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.11"] #, "3.10", "3.11", "3.12"]
+          - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
+        exclude:
+          - config: {os: macos-latest, arch: "arm64"}
+            python-version: "3.9"
+          - config: {os: macos-latest, arch: "arm64"}
+            python-version: "3.10"
     
     steps:
       - name: checkout orion repository
