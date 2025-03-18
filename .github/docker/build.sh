@@ -10,11 +10,14 @@ PYBIN=/opt/python/cp${PYTHON_VERSION_NO_DOT}*/bin
 
 echo "Building with Python $PYTHON_VERSION (using $PYBIN)"
 
+# Install build dependencies (especially for Python 3.12)
+$PYBIN/pip install setuptools>=61.0 wheel
+
 # Install uv
 $PYBIN/pip install uv
 
 # Build package
-$PYBIN/python setup.py build
+$PYBIN/python setup.py bdist_wheel
 $PYBIN/uv build --sdist --wheel --out-dir dist
 
 echo "Building manylinux wheels with auditwheel..."
