@@ -38,9 +38,9 @@ jobs:
             -e PYTHON_VERSION=${{ matrix.python-version }} \
             -v ${{ github.workspace }}:/workspace \
             wheel-builder:latest
-      
+            
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: python${{ matrix.python-version }}-manylinux-wheels
           path: dist/
