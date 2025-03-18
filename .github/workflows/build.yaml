@@ -177,11 +177,12 @@ jobs:
           path: dist/
           merge-multiple: true
       
-      - name: List files to publish
-        run: find dist -type f | sort
-      
       - name: Publish to TestPyPI
         run: |
-          pip install uv
-          uv publish --index testpypi --token ${{ secrets.PYPI_API_TOKEN }} 
+          echo "Files to be published:"
+          ls -la dist/
+
+          poetry config repositories.testpypi https://test.pypi.org/legacy/
+          poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
+          poetry publish --repository testpypi --skip-existing
 
