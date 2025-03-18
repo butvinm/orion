@@ -45,22 +45,22 @@ jobs:
         shell: bash -l {0}
         run: |
           uv pip install -e .
-          python setup.py build
+          # python setup.py build
           uv build --sdist --wheel --out-dir dist
       
-      - name: Convert to manylinux wheel
-        if: matrix.config.os == 'ubuntu-latest'
-        uses: ./.github/actions/convert-to-manylinux
-        with:
-          wheel-dir: dist
-          platform: manylinux2014_x86_64
+      # - name: Convert to manylinux wheel
+      #   if: matrix.config.os == 'ubuntu-latest'
+      #   uses: ./.github/actions/convert-to-manylinux
+      #   with:
+      #     wheel-dir: dist
+      #     platform: manylinux2014_x86_64
       
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
-        with:
-          name: >-
-            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
-          path: dist/*.whl
+      # - name: Upload wheels
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: >-
+      #       wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+      #     path: dist/*.whl
 
   test:
     needs: build
