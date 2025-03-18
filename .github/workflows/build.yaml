@@ -43,7 +43,7 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          #- {os: windows-latest, arch: "x64"}
+          - {os: windows-latest, arch: "x64"}
           #- {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
@@ -69,7 +69,12 @@ jobs:
         run: |
           pip install uv
           uv venv --python ${{ matrix.python-version }}
-          source .venv/bin/activate
+
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            . .\.venv\Scripts\activate
+          else
+            source .venv/bin/activate
+          fi
           
           uv build --sdist --wheel --out-dir dist
 
@@ -92,7 +97,7 @@ jobs:
       matrix:
         config:
           #- {os: ubuntu-latest, arch: "x64"}
-          #- {os: windows-latest, arch: "x64"}
+          - {os: windows-latest, arch: "x64"}
           #- {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
@@ -122,13 +127,23 @@ jobs:
       - name: install packages
         shell: bash
         run: |
-          source .venv/bin/activate
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            . .\.venv\Scripts\activate
+          else
+            source .venv/bin/activate
+          fi
+
           uv pip install --find-links=dist orion-fhe pytest pytest-cov
 
       - name: run pytest
         shell: bash
         run: |
-          source .venv/bin/activate
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            . .\.venv\Scripts\activate
+          else
+            source .venv/bin/activate
+          fi
+          
           pytest tests/
 
   # publish:
