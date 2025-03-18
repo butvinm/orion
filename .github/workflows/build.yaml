@@ -12,7 +12,7 @@ jobs:
   build-manylinux:
     runs-on: ubuntu-latest
     container:
-      image: manylinux_2_28_x86_64
+      image: quay.io/pypa/manylinux_2_28_x86_64
     strategy:
       fail-fast: false
       matrix:
