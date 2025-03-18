@@ -69,4 +69,5 @@ class BuildLattigo(build_py):
 
 setup(
     cmdclass={'build_py': BuildLattigo},
+    options={'bdist_wheel': {'universal': False}},
 )

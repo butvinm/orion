@@ -37,9 +37,8 @@ jobs:
       
       - name: Build package
         shell: bash -l {0}
-        run: |
-          # uv pip install -e . # generates .so/dylib/dll file first
-          python setup.py build
+        run: | 
+          python setup.py build # generates .so/dylib/dll file first
           uv build --sdist --wheel --out-dir dist
 
       - name: Inspect wheel contents
