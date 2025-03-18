@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 from setuptools.command.build_py import build_py
 import sys
 import os
@@ -62,11 +62,4 @@ class BuildLattigo(build_py):
 
 setup(
     cmdclass={'build_py': BuildLattigo},
-    packages=find_packages(),
-    include_package_data=True,  # Include files from MANIFEST.in
-    package_data={
-        'orion': ['backend/lattigo/*.so', 'backend/lattigo/*.dll', 'backend/lattigo/*.dylib'],
-    },
-    # Force this to be a platform-specific wheel due to the compiled extensions
-    options={'bdist_wheel': {'py_limited_api': False, 'plat_name': platform.system().lower()}},
 )
