@@ -80,7 +80,7 @@ jobs:
   # Now we can test the wheels we just created. We'll do this by pulling
   # all wheels added as artifacts in the previous steps. 
   test:
-    needs: [build-linux, build-other]
+    needs: [build-manylinux, build-other]
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
