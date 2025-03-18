@@ -29,7 +29,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-python-${{ matrix.python-version }}
+          name: wheels-manylinux2014-${{ matrix.python-version }}
           path: wheelhouse/*.whl
 
   # build-other:
