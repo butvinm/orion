@@ -56,7 +56,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v2
         with:
           python-version: ${{ matrix.python-version }}
-          architecture: ${{ maxtrix.config.arch }}
+          architecture: ${{ matrix.config.arch }}
           auto-activate-base: true
       
       - name: set up golang
