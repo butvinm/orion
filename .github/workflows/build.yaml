@@ -11,6 +11,8 @@ permissions:
 jobs:
   build-manylinux:
     runs-on: ubuntu-latest
+    env:
+      MANYLINUX_VERSION: manylinux_2_28_x86_64
     strategy:
       fail-fast: false
       matrix:
@@ -20,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Set up Docker container
-        uses: docker://quay.io/pypa/manylinux_2_28_x86_64
+        uses: docker://quay.io/pypa/${{ env.MANYLINUX_VERSION }}
         with:
           entrypoint: /bin/bash
       
@@ -28,6 +30,7 @@ jobs:
         uses: ./.github/actions/build-manylinux
         with:
           python-version: ${{ matrix.python-version }}
+          manylinux: ${{ env.MANYLINUX_VERSION }}
 
   # build-other:
   #   runs-on: ${{ matrix.config.os }}
