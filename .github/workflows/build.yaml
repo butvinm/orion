@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+
 jobs:
   build:
     runs-on: ${{ matrix.config.os }}
@@ -15,9 +16,9 @@ jobs:
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
@@ -30,17 +31,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.config.arch }}
       
-      - name: Install uv
+      - name: Install Poetry
         shell: bash -l {0}
         run: |
-          pip install uv
+          pip install poetry
       
       - name: Build package
         shell: bash -l {0}
         run: |
-          uv pip install -e .
-          uv build
-      
+          poetry build
+
       - name: Convert to manylinux wheel
         if: matrix.config.os == 'ubuntu-latest'
         uses: ./.github/actions/convert-to-manylinux
@@ -63,9 +63,9 @@ jobs:
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "arm64"}
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
@@ -81,7 +81,7 @@ jobs:
       - name: Install Tox
         shell: bash -l {0}
         run: |
-          uv pip install tox tox-conda tox-gh-actions
+          pip install tox tox-conda tox-gh-actions
       
       - name: Download wheels
         uses: actions/download-artifact@v4
@@ -93,7 +93,7 @@ jobs:
       - name: Install wheel
         shell: bash -l {0}
         run: |
-          uv pip install --find-links=dist orion-fhe
+          pip install --find-links=dist orion-fhe
       
       - name: Run tests with Tox
         shell: bash -l {0}
@@ -103,15 +103,16 @@ jobs:
   publish:
     needs: [test]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' #&& github.ref == 'refs/heads/main'
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Install uv
-        run: |
-          pip install uv
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.7.1
       
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -125,5 +126,6 @@ jobs:
       
       - name: Publish to TestPyPI
         run: |
-          uv pip install twine
-          python -m twine upload --repository-url https://test.pypi.org/legacy/ --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*
+          poetry config repositories.testpypi https://test.pypi.org/legacy/
+          poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
+          poetry publish --repository testpypi --skip-existing

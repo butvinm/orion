@@ -20,19 +20,18 @@ runs:
         # Install tool
         pip install auditwheel
         
-        # Find any wheel (not just ones with "linux" in the name)
-        WHEEL_PATH=$(find ${{ inputs.wheel-dir }} -name "*.whl" | grep -v "manylinux")
+        # Find any Linux wheel
+        WHEEL_PATH=$(find ${{ inputs.wheel-dir }} -name "*linux*.whl")
         
-        # Skip if no wheel found
+        # Skip if no Linux wheel found
         if [ -z "$WHEEL_PATH" ]; then
-          echo "No wheel found, skipping manylinux conversion"
+          echo "No Linux wheel found, skipping manylinux conversion"
           exit 0
         fi
         
         # Convert to manylinux
         echo "Converting $WHEEL_PATH to ${{ inputs.platform }}"
         TMP_DIR="${{ inputs.wheel-dir }}/manylinux"
-        mkdir -p "$TMP_DIR"
         
         # Repair wheel to manylinux standard
         auditwheel repair "$WHEEL_PATH" \
