@@ -4,9 +4,6 @@ inputs:
   python-version:
     description: 'python version to use'
     required: true
-  manylinux:
-    description: 'manylinux version to use'
-    required: true
 
 runs:
   using: 'composite'
@@ -30,16 +27,16 @@ runs:
         source .venv/bin/activate
         uv pip install setuptools wheel build auditwheel
         
-    #     python setup.py build # generates .so/dylib/dll file first
-    #     uv build --sdist --wheel --out-dir dist
+        python setup.py build # generates .so/dylib/dll file first
+        uv build --sdist --wheel --out-dir dist
 
-    #     echo "Contents of the wheel file:"
-    #     unzip -l dist/*.whl
+        echo "Contents of the wheel file:"
+        unzip -l dist/*.whl
     
-    # - name: use auditwheel to support earlier manylinux
-    #   shell: bash
-    #   run: |
-    #     source .venv/bin/activate
-    #     auditwheel-symbols repair dist/*.whl --plat manylinux2014_x86_64
-    #     ls -l dist
+    - name: use auditwheel to support earlier manylinux
+      shell: bash
+      run: |
+        source .venv/bin/activate
+        auditwheel repair dist/*.whl --plat manylinux2014_x86_64
+        ls -l dist
         

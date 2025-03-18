@@ -25,7 +25,6 @@ jobs:
         uses: ./.github/actions/build-manylinux
         with:
           python-version: ${{ matrix.python-version }}
-          manylinux: manylinux2014_x86_64
 
   # build-other:
   #   runs-on: ${{ matrix.config.os }}
