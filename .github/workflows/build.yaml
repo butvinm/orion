@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -65,19 +65,21 @@ jobs:
         with:
           go-version: '1.21.x'
 
+      - name: Set venv python path
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "VENV_PYTHON=.venv/Scripts/python" >> $GITHUB_ENV
+          else
+            echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
+          fi
+
       - name: install uv and build orion package
         shell: bash
         run: |
           pip install uv
-          uv venv --python ${{ matrix.python-version }}
-
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            . .venv/Scripts/activate
-          else
-            source .venv/bin/activate
-          fi
-          
-          uv build --sdist --wheel --out-dir dist
+          uv venv --python ${{ matrix.python-version }}          
+          uv build --sdist --wheel --out-dir dist --python $VENV_PYTHON
 
           echo "Contents of the wheel file:"
           unzip -l dist/*.whl
@@ -97,11 +99,11 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          #- {os: ubuntu-latest, arch: "x64"}
+          - {os: ubuntu-latest, arch: "x64"}
           - {os: windows-latest, arch: "x64"}
-          #- {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
+        python-version: ["3.9"] #, "3.11"] #, "3.10", "3.11", "3.12"]
     
     steps:
       - name: checkout orion repository
@@ -119,6 +121,15 @@ jobs:
           path: dist/
           merge-multiple: true
 
+      - name: Set venv python path
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "VENV_PYTHON=.venv/Scripts/python" >> $GITHUB_ENV
+          else
+            echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
+          fi
+
       - name: install uv and create venv
         shell: bash 
         run: |
@@ -128,63 +139,48 @@ jobs:
       - name: install packages
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            . .venv/Scripts/activate
-          else
-            source .venv/bin/activate
-          fi
-
-          uv pip install --find-links=dist orion-fhe pytest pytest-cov
+          uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
 
       - name: run pytest
         shell: bash 
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            . .venv/Scripts/activate
-          else
-            source .venv/bin/activate
-          fi
-          
-          pytest tests/
+          $VENV_PYTHON -m pytest tests/
 
-  # publish:
-  #   needs: [test]
-  #   runs-on: ${{ matrix.config.os }}
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       config:
-  #         - {os: ubuntu-latest, arch: "x64"}
-  #         - {os: windows-latest, arch: "x64"}
-  #         - {os: macos-latest, arch: "x64"}
-  #         - {os: macos-latest, arch: "arm64"}
-  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
+  publish:
+    needs: [test]
+    runs-on: ${{ matrix.config.os }}
+    if: github.event_name == 'push' #&& github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: ubuntu-latest, arch: "x64"}
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
     
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: ${{ matrix.python-version }}
-  #         architecture: ${{ matrix.config.arch }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.config.arch }}
+            
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
       
-  #     - name: install uv
-  #       run: pip install uv
+      - name: List files to publish
+        run: find dist -type f | sort
       
-  #     - name: Download all artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: wheels-*
-  #         path: dist/
-  #         merge-multiple: true
-      
-  #     - name: List files to publish
-  #       run: find dist -type f | sort
-      
-  #     - name: Publish to TestPyPI
-  #       run: |
-  #         uv pip install twine
-  #         python -m twine upload --repository testpypi --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*
+      - name: Publish to TestPyPI
+        run: |
+          pip install uv
+          uv publish --repository testpypi --token ${{ secrets.PYPI_API_TOKEN }} --no-prompt dist/*
