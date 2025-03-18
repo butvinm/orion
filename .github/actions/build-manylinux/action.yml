@@ -20,7 +20,7 @@ runs:
       shell: bash
       run: |
         yum install -y python3-pip
-        python3.9 -m pip install uv
+        python3 -m pip install uv
         uv --version
     
     # - name: build package 
