@@ -43,8 +43,8 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - {os: windows-latest, arch: "x64"}
-          - {os: macos-latest, arch: "x64"}
+          #- {os: windows-latest, arch: "x64"}
+          #- {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
     
@@ -68,7 +68,13 @@ jobs:
       - name: install uv and build orion package
         run: |
           pip install uv
+          uv venv --python ${{ inputs.python-version }}
+          source .venv/bin/activate
+          
           uv build --sdist --wheel --out-dir dist
+
+          echo "Contents of the wheel file:"
+          unzip -l dist/*.whl
       
       - name: upload other wheels
         uses: actions/upload-artifact@v4
@@ -86,8 +92,8 @@ jobs:
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          - {os: windows-latest, arch: "x64"}
-          - {os: macos-latest, arch: "x64"}
+          #- {os: windows-latest, arch: "x64"}
+          #- {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
         python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
     
@@ -133,44 +139,44 @@ jobs:
 
           pytest tests/
 
-  publish:
-    needs: [test]
-    runs-on: ${{ matrix.config.os }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - {os: ubuntu-latest, arch: "x64"}
-          - {os: windows-latest, arch: "x64"}
-          - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+  # publish:
+  #   needs: [test]
+  #   runs-on: ${{ matrix.config.os }}
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       config:
+  #         - {os: ubuntu-latest, arch: "x64"}
+  #         - {os: windows-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "arm64"}
+  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #         architecture: ${{ matrix.config.arch }}
       
-      - name: install uv
-        run: pip install uv
+  #     - name: install uv
+  #       run: pip install uv
       
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist/
-          merge-multiple: true
+  #     - name: Download all artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wheels-*
+  #         path: dist/
+  #         merge-multiple: true
       
-      - name: List files to publish
-        run: find dist -type f | sort
+  #     - name: List files to publish
+  #       run: find dist -type f | sort
       
-      - name: Publish to TestPyPI
-        run: |
-          uv pip install twine
-          python -m twine upload --repository testpypi --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*
+  #     - name: Publish to TestPyPI
+  #       run: |
+  #         uv pip install twine
+  #         python -m twine upload --repository testpypi --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*
