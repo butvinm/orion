@@ -52,22 +52,12 @@ jobs:
       - name: checkout orion repository
         uses: actions/checkout@v4
 
-      - name: add required mac directories
-        run: |
-          if [ "${{ runner.os }}" = "macOS" ]; then
-            mkdir -p /Users/runner/hostedtoolcache
-            chmod 777 /Users/runner/hostedtoolcache
-          fi
-        shell: bash
-
       - name: setup python
         uses: conda-incubator/setup-miniconda@v2
         with:
-          auto-update-conda: true
-          python-version: ${{ inputs.python-version }}
-          channels: conda-forge
-          architecture: ${{ inputs.architecture }}
-          miniconda-version: "latest"
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ maxtrix.config.arch }}
+          auto-activate-base: true
       
       - name: set up golang
         uses: actions/setup-go@v5
