@@ -26,6 +26,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist/*.whl
+
   # build-other:
   #   runs-on: ${{ matrix.config.os }}
   #   strategy:
