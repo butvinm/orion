@@ -1,0 +1,44 @@
+name: 'Build manylinux2014 wheel'
+description: 'Builds a Python package as a manylinux2014 wheel using Docker'
+inputs:
+  python-version:
+    description: 'Python version to build for (e.g., 3.9, 3.10)'
+    required: true
+  output-dir:
+    description: 'Directory to output wheels to'
+    required: false
+    default: 'dist'
+outputs:
+  wheel-path:
+    description: 'Path to the built manylinux wheel'
+    value: ${{ steps.find-wheel.outputs.wheel-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build manylinux wheel
+      uses: docker/build-push-action@v6
+      with:
+        context: ${{ github.workspace }}
+        file: ${{ github.workspace }}/.github/docker/Dockerfile
+        push: false
+        outputs: type=local,dest=${{ github.workspace }}/manylinux-output
+        build-args: |
+          PYTHON_VERSION=${{ inputs.python-version }}
+    
+    - name: Copy wheels to output directory
+      shell: bash
+      run: |
+        mkdir -p ${{ inputs.output-dir }}
+        cp -r ${{ github.workspace }}/manylinux-output/* ${{ inputs.output-dir }}/
+    
+    - name: Find built wheel
+      id: find-wheel
+      shell: bash
+      run: |
+        WHEEL_PATH=$(find ${{ inputs.output-dir }} -name "*manylinux*.whl" | head -n 1)
+        echo "wheel-path=$WHEEL_PATH" >> $GITHUB_OUTPUT
+        echo "Built manylinux wheel: $WHEEL_PATH"

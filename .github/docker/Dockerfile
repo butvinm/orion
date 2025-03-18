@@ -1,16 +1,31 @@
-FROM quay.io/pypa/manylinux_2_28_x86_64
+FROM quay.io/pypa/manylinux2014_x86_64
 
-# Install Go
-RUN curl -L https://golang.org/dl/go1.21.0.linux-amd64.tar.gz | tar -xz -C /usr/local && \
-    ln -s /usr/local/go/bin/go /usr/local/bin/go
+ARG PYTHON_VERSION
 
-# Install auditwheel (using a consistent Python)
-RUN /opt/python/cp310-cp310/bin/pip install auditwheel
+# Set up Python path based on version
+ENV PY_VERSION=${PYTHON_VERSION/./}
+ENV PYTHON_DIR=/opt/python/cp${PY_VERSION}-cp${PY_VERSION}
+ENV PATH=${PYTHON_DIR}/bin:$PATH
 
-WORKDIR /workspace
+WORKDIR /app
+COPY . .
 
-# Copy the build script
-COPY build.sh /build.sh
-RUN chmod +x /build.sh
+# Install build tools
+RUN ${PYTHON_DIR}/bin/pip install uv
 
-ENTRYPOINT ["/build.sh"]
+# Set up Go for any Go dependencies (as in your original workflow)
+RUN curl -L https://go.dev/dl/go1.21.0.linux-amd64.tar.gz | tar -C /usr/local -xzf -
+ENV PATH=$PATH:/usr/local/go/bin
+
+# Build with uv
+RUN uv pip build --wheel .
+
+# Repair wheels with auditwheel
+RUN mkdir -p /output && \
+    for whl in /app/dist/*.whl; do \
+      if [[ "$whl" == *linux* ]]; then \
+        auditwheel repair "$whl" --plat manylinux2014_x86_64 -w /output; \
+      else \
+        cp "$whl" /output/; \
+      fi \
+    done
