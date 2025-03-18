@@ -29,7 +29,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.5
         env:
-          CIBW_BUILD: "cp${{ matrix.python-version }}-manylinux_x86_64"
+          # Correctly format Python version for cibuildwheel
+          # For example, "3.11" needs to become "311" for cp311
+          CIBW_BUILD: "cp$(echo ${{ matrix.python-version }} | tr -d '.')-manylinux_x86_64"
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           # Skip building PyPy wheels
           CIBW_SKIP: "pp*"
