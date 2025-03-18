@@ -93,29 +93,28 @@ jobs:
         python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
     
     steps:
-      - name: Checkout repository
+      - name: checkout orion repository
         uses: actions/checkout@v4
       
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-            
-      - name: Install UV and pytest
-        run: |
-          pip install uv pytest pytest-cov
-      
-      - name: Download wheels
+
+      - name: download artifact wheels
         uses: actions/download-artifact@v4
         with:
           pattern: wheels-*
           path: dist/
           merge-multiple: true
-      
-      - name: Install wheel
+            
+      - name: install, uv, pytest, and wheels
         run: |
-          uv pip install --find-links=dist orion-fhe
-      
+          pip install uv
+          uv venv --python ${{ inputs.python-version }}
+          source .venv/bin/activate
+          uv pip install --find-links=dist orion-fhe pytest pytest-cov
+                  
       - name: Run tests
         run: pytest tests/
 
