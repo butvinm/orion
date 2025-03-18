@@ -11,7 +11,7 @@ PYBIN=/opt/python/cp${PYTHON_VERSION_NO_DOT}*/bin
 echo "Building with Python $PYTHON_VERSION (using $PYBIN)"
 
 # Install build dependencies (especially for Python 3.12)
-$PYBIN/pip install setuptools>=61.0 wheel
+#$PYBIN/pip install setuptools>=61.0 wheel
 
 # Install uv
 $PYBIN/pip install uv
