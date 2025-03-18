@@ -9,6 +9,8 @@ permissions:
   contents: write
 
 jobs:
+  # In order to build general manylinux wheels that support older Linux
+  # distributions, we'll need to use Docker. 
   build-linux:
     runs-on: ubuntu-latest
     container:
@@ -29,9 +31,12 @@ jobs:
       - name: upload linux wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-manylinux2014-${{ matrix.python-version }}
+          name: wheels-manylinux2014-py${{ matrix.python-version }}-x64
           path: wheelhouse/*.whl
 
+  # For all other operating systems we support (Windows, Mac Intel
+  # and Apple Silicon) we can use the default machines GitHub actions 
+  # gives us. 
   build-other:
     runs-on: ${{ matrix.config.os }}
     strategy:
@@ -69,55 +74,54 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: >-
-            wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+          name: wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
           path: dist/*.whl
 
-  # test:
-  #   needs: [build-manylinux, build-other]
-  #   runs-on: ${{ matrix.config.os }}
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       config:
-  #         - {os: ubuntu-latest, arch: "x64"}
-  #         - {os: windows-latest, arch: "x64"}
-  #         - {os: macos-latest, arch: "x64"}
-  #         - {os: macos-latest, arch: "arm64"}
-  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
+  test:
+    needs: [build-manylinux, build-other]
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: ubuntu-latest, arch: "x64"}
+          - {os: windows-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
     
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: ${{ matrix.python-version }}
-  #         architecture: ${{ matrix.config.arch }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.config.arch }}
       
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: '1.21.x'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.x'
       
-  #     - name: Install UV and pytest
-  #       run: |
-  #         pip install uv pytest pytest-cov
+      - name: Install UV and pytest
+        run: |
+          pip install uv pytest pytest-cov
       
-  #     - name: Download wheels
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: wheels-*
-  #         path: dist/
-  #         merge-multiple: true
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
       
-  #     - name: Install wheel
-  #       run: |
-  #         uv pip install --find-links=dist orion-fhe
+      - name: Install wheel
+        run: |
+          uv pip install --find-links=dist orion-fhe
       
-  #     - name: Run tests
-  #       run: pytest tests/
+      - name: Run tests
+        run: pytest tests/
 
   # publish:
   #   needs: [test]
