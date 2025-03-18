@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_namespace_packages
 from setuptools.command.build_py import build_py
 import sys
 import os
@@ -63,4 +63,6 @@ class BuildLattigo(build_py):
 
 setup(
     cmdclass={'build_py': BuildLattigo},
+    packages=find_namespace_packages(include=['orion*']),
+
 )

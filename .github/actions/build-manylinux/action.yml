@@ -28,10 +28,14 @@ runs:
         
         python setup.py build # generates .so/dylib/dll file first
         uv build --sdist --wheel --out-dir dist
+
+        echo "Contents of the wheel file:"
+        unzip -l dist/*.whl
     
     - name: convert to manylinux with auditwheel
       shell: bash
       run: |
+        source .venv/bin/activate
         auditwheel repair dist/*.whl --plat ${{ matrix.manylinux }}
         ls -l dist
         
