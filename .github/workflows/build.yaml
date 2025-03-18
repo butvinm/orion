@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MANYLINUX_VERSION: manylinux_2_28_x86_64
+    container:
+      image: quay.io/pypa/${{ env.MANYLINUX_VERSION }}
     strategy:
       fail-fast: false
       matrix:
@@ -20,12 +22,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Set up Docker container
-        uses: docker://quay.io/pypa/${{ env.MANYLINUX_VERSION }}
-        with:
-          entrypoint: /bin/bash
-      
+            
       - name: Build with manylinux action
         uses: ./.github/actions/build-manylinux
         with:
