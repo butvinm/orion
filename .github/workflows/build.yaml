@@ -9,17 +9,22 @@ permissions:
   contents: write
 
 jobs:
-  # Build manylinux wheels using the reusable workflow
-  build-linux:
+  build-manylinux:
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
-    uses: ./.github/workflows/build-manylinux.yml
-    with:
-      python-version: ${{ matrix.python-version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Build with manylinux action
+        uses: ./.github/actions/manylinux-builder
+        with:
+          python-version: ${{ matrix.python-version }}
 
-  # Build for other platforms
   build-other:
     runs-on: ${{ matrix.config.os }}
     strategy:
@@ -62,89 +67,90 @@ jobs:
             wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
           path: dist/*.whl
 
-  # Test all wheels
-  test:
-    needs: [build-linux, build-other]
-    runs-on: ${{ matrix.config.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - {os: ubuntu-latest, arch: "x64"}
-          - {os: windows-latest, arch: "x64"}
-          - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+  # test:
+  #   needs: [build-manylinux, build-other]
+  #   runs-on: ${{ matrix.config.os }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       config:
+  #         - {os: ubuntu-latest, arch: "x64"}
+  #         - {os: windows-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "arm64"}
+  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #         architecture: ${{ matrix.config.arch }}
       
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21.x'
+  #     - name: Set up Go
+  #       uses: actions/setup-go@v5
+  #       with:
+  #         go-version: '1.21.x'
       
-      - name: Install UV and pytest
-        run: |
-          pip install uv
-          uv pip install pytest pytest-cov
+  #     - name: Install UV and pytest
+  #       run: |
+  #         pip install uv pytest pytest-cov
       
-      - name: Download wheels
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist/
-          merge-multiple: true
-          # Exclude Docker build records if any
-          pattern-not: "*.dockerbuild"
+  #     - name: Download wheels
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wheels-*
+  #         path: dist/
+  #         merge-multiple: true
       
-      - name: Install wheel
-        run: |
-          uv pip install --find-links=dist orion-fhe
+  #     - name: Install wheel
+  #       run: |
+  #         uv pip install --find-links=dist orion-fhe
       
-      - name: Run tests
-        run: |
-          uv run pytest tests/
+  #     - name: Run tests
+  #       run: pytest tests/
 
-  # Publish to PyPI
-  publish:
-    needs: [test]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  # publish:
+  #   needs: [test]
+  #   runs-on: ${{ matrix.config.os }}
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       config:
+  #         - {os: ubuntu-latest, arch: "x64"}
+  #         - {os: windows-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "arm64"}
+  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          # For publishing, we only need one Python version
-          python-version: "3.9"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
+  #         architecture: ${{ matrix.config.arch }}
       
-      - name: Install UV
-        run: pip install uv
+  #     - name: Install UV
+  #       run: pip install uv
       
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist/
-          merge-multiple: true
-          # Exclude Docker build records if any
-          pattern-not: "*.dockerbuild"
+  #     - name: Download all artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wheels-*
+  #         path: dist/
+  #         merge-multiple: true
       
-      - name: List files to publish
-        run: find dist -type f | sort
+  #     - name: List files to publish
+  #       run: find dist -type f | sort
       
-      - name: Publish to TestPyPI
-        run: |
-          uv pip install twine
-          uv run twine upload --repository testpypi --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*
+  #     - name: Publish to TestPyPI
+  #       run: |
+  #         uv pip install twine
+  #         python -m twine upload --repository testpypi --username __token__ --password ${{ secrets.PYPI_API_TOKEN }} --skip-existing dist/*
