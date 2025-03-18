@@ -47,7 +47,7 @@ jobs:
           echo "Listing contents of generated wheel files:"
           for wheel in dist/*.whl; do
             echo "Contents of $wheel:"
-            unzip -l "$wheel" | grep -i "\.so\|\.dll\|\.dylib"
+            unzip -l "$wheel"
           done
             
       - name: Upload wheels
