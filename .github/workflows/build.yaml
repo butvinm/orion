@@ -45,6 +45,7 @@ jobs:
         shell: bash -l {0}
         run: |
           uv pip install -e .
+          python setup.py build
           uv build --sdist --wheel --out-dir dist
       
       - name: Convert to manylinux wheel
