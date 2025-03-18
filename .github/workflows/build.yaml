@@ -68,7 +68,7 @@ jobs:
       - name: install uv and build orion package
         run: |
           pip install uv
-          uv venv --python ${{ inputs.python-version }}
+          uv venv --python ${{ matrix.python-version }}
           source .venv/bin/activate
           
           uv build --sdist --wheel --out-dir dist
