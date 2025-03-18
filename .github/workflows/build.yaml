@@ -39,7 +39,7 @@ jobs:
         shell: bash -l {0}
         run: |
           # Install the package first to ensure the Go library is built
-          uv pip install -e .
+          # uv pip install -e .
           # Then build the distributions
           uv build --sdist --wheel --out-dir dist
       
