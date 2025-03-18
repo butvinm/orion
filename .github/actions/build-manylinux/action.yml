@@ -16,7 +16,7 @@ runs:
     - name: install uv
       shell: bash
       run: |
-        python3 -mpip install uv
+        python3 -m pip install uv
         uv --version
     
     - name: build package 
