@@ -66,6 +66,7 @@ jobs:
           go-version: '1.21.x'
 
       - name: install uv and build orion package
+        shell: bash
         run: |
           pip install uv
           uv venv --python ${{ matrix.python-version }}
@@ -119,7 +120,7 @@ jobs:
           merge-multiple: true
 
       - name: install uv and create venv
-        shell: bash
+        shell: bash 
         run: |
           pip install uv
           uv venv --python ${{ matrix.python-version }}
@@ -136,7 +137,7 @@ jobs:
           uv pip install --find-links=dist orion-fhe pytest pytest-cov
 
       - name: run pytest
-        shell: bash
+        shell: bash 
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             . .venv/Scripts/activate
