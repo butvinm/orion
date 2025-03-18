@@ -51,7 +51,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
+      - name: setup mac 
+        run: |
+          if [ "${{ runner.os }}" == "Darwin" ]; then
+            mkdir -p /Users/runner/hostedtoolcache
+            chmod 777 /Users/runner/hostedtoolcache
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
