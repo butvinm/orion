@@ -5,6 +5,10 @@ import subprocess
 from pathlib import Path
 import os
 
+def get_platname():
+    # do whatever you need here
+    return "potato"
+
 class BuildLattigo(build_py):
     """Custom build command to build the Go shared library for Lattigo."""
     def run(self):
@@ -48,7 +52,11 @@ class BuildLattigo(build_py):
         
         # Set up environment and build command
         env = os.environ.copy()
-        env.update({"CGO_ENABLED": "1", "GOOS": go_os, "GOARCH": go_arch})
+        env.update({
+            "CGO_ENABLED": "1", 
+            "GOOS": go_os, 
+            "GOARCH": go_arch
+        })
                 
         # Run the build command
         build_cmd = [
@@ -69,5 +77,9 @@ class BuildLattigo(build_py):
 
 setup(
     cmdclass={'build_py': BuildLattigo},
-    options={'bdist_wheel': {'universal': False}},
+    options={
+    "bdist_wheel": {
+        "plat_name": get_platname(),
+    },
+    }
 )
