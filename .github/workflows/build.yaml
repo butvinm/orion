@@ -54,11 +54,12 @@ jobs:
 
       - name: add required mac directories
         run: |
-          if [ "${{ runner.os }}" == "macOS" ]; then
+          if [ "${{ runner.os }}" = "macOS" ]; then
             mkdir -p /Users/runner/hostedtoolcache
             chmod 777 /Users/runner/hostedtoolcache
           fi
-          
+        shell: bash
+
       - name: set up python
         uses: actions/setup-python@v5
         with:
