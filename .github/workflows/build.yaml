@@ -1,3 +1,4 @@
+
 name: Build and Publish
 
 on:
@@ -36,10 +37,12 @@ jobs:
           pip install uv
       
       - name: Build package
-        shell: bash -l {0} 
+        shell: bash -l {0}
         run: |
-          python setup.py build
-          uv build 
+          # Install the package first to ensure the Go library is built
+          uv pip install -e .
+          # Then build the distributions
+          uv build --sdist --wheel --out-dir dist
       
       - name: Convert to manylinux wheel
         if: matrix.config.os == 'ubuntu-latest'
