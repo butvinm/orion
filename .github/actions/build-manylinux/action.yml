@@ -33,7 +33,7 @@ runs:
         echo "Contents of the wheel file:"
         unzip -l dist/*.whl
     
-    - name: convert to manylinux with auditwheel
+    - name: use auditwheel to support earlier manylinux
       shell: bash
       run: |
         source .venv/bin/activate
