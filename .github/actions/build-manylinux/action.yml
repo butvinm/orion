@@ -1,34 +1,37 @@
-name: 'Manylinux Builder with Go'
-description: 'Builds Python packages with manylinux and includes Go installation'
+name: 'build manylinux wheels'
+description: 'builds manylinux wheels for orion'
 inputs:
   python-version:
-    description: 'Python version to use'
+    description: 'python version to use'
     required: true
-    default: '3.9'
 
 runs:
   using: 'composite'
   steps:
-    - name: Set up Go
+    - name: set up go
       uses: actions/setup-go@v5
       with:
         go-version: '1.21.x'
     
-    - name: Set up Python
+    - name: install uv
       shell: bash
       run: |
-        # Use the proper Python version based on input
-        PYTHON_BIN="/opt/python/cp$(echo ${{ inputs.python-version }} | sed 's/\.//')/bin/python"
-        echo "Using Python: $PYTHON_BIN"
-        $PYTHON_BIN -m pip install --upgrade pip
+        pip install uv
+        uv --version
     
-    - name: Install UV
+    - name: build package 
       shell: bash
       run: |
-        $PYTHON_BIN -m pip install uv
+        uv venv --python ${{ inputs.python-version }}
+        source .venv/bin/activate
+        uv pip install setuptools wheel build auditwheel
+        
+        python setup.py build # generates .so/dylib/dll file first
+        uv build --sdist --wheel --out-dir dist
     
-    - name: Build package
+    - name: convert to manylinux with auditwheel
       shell: bash
       run: |
-        $PYTHON_BIN setup.py build # generates .so/dylib/dll file first
-        $PYTHON_BIN -m uv build --sdist --wheel --out-dir dist
+        auditwheel repair dist/*.whl --plat ${{ matrix.manylinux }}
+        ls -l dist
+        
