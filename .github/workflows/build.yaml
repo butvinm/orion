@@ -29,8 +29,8 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
-          path: dist/*.whl
+          name: wheels-python-${{ matrix.python-version }}
+          path: wheelhouse/*.whl
 
   # build-other:
   #   runs-on: ${{ matrix.config.os }}
