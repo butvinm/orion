@@ -183,5 +183,5 @@ jobs:
       - name: Publish to TestPyPI
         run: |
           pip install uv
-          uv publish --index testpypi --token ${{ secrets.PYPI_API_TOKEN }} --no-prompt dist/*
+          uv publish --index testpypi --token ${{ secrets.PYPI_API_TOKEN }} 
 
