@@ -39,7 +39,9 @@ jobs:
         shell: bash -l {0}
         run: | 
           python setup.py build # generates .so/dylib/dll file first
-          uv build --sdist --wheel --out-dir dist
+          python -m pip install build
+          python -m build --sdist
+          python -m build -w -C="--global-option=--plat-name" -C="--global-option=manylinux2014_x86_64"
 
       - name: Inspect wheel contents
         shell: bash -l {0}
