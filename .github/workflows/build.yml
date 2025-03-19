@@ -84,8 +84,11 @@ jobs:
 
           uv venv --python ${{ matrix.python-version }}
           source .venv/bin/activate
+
+          uv pip install poetry
+          poetry build
           
-          uv build --sdist --wheel --out-dir dist
+          # uv build --sdist --wheel --out-dir dist
 
           echo "Contents of the wheel file:"
           unzip -l dist/*.whl
