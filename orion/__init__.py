@@ -8,3 +8,5 @@ from .core import (
     fit, 
     compile
 )
+
+__version__ = "1.0.1"
