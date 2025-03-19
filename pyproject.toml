@@ -24,6 +24,7 @@ dependencies = [
 
 [tool.poetry]
 packages = [{include = "orion"}]
+include = ["orion/backend/lattigo/*.so"]
 
 [tool.poetry.build]
 generate-setup-file = false
