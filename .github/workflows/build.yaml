@@ -8,12 +8,6 @@ on:
 permissions:
   contents: write
 
-x-python-versions: &python-versions
-  - "3.9"
-  - "3.10"
-  - "3.11" 
-  - "3.12"
-
 jobs:
   # In order to build general manylinux wheels that support older Linux
   # distributions, we'll need to use Docker. 
@@ -24,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: *python-versions
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -52,7 +46,7 @@ jobs:
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: *python-versions
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: checkout orion repository
@@ -111,7 +105,7 @@ jobs:
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: *python-versions
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: checkout orion repository
@@ -166,7 +160,7 @@ jobs:
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: *python-versions
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: Checkout repository
