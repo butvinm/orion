@@ -95,60 +95,162 @@ jobs:
   # Now we can test the wheels we just created. We'll do this by pulling
   # all wheels added as artifacts in the previous steps. 
   test:
-    needs: [build-manylinux, build-other]
-    runs-on: ${{ matrix.config.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          # - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
-    
-    steps:
-      - name: checkout orion repository
-        uses: actions/checkout@v4
+      needs: [build-manylinux, build-other]
+      runs-on: ${{ matrix.config.os }}
+      strategy:
+        fail-fast: false
+        matrix:
+          config:
+            - {os: ubuntu-latest, arch: "x64"}
+            # - {os: windows-latest, arch: "x64"}
+            # - {os: macos-latest, arch: "x64"}
+            - {os: macos-latest, arch: "arm64"}
+          python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+      steps:
+        - name: checkout orion repository
+          uses: actions/checkout@v4
+        
+        - name: Set up Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: ${{ matrix.python-version }}
 
-      - name: download artifact wheels
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist/
-          merge-multiple: true
+        - name: download artifact wheels
+          uses: actions/download-artifact@v4
+          with:
+            pattern: wheels-*
+            path: dist/
+            merge-multiple: true
 
-      - name: Set venv python path
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
-          else
-            echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
-          fi
+        - name: debug downloaded artifacts
+          shell: bash
+          run: |
+            echo "Artifact downloads result:"
+            find dist -type f -name "*.whl" | sort
+            echo "Contents of dist directory:"
+            ls -la dist/
+          
+        - name: detailed wheel inspection
+          shell: bash
+          run: |
+            echo "Detailed wheel inspection:"
+            mkdir -p wheel_contents
+            for wheel in dist/*.whl; do
+              echo "Extracting $wheel for inspection"
+              unzip -q "$wheel" -d wheel_contents
+              echo "All files:"
+              find wheel_contents -type f | sort
+              echo "Searching for .so files:"
+              find wheel_contents -name "*.so" | sort
+            done
 
-      - name: install uv and create venv
-        shell: bash 
-        run: |
-          pip install uv
-          uv venv --python ${{ matrix.python-version }}
+        - name: Set venv python path
+          shell: bash
+          run: |
+            if [[ "${{ runner.os }}" == "Windows" ]]; then
+              echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
+            else
+              echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
+            fi
+
+        - name: install uv and create venv
+          shell: bash 
+          run: |
+            pip install uv
+            uv venv --python ${{ matrix.python-version }}
+              
+        - name: install packages
+          shell: bash
+          run: |
+            uv pip list --python $VENV_PYTHON  # Show packages before installation
+            uv pip install -v --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
+            uv pip list --python $VENV_PYTHON  # Show packages after installation
             
-      - name: install packages
-        shell: bash
-        run: |
-          uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
+            # This import might use local code - we'll check that later
+            echo "Attempting to import from repository directory:"
+            $VENV_PYTHON -c "import orion; print(f'Successfully imported orion version: {orion.__version__}')"
 
-      - name: run pytest from clean directory
-        shell: bash 
-        run: |
-          cd $RUNNER_TEMP
-          echo "Testing from directory: $RUNNER_TEMP"
-          $GITHUB_WORKSPACE/$VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
+        - name: debug installed library location
+          shell: bash
+          run: |
+            echo "Looking for installed .so files:"
+            find .venv -name "*.so" | sort
+            
+            echo "Checking installed package structure:"
+            $VENV_PYTHON -c "
+            import os
+            import sys
+            import orion  # Note: importing orion, not orion_fhe
+            
+            # Print all paths in sys.path
+            print('Python sys.path:')
+            for p in sys.path:
+                print(f'  {p}')
+            
+            # Print module paths
+            print(f'orion module path: {orion.__file__}')
+            print(f'orion package directory: {os.path.dirname(orion.__file__)}')
+            
+            # Check for expected .so location
+            so_patterns = ['lattigo-linux.so', 'lattigo-darwin.so', 'lattigo-windows.dll']
+            for pattern in so_patterns:
+                lattigo_dir = os.path.join(os.path.dirname(orion.__file__), 'backend', 'lattigo')
+                so_path = os.path.join(lattigo_dir, pattern)
+                if os.path.exists(so_path):
+                    print(f'Found .so at: {so_path}')
+            
+            # List all files in the lattigo directory
+            lattigo_dir = os.path.join(os.path.dirname(orion.__file__), 'backend', 'lattigo')
+            print(f'Lattigo directory contents: {os.listdir(lattigo_dir) if os.path.exists(lattigo_dir) else \"directory not found\"}')
+            "
+
+        - name: check installed package
+          shell: bash
+          run: |
+            uv pip show orion-fhe --python $VENV_PYTHON
+
+        - name: run pytest from clean directory with debug
+          shell: bash 
+          run: |
+            # Create temp directory
+            cd $RUNNER_TEMP
+            echo "Testing from directory: $RUNNER_TEMP"
+            
+            # Debug import from clean directory
+            echo "Checking orion import from clean directory:"
+            $GITHUB_WORKSPACE/$VENV_PYTHON -c "
+            import sys
+            import os
+            
+            # Print current working directory
+            print(f'Current working directory: {os.getcwd()}')
+            
+            # Print Python path
+            print('Python sys.path when running from clean directory:')
+            for p in sys.path:
+                print(f'  {p}')
+            
+            # Try to import orion and check where it's imported from
+            import orion
+            print(f'Imported orion from: {orion.__file__}')
+            
+            # Check for .so file in the imported package
+            so_patterns = ['lattigo-linux.so', 'lattigo-darwin.so', 'lattigo-windows.dll']
+            lattigo_dir = os.path.join(os.path.dirname(orion.__file__), 'backend', 'lattigo')
+            
+            if os.path.exists(lattigo_dir):
+                print(f'Lattigo directory contents: {os.listdir(lattigo_dir)}')
+                for pattern in so_patterns:
+                    so_path = os.path.join(lattigo_dir, pattern)
+                    if os.path.exists(so_path):
+                        print(f'Found shared library at: {so_path}')
+            else:
+                print(f'Lattigo directory not found at: {lattigo_dir}')
+            "
+            
+            # Run the actual tests
+            $GITHUB_WORKSPACE/$VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
 
   publish:
     needs: [test]
