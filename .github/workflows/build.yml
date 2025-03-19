@@ -143,81 +143,46 @@ jobs:
           # Create temp directory
           cd $RUNNER_TEMP
           echo "Testing from directory: $RUNNER_TEMP"
-          
-          # Debug import from clean directory
-          
-          echo "Checking orion import from clean directory:"
-          $GITHUB_WORKSPACE/$VENV_PYTHON -c "
-          import sys
-          import os
-          
-          # Print current working directory
-          print(f'Current working directory: {os.getcwd()}')
-          
-          # Print Python path
-          print('Python sys.path when running from clean directory:')
-          for p in sys.path:
-              print(f'  {p}')
-          
-          # Try to import orion and check where it's imported from
-          import orion
-          print(f'Imported orion from: {orion.__file__}')
-          
-          # Check for .so file in the imported package
-          so_patterns = ['lattigo-linux.so', 'lattigo-darwin.so', 'lattigo-windows.dll']
-          lattigo_dir = os.path.join(os.path.dirname(orion.__file__), 'backend', 'lattigo')
-          
-          if os.path.exists(lattigo_dir):
-              print(f'Lattigo directory contents: {os.listdir(lattigo_dir)}')
-              for pattern in so_patterns:
-                  so_path = os.path.join(lattigo_dir, pattern)
-                  if os.path.exists(so_path):
-                      print(f'Found shared library at: {so_path}')
-          else:
-              print(f'Lattigo directory not found at: {lattigo_dir}')
-          "
-          
-          # Run the actual tests
           $GITHUB_WORKSPACE/$VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
 
-  # publish:
-  #   needs: [test]
-  #   runs-on: ${{ matrix.config.os }}
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       config:
-  #         - {os: ubuntu-latest, arch: "x64"}
-  #         - {os: windows-latest, arch: "x64"}
-  #         - {os: macos-latest, arch: "x64"}
-  #         - {os: macos-latest, arch: "arm64"}
-  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
+  publish:
+    needs: [test]
+    runs-on: ${{ matrix.config.os }}
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: ubuntu-latest, arch: "x64"}
+          # - {os: windows-latest, arch: "x64"}
+          # - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
     
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  #     # Conda is necessary else we can't build Mac M1+ on Python
-  #     # versions < 3.11.
-  #     - name: setup python
-  #       uses: conda-incubator/setup-miniconda@v2
-  #       with:
-  #         miniconda-version: "latest"
-  #         python-version: ${{ matrix.python-version }}
-  #         architecture: ${{ matrix.config.arch }}
-  #         auto-activate-base: true
+      # Conda is necessary else we can't build Mac M1+ on Python
+      # versions < 3.11.
+      - name: setup python
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.config.arch }}
+          auto-activate-base: true
                   
-  #     - name: Download all artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         pattern: wheels-*
-  #         path: dist/
-  #         merge-multiple: true
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
       
-  #     - name: Publish to TestPyPI
-  #       run: |
-  #         pip install poetry
-  #         poetry config repositories.testpypi https://test.pypi.org/legacy/
-  #         poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
-  #         poetry publish --repository testpypi --skip-existing
+      - name: Publish to TestPyPI
+        run: |
+          pip install poetry
+          poetry config repositories.testpypi https://test.pypi.org/legacy/
+          poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
+          poetry publish --repository testpypi --skip-existing
