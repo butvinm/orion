@@ -18,7 +18,8 @@ trainloader, testloader = get_mnist_datasets(data_dir="../data", batch_size=1)
 net = models.MLP()
 
 # Train model (optional)
-#train_on_mnist(net, data_dir="../data", epochs=1, device="cuda")
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+# train_on_mnist(net, data_dir="../data", epochs=1, device=device)
 
 # Get a test batch to pass through our network
 inp, _ = next(iter(testloader))
