@@ -196,10 +196,12 @@ jobs:
         run: |
           uv pip show orion-fhe --python $VENV_PYTHON
 
-      - name: run pytest
+      - name: run pytest from clean directory
         shell: bash 
         run: |
-          $VENV_PYTHON -m pytest tests/
+          cd $RUNNER_TEMP
+          echo "Testing from directory: $RUNNER_TEMP"
+          $VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
 
   publish:
     needs: [test]
