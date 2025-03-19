@@ -95,7 +95,7 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - {os: ubuntu-latest, arch: "x64"}
+          #m- {os: ubuntu-latest, arch: "x64"}
           # - {os: windows-latest, arch: "x64"}
           # - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
@@ -126,12 +126,16 @@ jobs:
             echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
           fi
 
+      - name: install uv and create venv
+        shell: bash 
+        run: |
+          pip install uv
+          uv venv --python ${{ matrix.python-version }}
+            
       - name: install packages
         shell: bash
         run: |
-          pip install uv
-          uv pip install --find-links=dist orion-fhe --python $VENV_PYTHON
-          uv pip install pytest pytest-cov --python $VENV_PYTHON
+          uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
 
       - name: run pytest from clean directory with debug
         shell: bash 
@@ -141,6 +145,7 @@ jobs:
           echo "Testing from directory: $RUNNER_TEMP"
           
           # Debug import from clean directory
+          
           echo "Checking orion import from clean directory:"
           $GITHUB_WORKSPACE/$VENV_PYTHON -c "
           import sys
