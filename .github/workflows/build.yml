@@ -101,7 +101,7 @@ jobs:
       - name: checkout orion repository
         uses: actions/checkout@v4
       
-      - name: Set up Python
+      - name: set up python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -118,7 +118,7 @@ jobs:
         run: |
           pip install --find-links=dist orion-fhe pytest pytest-cov
 
-      - name: run pytest from clean directory with debug
+      - name: run pytest
         shell: bash 
         run: |
           # Create temp directory
@@ -129,27 +129,26 @@ jobs:
   publish:
     needs: [test]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' #&& github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
-      - name: Checkout repository
+      - name: checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: set up python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       
-      - name: Download all artifacts
+      - name: download all artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: wheels-*
           path: dist/
           merge-multiple: true
       
-      - name: Publish to TestPyPI
+      - name: publish to pypi
         run: |
           pip install poetry
-          poetry config repositories.testpypi https://test.pypi.org/legacy/
-          poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
-          poetry publish --repository testpypi --skip-existing
+          poetry config pypi-token.pypi ${{ secrets.PYPI_API_TOKEN }}
+          poetry publish --skip-existing
