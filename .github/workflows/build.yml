@@ -131,6 +131,20 @@ jobs:
           echo "Contents of dist directory:"
           ls -la dist/
 
+      - name: detailed wheel inspection
+        shell: bash
+        run: |
+          echo "Detailed wheel inspection:"
+          mkdir -p wheel_contents
+          for wheel in dist/*.whl; do
+            echo "Extracting $wheel for inspection"
+            unzip -q "$wheel" -d wheel_contents
+            echo "All files:"
+            find wheel_contents -type f | sort
+            echo "Searching for .so files:"
+            find wheel_contents -name "*.so" | sort
+          done
+
       - name: Set venv python path
         shell: bash
         run: |
