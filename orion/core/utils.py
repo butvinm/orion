@@ -1,6 +1,9 @@
 import os
 import shutil
 import zipfile
+
+import ssl
+import certifi
 import urllib.request
 
 import torch
@@ -26,39 +29,57 @@ def get_mnist_datasets(data_dir, batch_size, test_samples=10000, seed=None):
     Returns:
         tuple: (train_loader, test_loader)
     """
-    if seed is not None:
-        torch.manual_seed(seed)  # Set the global seed for reproducibility
 
-    # Define a transform to normalize the data
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
-    
-    # Download and load the training and test datasets
-    train_dataset = datasets.MNIST(
-        data_dir, train=True, download=True, transform=transform
-    )
-    test_dataset = datasets.MNIST(
-        data_dir, train=False, download=True, transform=transform
-    )
+    # Create a secure SSL context using certifi. Otherwise we'll get a
+    # [SSL: CERTIFICATE_VERIFY_FAILED] error.
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    old_context = ssl._create_default_https_context
+    ssl._create_default_https_context = lambda: ssl_context
 
-    # Limit the number of test samples if necessary
-    if test_samples < len(test_dataset):
-        test_dataset, _ = random_split(
-            test_dataset,
-            [test_samples, len(test_dataset) - test_samples]
+    try:
+        if seed is not None:
+            torch.manual_seed(seed)  # Set the global seed for reproducibility
+
+        # Define a transform to normalize the data
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
+        
+        # Try to download and load the training and test datasets
+        try:
+            train_dataset = datasets.MNIST(
+                data_dir, train=True, download=True, transform=transform
+            )
+            test_dataset = datasets.MNIST(
+                data_dir, train=False, download=True, transform=transform
+            )
+        except Exception as e: 
+            raise RuntimeError(
+                e + " Could not install MNIST dataset automatically " + 
+                "You'll need to download it manually from torchvision.datasets.MNIST()"
+            )
+ 
+        # Limit the number of test samples if necessary
+        if test_samples < len(test_dataset):
+            test_dataset, _ = random_split(
+                test_dataset,
+                [test_samples, len(test_dataset) - test_samples]
+            )
+
+        # Create DataLoaders for training and test datasets
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=True
+        )
+        test_loader = DataLoader(
+            test_dataset, batch_size=batch_size
         )
 
-    # Create DataLoaders for training and test datasets
-    train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True
-    )
-    test_loader = DataLoader(
-        test_dataset, batch_size=batch_size
-    )
-
-    return train_loader, test_loader
+        return train_loader, test_loader
+        
+    finally:
+        # Restore the original SSL context
+        ssl._create_default_https_context = old_context
 
 
 def get_cifar_datasets(data_dir, batch_size, test_samples=10000, seed=None):
@@ -74,52 +95,70 @@ def get_cifar_datasets(data_dir, batch_size, test_samples=10000, seed=None):
     Returns:
         tuple: (train_loader, test_loader)
     """
-    if seed is not None:
-        torch.manual_seed(seed)  # Set the global seed for reproducibility
+    
+    # Create a secure SSL context using certifi. Otherwise we'll get a
+    # [SSL: CERTIFICATE_VERIFY_FAILED] error.
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    old_context = ssl._create_default_https_context
+    ssl._create_default_https_context = lambda: ssl_context
 
-    # Define data transformations
-    transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.4914, 0.4822, 0.4465), 
-            (0.2470, 0.2435, 0.2616)
-        ),
-    ])
+    try:
+        if seed is not None:
+            torch.manual_seed(seed)  # Set the global seed for reproducibility
+            
+        # Define data transformations
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                (0.4914, 0.4822, 0.4465), 
+                (0.2470, 0.2435, 0.2616)
+            ),
+        ])
 
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(
-            (0.4914, 0.4822, 0.4465), 
-            (0.2470, 0.2435, 0.2616)
-        ),
-    ])
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(
+                (0.4914, 0.4822, 0.4465), 
+                (0.2470, 0.2435, 0.2616)
+            ),
+        ])
 
-    # Load the training and test datasets
-    train_dataset = datasets.CIFAR10(
-        data_dir, train=True, download=True, transform=transform_train
-    )
-    test_dataset = datasets.CIFAR10(
-        data_dir, train=False, download=True, transform=transform_test
-    )
+        # Try to download and load the training and test datasets
+        try:
+            train_dataset = datasets.CIFAR10(
+                data_dir, train=True, download=True, transform=transform_train
+            )
+            test_dataset = datasets.CIFAR10(
+                data_dir, train=False, download=True, transform=transform_test
+            )
+        except Exception as e:
+            raise RuntimeError(
+                str(e) + " Could not install CIFAR-10 dataset automatically " +
+                "You'll need to download it manually from torchvision.datasets.CIFAR10()"
+            )
 
-    # Limit the number of test samples if necessary
-    if test_samples < len(test_dataset):
-        test_dataset, _ = random_split(
-            test_dataset,
-            [test_samples, len(test_dataset) - test_samples]
+        # Limit the number of test samples if necessary
+        if test_samples < len(test_dataset):
+            test_dataset, _ = random_split(
+                test_dataset,
+                [test_samples, len(test_dataset) - test_samples]
+            )
+
+        # Create DataLoaders
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=True
+        )
+        test_loader = DataLoader(
+            test_dataset, batch_size=batch_size
         )
 
-    # Create DataLoaders
-    train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True
-    )
-    test_loader = DataLoader(
-        test_dataset, batch_size=batch_size
-    )
-
-    return train_loader, test_loader
+        return train_loader, test_loader
+        
+    finally:
+        # Restore the original SSL context
+        ssl._create_default_https_context = old_context
 
 
 def download_and_prepare_tinyimagenet(data_dir='./data'):
@@ -133,57 +172,73 @@ def download_and_prepare_tinyimagenet(data_dir='./data'):
         # Create data directory if it doesn't exist
         os.makedirs(data_dir, exist_ok=True)
 
-        # Download the dataset
-        print("Downloading Tiny-ImageNet dataset...")
-        urllib.request.urlretrieve(url, zip_filename)
-        
-        # Extract the dataset
-        print("Extracting Tiny-ImageNet dataset...")
-        with zipfile.ZipFile(zip_filename, 'r') as zip_ref:
-            zip_ref.extractall(data_dir)
-        
-        print("Organizing Tiny-ImageNet dataset...")
+        # Create a secure SSL context using certifi
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        old_context = ssl._create_default_https_context
+        ssl._create_default_https_context = lambda: ssl_context
 
-        # Organize the training data
-        train_dir = os.path.join(dataset_dir, 'train')
-        for class_dir in os.listdir(train_dir):
-            class_path = os.path.join(train_dir, class_dir)
-            if os.path.isdir(class_path):
-                images_dir = os.path.join(class_path, 'images')
-                # Move images up one level
-                for image_file in os.listdir(images_dir):
-                    shutil.move(os.path.join(images_dir, image_file), class_path)
-                # Remove the now-empty 'images' folder
-                os.rmdir(images_dir)
-                # Remove the .txt file in the class directory
-                for txt_file in os.listdir(class_path):
-                    if txt_file.endswith('.txt'):
-                        os.remove(os.path.join(class_path, txt_file))
+        try:
+            # Download the dataset
+            print("Downloading Tiny-ImageNet dataset...")
+            try:
+                urllib.request.urlretrieve(url, zip_filename)
+            except Exception as e:
+                raise RuntimeError(
+                    f"{str(e)}\nCould not download Tiny-ImageNet dataset "
+                    "automatically. You'll need to download it manually from "
+                    "http://cs231n.stanford.edu/tiny-imagenet-200.zip"
+                )
+            
+            # Extract the dataset
+            print("Extracting Tiny-ImageNet dataset...")
+            with zipfile.ZipFile(zip_filename, 'r') as zip_ref:
+                zip_ref.extractall(data_dir)
+            
+            print("Organizing Tiny-ImageNet dataset...")
 
-        # Organize the validation data
-        val_dir = os.path.join(dataset_dir, 'val')
-        val_images_dir = os.path.join(val_dir, 'images')
-        val_annotations_file = os.path.join(val_dir, 'val_annotations.txt')
+            # Organize the training data
+            train_dir = os.path.join(dataset_dir, 'train')
+            for class_dir in os.listdir(train_dir):
+                class_path = os.path.join(train_dir, class_dir)
+                if os.path.isdir(class_path):
+                    images_dir = os.path.join(class_path, 'images')
+                    # Move images up one level
+                    for image_file in os.listdir(images_dir):
+                        shutil.move(os.path.join(images_dir, image_file), class_path)
+                    # Remove the now-empty 'images' folder
+                    os.rmdir(images_dir)
+                    # Remove the .txt file in the class directory
+                    for txt_file in os.listdir(class_path):
+                        if txt_file.endswith('.txt'):
+                            os.remove(os.path.join(class_path, txt_file))
 
-        with open(val_annotations_file, 'r') as f:
-            annotations = f.readlines()
+            # Organize the validation data
+            val_dir = os.path.join(dataset_dir, 'val')
+            val_images_dir = os.path.join(val_dir, 'images')
+            val_annotations_file = os.path.join(val_dir, 'val_annotations.txt')
 
-        for line in annotations:
-            # Get the image filename and the corresponding class
-            parts = line.split('\t')
-            image_filename = parts[0]
-            class_dir = parts[1]
-            # Create the class directory if it doesn't exist
-            class_path = os.path.join(val_dir, class_dir)
-            os.makedirs(class_path, exist_ok=True)
-            # Move the image to its class directory
-            shutil.move(os.path.join(val_images_dir, image_filename), class_path)
-        
-        # Remove the now-empty 'images' folder and the annotations file
-        os.rmdir(val_images_dir)
-        os.remove(val_annotations_file)
+            with open(val_annotations_file, 'r') as f:
+                annotations = f.readlines()
 
-        print("Tiny-ImageNet dataset preparation complete.")
+            for line in annotations:
+                # Get the image filename and the corresponding class
+                parts = line.split('\t')
+                image_filename = parts[0]
+                class_dir = parts[1]
+                # Create the class directory if it doesn't exist
+                class_path = os.path.join(val_dir, class_dir)
+                os.makedirs(class_path, exist_ok=True)
+                # Move the image to its class directory
+                shutil.move(os.path.join(val_images_dir, image_filename), class_path)
+            
+            # Remove the now-empty 'images' folder and the annotations file
+            os.rmdir(val_images_dir)
+            os.remove(val_annotations_file)
+
+            print("Tiny-ImageNet dataset preparation complete.")
+        finally:
+            # Restore the original SSL context
+            ssl._create_default_https_context = old_context
 
 
 def get_tiny_datasets(data_dir, batch_size, test_samples=10000, seed=None):
