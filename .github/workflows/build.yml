@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -37,75 +37,75 @@ jobs:
   # For all other operating systems we support (Windows, Mac Intel
   # and Apple Silicon) we can use the default machines GitHub actions 
   # gives us. 
-  # build-other:
-  #   runs-on: ${{ matrix.config.os }}
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       config:
-  #         # - {os: windows-latest, arch: "x64"}
-  #         # - {os: macos-latest, arch: "x64"}
-  #         #- {os: macos-latest, arch: "arm64"}
-  #       python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+  build-other:
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "arm64"}
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
-  #   steps:
-  #     - name: checkout orion repository
-  #       uses: actions/checkout@v4
+    steps:
+      - name: checkout orion repository
+        uses: actions/checkout@v4
 
-  #     # Conda is necessary else we can't build Mac M1+ on Python
-  #     # versions < 3.11.
-  #     - name: setup python
-  #       uses: conda-incubator/setup-miniconda@v2
-  #       with:
-  #         miniconda-version: "latest"
-  #         python-version: ${{ matrix.python-version }}
-  #         architecture: ${{ matrix.config.arch }}
-  #         auto-activate-base: true
+      # Conda is necessary else we can't build Mac M1+ on Python
+      # versions < 3.11.
+      - name: setup python
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.config.arch }}
+          auto-activate-base: true
       
-  #     - name: set up golang
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version: '1.21.x'
+      - name: set up golang
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.x'
 
-  #     - name: Set venv python path
-  #       shell: bash
-  #       run: |
-  #         if [[ "${{ runner.os }}" == "Windows" ]]; then
-  #           echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
-  #         else
-  #           echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
-  #         fi
+      - name: Set venv python path
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
+          else
+            echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
+          fi
 
-  #     - name: install uv and build orion package
-  #       shell: bash
-  #       run: |
-  #         pip install uv
-  #         uv venv --python ${{ matrix.python-version }}          
-  #         uv build --sdist --wheel --out-dir dist --python $VENV_PYTHON
+      - name: install uv and build orion package
+        shell: bash
+        run: |
+          pip install uv
+          uv venv --python ${{ matrix.python-version }}          
+          uv build --sdist --wheel --out-dir dist --python $VENV_PYTHON
 
-  #         echo "Contents of the wheel file:"
-  #         unzip -l dist/*.whl
+          echo "Contents of the wheel file:"
+          unzip -l dist/*.whl
 
-  #     - name: Upload built wheels
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
-  #         path: dist/*.whl
+      - name: Upload built wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
+          path: dist/*.whl
 
   # Now we can test the wheels we just created. We'll do this by pulling
   # all wheels added as artifacts in the previous steps. 
   test:
-    needs: [build-manylinux]
+    needs: [build-manylinux, build-other]
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
         config:
           - {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
+          - {os: windows-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - name: checkout orion repository
@@ -122,28 +122,6 @@ jobs:
           pattern: wheels-*
           path: dist/
           merge-multiple: true
-
-      - name: debug downloaded artifacts
-        shell: bash
-        run: |
-          echo "Artifact downloads result:"
-          find dist -type f -name "*.whl" | sort
-          echo "Contents of dist directory:"
-          ls -la dist/
-          
-      - name: detailed wheel inspection
-        shell: bash
-        run: |
-          echo "Detailed wheel inspection:"
-          mkdir -p wheel_contents
-          for wheel in dist/*.whl; do
-            echo "Extracting $wheel for inspection"
-            unzip -q "$wheel" -d wheel_contents
-            echo "All files:"
-            find wheel_contents -type f | sort
-            echo "Searching for .so files:"
-            find wheel_contents -name "*.so" | sort
-          done
 
       - name: Set venv python path
         shell: bash
@@ -163,50 +141,19 @@ jobs:
       - name: install packages
         shell: bash
         run: |
-          uv pip list --python $VENV_PYTHON  # Show packages before installation
-          uv pip install -v --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
-          uv pip list --python $VENV_PYTHON  # Show packages after installation
-          $VENV_PYTHON -c "import orion; print(f'Successfully imported orion version: {orion.__version__}')"
-
-      - name: debug installed library location
-        shell: bash
-        run: |
-          echo "Looking for installed .so files:"
-          find .venv -name "*.so" | sort
-          
-          echo "Checking installed package structure:"
-          $VENV_PYTHON -c "
-          import os
-          import sys
-          import orion  # Note: importing orion, not orion_fhe
-          # Print module paths
-          print(f'orion module path: {orion.__file__}')
-          print(f'orion package directory: {os.path.dirname(orion.__file__)}')
-          # Check for expected .so location
-          so_path = os.path.join(os.path.dirname(orion.__file__), 'backend', 'lattigo', 'lattigo-linux.so')
-          print(f'Expected .so path: {so_path}')
-          print(f'File exists: {os.path.exists(so_path)}')
-          # List all files in the lattigo directory
-          lattigo_dir = os.path.join(os.path.dirname(orion.__file__), 'backend', 'lattigo')
-          print(f'Lattigo directory contents: {os.listdir(lattigo_dir) if os.path.exists(lattigo_dir) else \"directory not found\"}')
-          "
-
-      - name: check installed package
-        shell: bash
-        run: |
-          uv pip show orion-fhe --python $VENV_PYTHON
+          uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
 
       - name: run pytest from clean directory
         shell: bash 
         run: |
           cd $RUNNER_TEMP
           echo "Testing from directory: $RUNNER_TEMP"
-          $VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
+          $GITHUB_WORKSPACE/$VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
 
   publish:
     needs: [test]
     runs-on: ${{ matrix.config.os }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' #&& github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
@@ -240,8 +187,7 @@ jobs:
       
       - name: Publish to TestPyPI
         run: |
-          pip install poetry
+          uv pip install poetry --python $VENV_PYTHON
           poetry config repositories.testpypi https://test.pypi.org/legacy/
           poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
           poetry publish --repository testpypi --skip-existing
-
