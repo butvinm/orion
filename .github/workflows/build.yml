@@ -123,6 +123,14 @@ jobs:
           path: dist/
           merge-multiple: true
 
+      - name: debug downloaded artifacts
+        shell: bash
+        run: |
+          echo "Artifact downloads result:"
+          find dist -type f -name "*.whl" | sort
+          echo "Contents of dist directory:"
+          ls -la dist/
+
       - name: Set venv python path
         shell: bash
         run: |
@@ -141,7 +149,15 @@ jobs:
       - name: install packages
         shell: bash
         run: |
-          uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
+          $VENV_PYTHON -m pip list  # Show packages before installation
+          uv pip install -v --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
+          $VENV_PYTHON -m pip list  # Show packages after installation
+          $VENV_PYTHON -c "import orion_fhe; print(f'Successfully imported orion_fhe version: {orion_fhe.__version__}')"
+
+      - name: check installed package
+        shell: bash
+        run: |
+          $VENV_PYTHON -m pip show orion-fhe
 
       - name: run pytest
         shell: bash 
