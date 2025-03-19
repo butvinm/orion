@@ -149,15 +149,15 @@ jobs:
       - name: install packages
         shell: bash
         run: |
-          $VENV_PYTHON -m pip list  # Show packages before installation
+          uv pip list --python $VENV_PYTHON  # Show packages before installation
           uv pip install -v --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
-          $VENV_PYTHON -m pip list  # Show packages after installation
+          uv pip list --python $VENV_PYTHON  # Show packages after installation
           $VENV_PYTHON -c "import orion_fhe; print(f'Successfully imported orion_fhe version: {orion_fhe.__version__}')"
 
       - name: check installed package
         shell: bash
         run: |
-          $VENV_PYTHON -m pip show orion-fhe
+          uv pip show orion-fhe --python $VENV_PYTHON
 
       - name: run pytest
         shell: bash 
