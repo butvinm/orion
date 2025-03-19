@@ -8,26 +8,20 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: set up go
+    - name: set up golang
       uses: actions/setup-go@v5
       with:
         go-version: '1.21.x'
-    
-    - name: install uv
-      shell: bash
+
+    - name: Install Poetry
+      shell: bash -l {0}
       run: |
-        yum install -y python3-pip
-        python${{ inputs.python-version }} -m pip install uv
-        uv --version
+        pip install poetry auditwheel
     
-    - name: build package 
-      shell: bash
+    - name: Build package
+      shell: bash -l {0}
       run: |
-        uv venv --python ${{ inputs.python-version }}
-        source .venv/bin/activate
-        
-        uv pip install auditwheel
-        uv build --sdist --wheel --out-dir dist
+        poetry build
 
         echo "Contents of the wheel file:"
         unzip -l dist/*.whl
@@ -35,7 +29,6 @@ runs:
     - name: use auditwheel to support earlier manylinux
       shell: bash
       run: |
-        source .venv/bin/activate
         auditwheel repair dist/*.whl --plat manylinux2014_x86_64
 
         echo "Contents of the wheelhouse directory:"
