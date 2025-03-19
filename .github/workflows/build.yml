@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+        python-version: ["3.11"] #, "3.10", "3.11", "3.12"]
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -105,7 +105,7 @@ jobs:
           # - {os: windows-latest, arch: "x64"}
           # - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+        python-version: ["3.11"] #, "3.10", "3.11", "3.12"]
     
     steps:
       - name: checkout orion repository
