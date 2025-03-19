@@ -80,10 +80,12 @@ jobs:
         shell: bash
         run: |
           python${{ inputs.python-version }} -m pip install uv
-          uv venv --python ${{ matrix.python-version }}  
+          uv --version
+
+          uv venv --python ${{ inputs.python-version }}
+          source .venv/bin/activate
           
-          # $VENV_PYTHON $GITHUB_WORKSPACE/tools/build_lattigo.py
-          uv build --sdist --wheel --out-dir dist --python $VENV_PYTHON
+          uv build --sdist --wheel --out-dir dist
 
           echo "Contents of the wheel file:"
           unzip -l dist/*.whl
@@ -96,135 +98,135 @@ jobs:
 
   # Now we can test the wheels we just created. We'll do this by pulling
   # all wheels added as artifacts in the previous steps. 
-  test:
-    needs: [build-manylinux, build-other]
-    runs-on: ${{ matrix.config.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          #m- {os: ubuntu-latest, arch: "x64"}
-          # - {os: windows-latest, arch: "x64"}
-          # - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.11"] #, "3.10", "3.11", "3.12"]
+  # test:
+  #   needs: [build-manylinux, build-other]
+  #   runs-on: ${{ matrix.config.os }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       config:
+  #         #m- {os: ubuntu-latest, arch: "x64"}
+  #         # - {os: windows-latest, arch: "x64"}
+  #         # - {os: macos-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "arm64"}
+  #       python-version: ["3.11"] #, "3.10", "3.11", "3.12"]
     
-    steps:
-      - name: checkout orion repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: checkout orion repository
+  #       uses: actions/checkout@v4
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: ${{ matrix.python-version }}
 
-      - name: download artifact wheels
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist/
-          merge-multiple: true
+  #     - name: download artifact wheels
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wheels-*
+  #         path: dist/
+  #         merge-multiple: true
 
-      - name: Set venv python path
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
-          else
-            echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
-          fi
+  #     - name: Set venv python path
+  #       shell: bash
+  #       run: |
+  #         if [[ "${{ runner.os }}" == "Windows" ]]; then
+  #           echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
+  #         else
+  #           echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
+  #         fi
 
-      - name: install uv and create venv
-        shell: bash 
-        run: |
-          pip install uv
-          uv venv --python ${{ matrix.python-version }}
+  #     - name: install uv and create venv
+  #       shell: bash 
+  #       run: |
+  #         pip install uv
+  #         uv venv --python ${{ matrix.python-version }}
             
-      - name: install packages
-        shell: bash
-        run: |
-          uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
+  #     - name: install packages
+  #       shell: bash
+  #       run: |
+  #         uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
 
-      - name: run pytest from clean directory with debug
-        shell: bash 
-        run: |
-          # Create temp directory
-          cd $RUNNER_TEMP
-          echo "Testing from directory: $RUNNER_TEMP"
+  #     - name: run pytest from clean directory with debug
+  #       shell: bash 
+  #       run: |
+  #         # Create temp directory
+  #         cd $RUNNER_TEMP
+  #         echo "Testing from directory: $RUNNER_TEMP"
           
-          # Debug import from clean directory
-          echo "Checking orion import from clean directory:"
-          $GITHUB_WORKSPACE/$VENV_PYTHON -c "
-          import sys
-          import os
+  #         # Debug import from clean directory
+  #         echo "Checking orion import from clean directory:"
+  #         $GITHUB_WORKSPACE/$VENV_PYTHON -c "
+  #         import sys
+  #         import os
           
-          # Print current working directory
-          print(f'Current working directory: {os.getcwd()}')
+  #         # Print current working directory
+  #         print(f'Current working directory: {os.getcwd()}')
           
-          # Print Python path
-          print('Python sys.path when running from clean directory:')
-          for p in sys.path:
-              print(f'  {p}')
+  #         # Print Python path
+  #         print('Python sys.path when running from clean directory:')
+  #         for p in sys.path:
+  #             print(f'  {p}')
           
-          # Try to import orion and check where it's imported from
-          import orion
-          print(f'Imported orion from: {orion.__file__}')
+  #         # Try to import orion and check where it's imported from
+  #         import orion
+  #         print(f'Imported orion from: {orion.__file__}')
           
-          # Check for .so file in the imported package
-          so_patterns = ['lattigo-linux.so', 'lattigo-darwin.so', 'lattigo-windows.dll']
-          lattigo_dir = os.path.join(os.path.dirname(orion.__file__), 'backend', 'lattigo')
+  #         # Check for .so file in the imported package
+  #         so_patterns = ['lattigo-linux.so', 'lattigo-darwin.so', 'lattigo-windows.dll']
+  #         lattigo_dir = os.path.join(os.path.dirname(orion.__file__), 'backend', 'lattigo')
           
-          if os.path.exists(lattigo_dir):
-              print(f'Lattigo directory contents: {os.listdir(lattigo_dir)}')
-              for pattern in so_patterns:
-                  so_path = os.path.join(lattigo_dir, pattern)
-                  if os.path.exists(so_path):
-                      print(f'Found shared library at: {so_path}')
-          else:
-              print(f'Lattigo directory not found at: {lattigo_dir}')
-          "
+  #         if os.path.exists(lattigo_dir):
+  #             print(f'Lattigo directory contents: {os.listdir(lattigo_dir)}')
+  #             for pattern in so_patterns:
+  #                 so_path = os.path.join(lattigo_dir, pattern)
+  #                 if os.path.exists(so_path):
+  #                     print(f'Found shared library at: {so_path}')
+  #         else:
+  #             print(f'Lattigo directory not found at: {lattigo_dir}')
+  #         "
           
-          # Run the actual tests
-          $GITHUB_WORKSPACE/$VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
+  #         # Run the actual tests
+  #         $GITHUB_WORKSPACE/$VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
 
-  publish:
-    needs: [test]
-    runs-on: ${{ matrix.config.os }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - {os: ubuntu-latest, arch: "x64"}
-          - {os: windows-latest, arch: "x64"}
-          - {os: macos-latest, arch: "x64"}
-          - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+  # publish:
+  #   needs: [test]
+  #   runs-on: ${{ matrix.config.os }}
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       config:
+  #         - {os: ubuntu-latest, arch: "x64"}
+  #         - {os: windows-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "x64"}
+  #         - {os: macos-latest, arch: "arm64"}
+  #       python-version: ["3.9", "3.10", "3.11", "3.12"]
     
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
 
-      # Conda is necessary else we can't build Mac M1+ on Python
-      # versions < 3.11.
-      - name: setup python
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          miniconda-version: "latest"
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.config.arch }}
-          auto-activate-base: true
+  #     # Conda is necessary else we can't build Mac M1+ on Python
+  #     # versions < 3.11.
+  #     - name: setup python
+  #       uses: conda-incubator/setup-miniconda@v2
+  #       with:
+  #         miniconda-version: "latest"
+  #         python-version: ${{ matrix.python-version }}
+  #         architecture: ${{ matrix.config.arch }}
+  #         auto-activate-base: true
                   
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist/
-          merge-multiple: true
+  #     - name: Download all artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wheels-*
+  #         path: dist/
+  #         merge-multiple: true
       
-      - name: Publish to TestPyPI
-        run: |
-          pip install poetry
-          poetry config repositories.testpypi https://test.pypi.org/legacy/
-          poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
-          poetry publish --repository testpypi --skip-existing
+  #     - name: Publish to TestPyPI
+  #       run: |
+  #         pip install poetry
+  #         poetry config repositories.testpypi https://test.pypi.org/legacy/
+  #         poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
+  #         poetry publish --repository testpypi --skip-existing
