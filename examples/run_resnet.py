@@ -31,7 +31,7 @@ out_clear = net(inp)
 # Prepare for FHE inference. 
 # Some polynomial activation functions require knowing the range of possible 
 # input values. We'll estimate these ranges using training set statistics, 
-# adjusted to be wider by a tolerance factor (margin).
+# adjusted to be wider by a tolerance factor (= margin).
 orion.fit(net, inp)
 input_level = orion.compile(net)
 
