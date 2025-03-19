@@ -8,6 +8,12 @@ on:
 permissions:
   contents: write
 
+x-python-versions: &python-versions
+  - "3.9"
+  - "3.10"
+  - "3.11" 
+  - "3.12"
+
 jobs:
   # In order to build general manylinux wheels that support older Linux
   # distributions, we'll need to use Docker. 
@@ -18,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+        python-version: *python-versions
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -44,14 +50,16 @@ jobs:
       matrix:
         config:
           - {os: windows-latest, arch: "x64"}
-          #- {os: macos-latest, arch: "x64"}
+          - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9", "3.11"] #, "3.10", "3.11", "3.12"]
+        python-version: *python-versions
     
     steps:
       - name: checkout orion repository
         uses: actions/checkout@v4
 
+      # Conda is necessary else we can't build Mac M1+ on Python
+      # versions < 3.11.
       - name: setup python
         uses: conda-incubator/setup-miniconda@v2
         with:
@@ -103,7 +111,7 @@ jobs:
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9"] #, "3.11"] #, "3.10", "3.11", "3.12"]
+        python-version: *python-versions
     
     steps:
       - name: checkout orion repository
@@ -158,12 +166,14 @@ jobs:
           - {os: windows-latest, arch: "x64"}
           - {os: macos-latest, arch: "x64"}
           - {os: macos-latest, arch: "arm64"}
-        python-version: ["3.9"] #, "3.10", "3.11", "3.12"]
+        python-version: *python-versions
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Conda is necessary else we can't build Mac M1+ on Python
+      # versions < 3.11.
       - name: setup python
         uses: conda-incubator/setup-miniconda@v2
         with:
