@@ -30,7 +30,22 @@ from .auto_bootstrap import BootstrapSolver, BootstrapPlacer
 class Scheme:
     """
     This Scheme class drives most of the functionality in Orion. It 
-    aggregates all the 
+    configures and manages how our framework interfaces with FHE backends, 
+    and exposes this functionality to the user through attributes such as 
+    the encoder, evaluators (linear transform, polynomial, etc.) and 
+    bootstrappers. 
+
+    It also serves two important purposes required before running FHE 
+    inference: fitting the network and then compiling it. The fit() method 
+    runs cleartext forward passes through the network to determine per-layer 
+    input ranges, which are then used to fit polynomial approximations to 
+    common activation functions (e.g., SiLU, ReLU). 
+
+    The compile() function is responsible for all packing of data and 
+    determines a level management policy by running our automatic bootstrap 
+    placement algorithm. Once done, each Orion module is automatically 
+    assigned a level that can then be used in its compilation. This primarily 
+    includes generating the plaintexts needed for each linear transform. 
     """
     
     def __init__(self):

@@ -2,11 +2,18 @@ import math
  
 import networkx as nx 
 import torch.nn as nn
+import matplotlib.pyplot as plt
 
 from orion.nn.linear import LinearTransform
 
 class LevelDAG(nx.DiGraph):
-    """Test"""
+    """
+    The level digraph implementation from Section 5.2 of Orion:
+    https://arxiv.org/pdf/2311.03470. It your goal is to understand this
+    code, it may be useful to have the paper beside you for reference.
+    The goal of this class is to determine the levels of all layers
+    and locations of bootstrap operations in a given neural network.
+    """
 
     def __init__(self, l_eff, network_dag, path=None):
         super().__init__()
@@ -17,7 +24,11 @@ class LevelDAG(nx.DiGraph):
         self.build_level_dag_from_path()
 
     def __add__(self, other):
-        """Test"""
+        """
+        Accepts two level DAGs and computes their aggregate level DAG
+        by "adding" the two together. This addition is a bit abstract;
+        see the paper for additional details.
+        """
 
         if self.number_of_nodes() == 0:
             return other 
@@ -99,7 +110,10 @@ class LevelDAG(nx.DiGraph):
                 self.add_edge(tail, head, weight=weight, path=[tail, head])
         
     def build_level_dag_from_path(self):
-        """Test"""
+        """If a path parameter is provided, this method automatically 
+           generates a level digraph for this path. If this path contains
+           a previously solved SESE region, then we insert it before
+           moving on."""
 
         if not self.path:
             return
@@ -134,7 +148,8 @@ class LevelDAG(nx.DiGraph):
                     prev_dag_nodes = curr_dag_nodes
 
     def build_layer(self, node: str):
-        """Test"""
+        """Builds the next layer of nodes in the level DAG and estimates
+           their latency, eventually used in shortest path."""
 
         level_dag_nodes = [f"{node}@l={i}" for i in range(self.l_eff+1)]
         self.add_nodes_from(level_dag_nodes)
@@ -147,7 +162,14 @@ class LevelDAG(nx.DiGraph):
         return level_dag_nodes
 
     def estimate_layer_latency(self, module, level):
-        """Test"""
+        """
+        Analytical model for estimating linear layer latency. A more
+        comprehensive profiler could provide more accurate estimates.
+        One is in the works, however we feel this route is overkill.
+        What really matters (e.g. 95% of inference) is the latencies 
+        of bootstrapping. Even setting to zero every linear layer 
+        latency here will not affect bootstrap counts.
+        """
 
         if isinstance(module, nn.Identity):
             return 0
@@ -174,7 +196,10 @@ class LevelDAG(nx.DiGraph):
             return 0
 
     def connect_layer_to_existing_dag(self, curr_dag_nodes, prev_dag_nodes):
-        """Test"""
+        """
+        Connect the layer built in build_layer() to the existing level DAG
+        through edges weighted by if a bootstrap is required. 
+        """
 
         if not prev_dag_nodes:
             return
@@ -212,6 +237,8 @@ class LevelDAG(nx.DiGraph):
             if prev_level - prev_module.depth <= 0:
                 return (float("inf"), 0)
             
+            # Analytical fit based on experiments. Once again could benefit
+            # from a profiler, but the search space here is quite massive.
             a, b, c = 3.41, 0.18, 4.81
             t_boot = a * math.exp(b * self.l_eff) + c
             num_boots_required = self.get_num_input_cts(prev_module)
@@ -272,7 +299,6 @@ class LevelDAG(nx.DiGraph):
 
     def plot(self, save_path="", figsize=(10,10)):
         """Plot the level digraph with edge colors based on 'weight'."""
-
         try:
             pos = nx.nx_agraph.graphviz_layout(self, prog='dot')
         except:
