@@ -79,10 +79,10 @@ jobs:
       - name: install uv and build orion package
         shell: bash
         run: |
-          pip install uv
+          python${{ inputs.python-version }} -m pip install uv
           uv venv --python ${{ matrix.python-version }}  
           
-          $VENV_PYTHON $GITHUB_WORKSPACE/tools/build_lattigo.py
+          # $VENV_PYTHON $GITHUB_WORKSPACE/tools/build_lattigo.py
           uv build --sdist --wheel --out-dir dist --python $VENV_PYTHON
 
           echo "Contents of the wheel file:"
