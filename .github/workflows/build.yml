@@ -95,7 +95,7 @@ jobs:
   # Now we can test the wheels we just created. We'll do this by pulling
   # all wheels added as artifacts in the previous steps. 
   test:
-    needs: [build-manylinux, build-other]
+    needs: [build-manylinux]
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
@@ -191,15 +191,15 @@ jobs:
           print(f'Lattigo directory contents: {os.listdir(lattigo_dir) if os.path.exists(lattigo_dir) else \"directory not found\"}')
           "
 
-              - name: check installed package
-                shell: bash
-                run: |
-                  uv pip show orion-fhe --python $VENV_PYTHON
+      - name: check installed package
+        shell: bash
+        run: |
+          uv pip show orion-fhe --python $VENV_PYTHON
 
-              - name: run pytest
-                shell: bash 
-                run: |
-                  $VENV_PYTHON -m pytest tests/
+      - name: run pytest
+        shell: bash 
+        run: |
+          $VENV_PYTHON -m pytest tests/
 
   publish:
     needs: [test]
