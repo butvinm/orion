@@ -126,16 +126,12 @@ jobs:
             echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
           fi
 
-      - name: install uv and create venv
-        shell: bash 
-        run: |
-          pip install uv
-          uv venv --python ${{ matrix.python-version }}
-            
       - name: install packages
         shell: bash
         run: |
-          uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
+          pip install uv
+          uv pip install --find-links=dist orion-fhe --python $VENV_PYTHON
+          uv pip install pytest pytest-cov --python $VENV_PYTHON
 
       - name: run pytest from clean directory with debug
         shell: bash 
