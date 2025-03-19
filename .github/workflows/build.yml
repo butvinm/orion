@@ -77,9 +77,9 @@ jobs:
           fi
 
       - name: install uv and build orion package
-        shell: bash
+        shell: bash -l {0}
         run: |
-          python${{ matrix.python-version }} -m pip install uv
+          python -m pip install uv
           uv --version
 
           uv venv --python ${{ matrix.python-version }}
