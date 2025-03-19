@@ -145,30 +145,30 @@ jobs:
           echo "Testing from directory: $RUNNER_TEMP"
           $GITHUB_WORKSPACE/$VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
 
-publish:
-  needs: [test]
-  runs-on: ubuntu-latest
-  if: github.event_name == 'push' #&& github.ref == 'refs/heads/main'
-  
-  steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+  publish:
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' #&& github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-    
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        pattern: wheels-*
-        path: dist/
-        merge-multiple: true
-    
-    - name: Publish to TestPyPI
-      run: |
-        pip install poetry
-        poetry config repositories.testpypi https://test.pypi.org/legacy/
-        poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
-        poetry publish --repository testpypi --skip-existing
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/
+          merge-multiple: true
+      
+      - name: Publish to TestPyPI
+        run: |
+          pip install poetry
+          poetry config repositories.testpypi https://test.pypi.org/legacy/
+          poetry config pypi-token.testpypi ${{ secrets.PYPI_API_TOKEN }}
+          poetry publish --repository testpypi --skip-existing
