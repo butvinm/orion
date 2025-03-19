@@ -4,7 +4,7 @@ import platform
 import subprocess
 from pathlib import Path
 
-def build():
+def build(setup_kwargs=None):
     """Build the Go shared library for Lattigo."""
     print("=== Building Go shared library ===")
     
@@ -51,10 +51,12 @@ def build():
         print(f"Running: {' '.join(build_cmd)}")
         subprocess.run(build_cmd, cwd=str(backend_dir), env=env, check=True)
         print(f"Successfully built {output_file}")
-        return True
     except subprocess.CalledProcessError as e:
         print(f"Go build failed with exit code {e.returncode}")
-        return False
+        sys.exit(1)
+
+    # Return setup_kwargs for Poetry
+    return setup_kwargs or {}
 
 if __name__ == "__main__":
     success = build()
