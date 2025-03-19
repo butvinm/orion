@@ -26,5 +26,5 @@ dependencies = [
 packages = [{include = "orion"}]
 
 [tool.poetry.build]
-generate-setup-file = false
+generate-setup-file = true
 script = "tools/build_lattigo.py"
