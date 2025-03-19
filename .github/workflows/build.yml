@@ -135,14 +135,26 @@ jobs:
           shell: bash
           run: |
             echo "Detailed wheel inspection:"
-            mkdir -p wheel_contents
             for wheel in dist/*.whl; do
-              echo "Extracting $wheel for inspection"
-              unzip -q "$wheel" -d wheel_contents
-              echo "All files:"
-              find wheel_contents -type f | sort
-              echo "Searching for .so files:"
-              find wheel_contents -name "*.so" | sort
+              wheel_name=$(basename "$wheel" .whl)
+              extract_dir="wheel_contents_$wheel_name"
+              
+              echo "Extracting $wheel to $extract_dir"
+              mkdir -p "$extract_dir"
+              unzip -q "$wheel" -d "$extract_dir"
+              
+              echo "All files in $wheel_name:"
+              find "$extract_dir" -type f | sort
+              
+              echo "Searching for .so files in $wheel_name:"
+              find "$extract_dir" -name "*.so" | sort
+              
+              # Specifically check the lattigo directory
+              lattigo_dir="$extract_dir/orion/backend/lattigo"
+              if [ -d "$lattigo_dir" ]; then
+                echo "Contents of lattigo directory in $wheel_name:"
+                ls -la "$lattigo_dir"
+              fi
             done
 
         - name: Set venv python path
