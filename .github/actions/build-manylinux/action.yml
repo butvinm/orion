@@ -22,7 +22,7 @@ runs:
     - name: Build package
       shell: bash -l {0}
       run: |
-        poetry build
+        python${{ inputs.python-version }} -m poetry build
 
         echo "Contents of the wheel file:"
         unzip -l dist/*.whl
