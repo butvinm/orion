@@ -23,7 +23,7 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@v4
             
-      - name: Build with manylinux action
+      - name: build in docker
         uses: ./.github/actions/build-manylinux
         with:
           python-version: ${{ matrix.python-version }}
@@ -34,9 +34,9 @@ jobs:
           name: wheels-manylinux2014-py${{ matrix.python-version }}-x64
           path: wheelhouse/*.whl
 
-  # For all other operating systems we support (Windows, Mac Intel
-  # and Apple Silicon) we can use the default machines GitHub actions 
-  # gives us. 
+  # For all other operating systems we support (Windows, macOS Intel (x64)
+  # and macOS Apple Silicon (arm64)) we can use the default machines GitHub 
+  # Actions provides
   build-other:
     runs-on: ${{ matrix.config.os }}
     strategy:
@@ -52,8 +52,8 @@ jobs:
       - name: checkout orion repository
         uses: actions/checkout@v4
 
-      # Conda is necessary else we can't build Mac M1+ on Python
-      # versions < 3.11.
+      # Conda is necessary here else we can't build MacOS arm64 on 
+      # Python versions < 3.11.
       - name: setup python
         uses: conda-incubator/setup-miniconda@v2
         with:
@@ -66,28 +66,24 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.21.x'
-
-      - name: Install Poetry
+      
+      - name: build wheels
         shell: bash -l {0}
         run: |
           pip install poetry
-      
-      - name: Build package
-        shell: bash -l {0}
-        run: |
           poetry build
 
           echo "Contents of the wheel file:"
           unzip -l dist/*.whl
 
-      - name: Upload built wheels
+      - name: upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.config.os }}-py${{ matrix.python-version }}-${{ matrix.config.arch }}
           path: dist/*.whl
 
-  # Now we can test the wheels we just created. We'll do this by pulling
-  # all wheels added as artifacts in the previous steps. 
+  # Now we can test the wheels we just created. We'll do this by downloading
+  # all wheels that were added as artifacts in the previous build jobs.
   test:
     needs: [build-manylinux, build-other]
     runs-on: ${{ matrix.config.os }}
@@ -116,26 +112,11 @@ jobs:
           pattern: wheels-*
           path: dist/
           merge-multiple: true
-
-      - name: Set venv python path
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            echo "VENV_PYTHON=.venv\\Scripts\\python.exe" >> $GITHUB_ENV
-          else
-            echo "VENV_PYTHON=.venv/bin/python" >> $GITHUB_ENV
-          fi
-
-      - name: install uv and create venv
-        shell: bash 
-        run: |
-          pip install uv
-          uv venv --python ${{ matrix.python-version }}
             
       - name: install packages
         shell: bash
         run: |
-          uv pip install --find-links=dist orion-fhe pytest pytest-cov --python $VENV_PYTHON
+          pip install --find-links=dist orion-fhe pytest pytest-cov
 
       - name: run pytest from clean directory with debug
         shell: bash 
@@ -143,7 +124,7 @@ jobs:
           # Create temp directory
           cd $RUNNER_TEMP
           echo "Testing from directory: $RUNNER_TEMP"
-          $GITHUB_WORKSPACE/$VENV_PYTHON -m pytest $GITHUB_WORKSPACE/tests/
+          python -m pytest $GITHUB_WORKSPACE/tests/
 
   publish:
     needs: [test]
