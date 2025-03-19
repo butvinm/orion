@@ -8,7 +8,7 @@ import orion.models as models
 from orion.core.utils import mae
 
 def get_config_path(yml_str):
-    orion_path = Path(orion.__file__).parent.parent
+    orion_path = Path(__file__).parent.parent
     return str(orion_path / "configs" / f"{yml_str}")
 
 def test_mlp():

@@ -151,7 +151,7 @@ jobs:
   publish:
     needs: [test]
     runs-on: ${{ matrix.config.os }}
-    if: github.event_name == 'push' #&& github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:

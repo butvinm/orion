@@ -95,6 +95,12 @@ class LattigoLibrary:
 
     def _load_library(self):
         try:
+            # Debug information about current file location
+            print(f"Current file: {__file__}")
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            print(f"Current directory: {current_dir}")
+            print(f"Directory contents: {os.listdir(current_dir)}")
+            
             # Determine library name based on platform
             if platform.system() == "Linux":
                 lib_name = "lattigo-linux.so"
@@ -108,11 +114,38 @@ class LattigoLibrary:
             else:
                 raise RuntimeError("Unsupported platform")
             
-            # Standard path
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            lib_path = os.path.join(current_dir, lib_name)            
+            print(f"Looking for library: {lib_name}")
+            lib_path = os.path.join(current_dir, lib_name)
+            print(f"Full library path: {lib_path}")
+            print(f"Library exists: {os.path.exists(lib_path)}")
+            
+            # If directory exists but file doesn't, show what is there
+            if os.path.exists(current_dir) and not os.path.exists(lib_path):
+                print(f"Files in directory:")
+                for file in os.listdir(current_dir):
+                    print(f"  - {file}")
+                
+                # Try going up directories to see if we can find the library
+                parent_dir = os.path.dirname(current_dir)
+                print(f"Parent directory: {parent_dir}")
+                if os.path.exists(parent_dir):
+                    print(f"Parent directory contents: {os.listdir(parent_dir)}")
+                    
+                    # Look specifically for our library file anywhere in the project
+                    print("Searching for library file in project...")
+                    project_root = parent_dir
+                    while os.path.basename(project_root) != "orion" and project_root != os.path.dirname(project_root):
+                        project_root = os.path.dirname(project_root)
+                    
+                    print(f"Project root: {project_root}")
+                    # Recursive search for the library file
+                    for root, dirs, files in os.walk(project_root):
+                        if lib_name in files:
+                            found_path = os.path.join(root, lib_name)
+                            print(f"Found library at: {found_path}")
+            
             return ctypes.CDLL(lib_path)
-        
+            
         except OSError as e:
             raise RuntimeError(f"Failed to load Lattigo library: {e}")
 
