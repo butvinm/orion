@@ -4,7 +4,7 @@ import platform
 import subprocess
 from pathlib import Path
 
-def build_lattigo():
+def build():
     """Build the Go shared library for Lattigo."""
     print("=== Building Go shared library ===")
     
@@ -57,5 +57,5 @@ def build_lattigo():
         return False
 
 if __name__ == "__main__":
-    success = build_lattigo()
+    success = build()
     sys.exit(0 if success else 1)
