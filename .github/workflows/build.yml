@@ -77,6 +77,9 @@ jobs:
         run: |
           poetry build
 
+          echo "Contents of the wheel file:"
+          unzip -l dist/*.whl
+
       - name: Upload built wheels
         uses: actions/upload-artifact@v4
         with:
