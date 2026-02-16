@@ -22,6 +22,15 @@ func NewEvaluator() {
 	AddPo2RotationKeys()
 }
 
+//export NewEvaluatorFromKeys
+func NewEvaluatorFromKeys() {
+	// Constructs an evaluator from pre-loaded keys in scheme.EvalKeys.
+	// Unlike NewEvaluator, this does NOT call AddPo2RotationKeys()
+	// because all required keys must already be loaded via LoadGaloisKey.
+	// This is the server-side constructor for imported keys.
+	scheme.Evaluator = ckks.NewEvaluator(*scheme.Params, scheme.EvalKeys)
+}
+
 func AddPo2RotationKeys() {
 	maxSlots := scheme.Params.MaxSlots()
 	// Generate all positive power-of-two rotation keys
@@ -60,7 +69,15 @@ func Negate(ciphertextID C.int) C.int {
 //export Rotate
 func Rotate(ciphertextID, amount C.int) C.int {
 	ctIn := RetrieveCiphertext(int(ciphertextID))
-	AddRotationKey(amount)
+
+	// If we have a keygen and secret key available (client mode),
+	// lazily generate the rotation key. Otherwise (server mode),
+	// the key must already be loaded — the evaluator will panic
+	// if it's missing.
+	if scheme.KeyGen != nil && scheme.SecretKey != nil {
+		AddRotationKey(amount)
+	}
+
 	scheme.Evaluator.Rotate(ctIn, int(amount), ctIn)
 
 	return ciphertextID
@@ -69,7 +86,14 @@ func Rotate(ciphertextID, amount C.int) C.int {
 //export RotateNew
 func RotateNew(ciphertextID, amount C.int) C.int {
 	ctIn := RetrieveCiphertext(int(ciphertextID))
-	AddRotationKey(amount)
+
+	// If we have a keygen and secret key available (client mode),
+	// lazily generate the rotation key. Otherwise (server mode),
+	// the key must already be loaded — the evaluator will panic
+	// if it's missing.
+	if scheme.KeyGen != nil && scheme.SecretKey != nil {
+		AddRotationKey(amount)
+	}
 
 	ctOut, err := scheme.Evaluator.RotateNew(ctIn, int(amount))
 	if err != nil {

@@ -295,6 +295,18 @@ class LattigoLibrary:
             restype=ArrayResultInt
         )
 
+        self.SerializeCiphertext = LattigoFunction(
+            self.lib.SerializeCiphertext,
+            argtypes=[ctypes.c_int],
+            restype=ArrayResultByte
+        )
+
+        self.LoadCiphertext = LattigoFunction(
+            self.lib.LoadCiphertext,
+            argtypes=[ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong],
+            restype=ctypes.c_int
+        )
+
     def setup_key_generator(self):
         self.NewKeyGenerator = LattigoFunction(
             self.lib.NewKeyGenerator,
@@ -334,6 +346,30 @@ class LattigoLibrary:
 
         self.LoadSecretKey = LattigoFunction(
             self.lib.LoadSecretKey,
+            argtypes=[ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong],
+            restype=None
+        )
+
+        self.SerializePublicKey = LattigoFunction(
+            self.lib.SerializePublicKey,
+            argtypes=[],
+            restype=ArrayResultByte
+        )
+
+        self.LoadPublicKey = LattigoFunction(
+            self.lib.LoadPublicKey,
+            argtypes=[ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong],
+            restype=None
+        )
+
+        self.SerializeRelinKey = LattigoFunction(
+            self.lib.SerializeRelinKey,
+            argtypes=[],
+            restype=ArrayResultByte
+        )
+
+        self.LoadRelinKey = LattigoFunction(
+            self.lib.LoadRelinKey,
             argtypes=[ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong],
             restype=None
         )
@@ -387,6 +423,12 @@ class LattigoLibrary:
     def setup_evaluator(self):
         self.NewEvaluator = LattigoFunction(
             self.lib.NewEvaluator,
+            argtypes=[],
+            restype=None
+        )
+
+        self.NewEvaluatorFromKeys = LattigoFunction(
+            self.lib.NewEvaluatorFromKeys,
             argtypes=[],
             restype=None
         )
@@ -763,6 +805,25 @@ class LattigoLibrary:
                 ctypes.c_int,
             ],
             restype=ctypes.c_int
+        )
+
+        self.SerializeBootstrapKeys = LattigoFunction(
+            self.lib.SerializeBootstrapKeys,
+            argtypes=[
+                ctypes.c_int,  # numSlots
+                ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # logPs
+            ],
+            restype=ArrayResultByte
+        )
+
+        self.LoadBootstrapKeys = LattigoFunction(
+            self.lib.LoadBootstrapKeys,
+            argtypes=[
+                ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong,  # data
+                ctypes.c_int,  # numSlots
+                ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # logPs
+            ],
+            restype=None
         )
 
         self.DeleteBootstrappers = LattigoFunction(

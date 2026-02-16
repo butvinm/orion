@@ -2,10 +2,9 @@ package main
 
 import (
 	"C"
-)
-import (
 	"fmt"
 	"math"
+	"unsafe"
 
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/baahl-nyu/lattigo/v6/utils"
@@ -85,6 +84,79 @@ func GetBootstrapper(numSlots int) *bootstrapping.Evaluator {
 		panic(fmt.Errorf("no bootstrapper found for slot count: %d", numSlots))
 	}
 	return bootstrapper
+}
+
+//export SerializeBootstrapKeys
+func SerializeBootstrapKeys(numSlots C.int, LogPs *C.int, lenLogPs C.int) (*C.char, C.ulong) {
+	slots := int(numSlots)
+	logP := CArrayToSlice(LogPs, lenLogPs, convertCIntToInt)
+
+	btpParametersLit := bootstrapping.ParametersLiteral{
+		LogN:     utils.Pointy(scheme.Params.LogN()),
+		LogP:     logP,
+		Xs:       scheme.Params.Xs(),
+		LogSlots: utils.Pointy(int(math.Log2(float64(slots)))),
+	}
+
+	btpParams, err := bootstrapping.NewParametersFromLiteral(
+		*scheme.Params, btpParametersLit)
+	if err != nil {
+		panic(err)
+	}
+
+	btpKeys, _, err := btpParams.GenEvaluationKeys(scheme.SecretKey)
+	if err != nil {
+		panic(err)
+	}
+
+	data, err := btpKeys.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+
+	arrPtr, length := SliceToCArray(data, convertByteToCChar)
+	return arrPtr, length
+}
+
+//export LoadBootstrapKeys
+func LoadBootstrapKeys(
+	dataPtr *C.char, lenData C.ulong,
+	numSlots C.int,
+	LogPs *C.int, lenLogPs C.int,
+) {
+	slots := int(numSlots)
+
+	if _, exists := bootstrapperMap[slots]; exists {
+		return
+	}
+
+	btpKeysSerial := CArrayToByteSlice(unsafe.Pointer(dataPtr), uint64(lenData))
+	logP := CArrayToSlice(LogPs, lenLogPs, convertCIntToInt)
+
+	btpParametersLit := bootstrapping.ParametersLiteral{
+		LogN:     utils.Pointy(scheme.Params.LogN()),
+		LogP:     logP,
+		Xs:       scheme.Params.Xs(),
+		LogSlots: utils.Pointy(int(math.Log2(float64(slots)))),
+	}
+
+	btpParams, err := bootstrapping.NewParametersFromLiteral(
+		*scheme.Params, btpParametersLit)
+	if err != nil {
+		panic(err)
+	}
+
+	var btpKeys bootstrapping.EvaluationKeys
+	if err := btpKeys.UnmarshalBinary(btpKeysSerial); err != nil {
+		panic(err)
+	}
+
+	var btpEval *bootstrapping.Evaluator
+	if btpEval, err = bootstrapping.NewEvaluator(btpParams, &btpKeys); err != nil {
+		panic(err)
+	}
+
+	bootstrapperMap[slots] = btpEval
 }
 
 //export DeleteBootstrappers

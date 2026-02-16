@@ -2,6 +2,7 @@ package main
 
 import (
 	"C"
+	"unsafe"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 )
@@ -127,4 +128,29 @@ func GetLiveCiphertexts() (*C.int, C.ulong) {
 	ids := ctHeap.GetLiveKeys()
 	arrPtr, length := SliceToCArray(ids, convertIntToCInt)
 	return arrPtr, length
+}
+
+//export SerializeCiphertext
+func SerializeCiphertext(ciphertextID C.int) (*C.char, C.ulong) {
+	ct := RetrieveCiphertext(int(ciphertextID))
+	data, err := ct.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+
+	arrPtr, length := SliceToCArray(data, convertByteToCChar)
+	return arrPtr, length
+}
+
+//export LoadCiphertext
+func LoadCiphertext(dataPtr *C.char, lenData C.ulong) C.int {
+	ctSerial := CArrayToByteSlice(unsafe.Pointer(dataPtr), uint64(lenData))
+
+	ct := &rlwe.Ciphertext{}
+	if err := ct.UnmarshalBinary(ctSerial); err != nil {
+		panic(err)
+	}
+
+	idx := PushCiphertext(ct)
+	return C.int(idx)
 }

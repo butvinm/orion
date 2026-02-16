@@ -153,11 +153,11 @@ decrypt(result_ct, sk) → result
 5. `LoadBootstrapKeys(data, len, slots)` — deserialize bootstrap eval keys, construct `bootstrapping.Evaluator`
 6. Modify `Rotate()`/`RotateNew()` — remove lazy `AddRotationKey()` call; panic if key is missing instead of generating from sk
 
-- [ ] Create `experiments/04_key_import_ffi/` directory
-- [ ] Add new Go exports listed above to the Lattigo backend. Document each change.
-- [ ] Add corresponding Python FFI bindings in `bindings.py`. Document each change.
-- [ ] Modify `Rotate()`/`RotateNew()` in `evaluator.go` to NOT lazy-generate missing keys — fail explicitly instead. Document the change.
-- [ ] Write Python test script that:
+- [x] Create `experiments/04_key_import_ffi/` directory
+- [x] Add new Go exports listed above to the Lattigo backend. Document each change.
+- [x] Add corresponding Python FFI bindings in `bindings.py`. Document each change.
+- [x] Modify `Rotate()`/`RotateNew()` in `evaluator.go` to NOT lazy-generate missing keys — fail explicitly instead. Document the change.
+- [x] Write Python test script that:
   - Inits scheme normally (with keys) as the "client"
   - Serializes pk, rlk, a few galois keys via existing `SerializeSecretKey`-style pattern
   - Creates a second scheme instance (params only) as the "server"
@@ -165,8 +165,8 @@ decrypt(result_ct, sk) → result
   - Constructs evaluator via `NewEvaluatorFromKeys`
   - Performs a simple ct-ct multiply + rotate on server side
   - Decrypts on client side, verifies correctness
-- [ ] Document all Go and Python changes made (file, function, what changed, why)
-- [ ] Run experiment — operations must produce correct results
+- [x] Document all Go and Python changes made (file, function, what changed, why)
+- [x] Run experiment — operations must produce correct results
 
 ### Task 5: Experiment 5 — Full client-server inference roundtrip
 

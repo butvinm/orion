@@ -2,11 +2,9 @@ package main
 
 import (
 	"C"
+	"unsafe"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-)
-import (
-	"unsafe"
 )
 
 //export NewKeyGenerator
@@ -55,4 +53,50 @@ func LoadSecretKey(dataPtr *C.char, lenData C.ulong) {
 	}
 
 	scheme.SecretKey = sk
+}
+
+//export SerializePublicKey
+func SerializePublicKey() (*C.char, C.ulong) {
+	data, err := scheme.PublicKey.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+
+	arrPtr, length := SliceToCArray(data, convertByteToCChar)
+	return arrPtr, length
+}
+
+//export LoadPublicKey
+func LoadPublicKey(dataPtr *C.char, lenData C.ulong) {
+	pkSerial := CArrayToByteSlice(unsafe.Pointer(dataPtr), uint64(lenData))
+
+	pk := rlwe.NewPublicKey(scheme.Params)
+	if err := pk.UnmarshalBinary(pkSerial); err != nil {
+		panic(err)
+	}
+
+	scheme.PublicKey = pk
+}
+
+//export SerializeRelinKey
+func SerializeRelinKey() (*C.char, C.ulong) {
+	data, err := scheme.RelinKey.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+
+	arrPtr, length := SliceToCArray(data, convertByteToCChar)
+	return arrPtr, length
+}
+
+//export LoadRelinKey
+func LoadRelinKey(dataPtr *C.char, lenData C.ulong) {
+	rlkSerial := CArrayToByteSlice(unsafe.Pointer(dataPtr), uint64(lenData))
+
+	rlk := &rlwe.RelinearizationKey{}
+	if err := rlk.UnmarshalBinary(rlkSerial); err != nil {
+		panic(err)
+	}
+
+	scheme.RelinKey = rlk
 }
