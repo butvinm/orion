@@ -35,8 +35,18 @@ The build process compiles Go code in `orion/backend/lattigo/` into a platform-s
 ### Three-phase pipeline (`orion/core/orion.py` — `Scheme` class)
 
 1. **`fit(net, dataloader)`** — Runs cleartext forward passes, uses `StatsTracker` to record per-layer min/max ranges. These ranges parameterize Chebyshev polynomial approximations for activations.
-2. **`compile(net)`** — Traces the network into a DAG (`NetworkDAG`), computes multiplicative depth levels (`LevelDAG`), solves bootstrap placement (`BootstrapSolver`/`BootstrapPlacer`), and generates packed diagonal matrices for linear transforms.
+2. **`compile(net)`** — Traces the network into a DAG (`NetworkDAG`), computes multiplicative depth levels (`LevelDAG`), solves bootstrap placement (`BootstrapSolver`/`BootstrapPlacer`), and generates packed diagonal matrices for linear transforms. Returns `input_level` in normal mode, or `(input_level, manifest)` in keyless mode.
 3. **Inference** — `encode` → `encrypt` → `net.he()` → forward pass on ciphertexts → `decrypt` → `decode`.
+
+#### Client-server split (experimental, v2 branch)
+
+The pipeline can be split into keyless compilation and key-imported inference:
+
+1. **`init_params_only(config)`** — Creates backend + encoder only, no keys. Sets `scheme.keyless = True`.
+2. **`compile(net)` in keyless mode** — Returns `(input_level, manifest)` where manifest lists all required Galois elements, bootstrap slot counts, and RLK flag. Rotation key generation is replaced by manifest collection via `lt_evaluator.required_galois_elements`.
+3. **Key import path** — Server loads eval keys via `LoadRelinKey`, `LoadRotationKey`, `LoadBootstrapKeys` FFI functions, then constructs evaluators via `NewEvaluatorFromKeys()`.
+
+The Go `Scheme` struct has an `EvalKeys *rlwe.MemEvaluationKeySet` field for holding imported evaluation keys. `Rotate()`/`RotateNew()` no longer lazy-generate keys when `scheme.SecretKey` is nil. See `experiments/REPORT.md` for detailed findings.
 
 ### Custom NN modules (`orion/nn/`)
 
@@ -74,7 +84,8 @@ YAML files specifying CKKS parameters (`LogN`, `LogQ`, `LogP`, `LogScale`, `H`, 
 
 ## Conventions
 
-- Top-level API is flat: `orion.init_scheme()`, `orion.fit()`, `orion.compile()`, `orion.encode()`, `orion.encrypt()`, etc. (re-exported from `orion/core/`).
-- Backend objects follow a `NewXxx(scheme)` factory pattern (e.g., `NewEncoder`, `NewEvaluator`).
+- Top-level API is flat: `orion.init_scheme()`, `orion.init_params_only()`, `orion.fit()`, `orion.compile()`, `orion.encode()`, `orion.encrypt()`, etc. (re-exported from `orion/core/`).
+- Backend objects follow a `NewXxx(scheme)` factory pattern (e.g., `NewEncoder`, `NewEvaluator`). `NewEvaluatorFromKeys()` is a server-side variant that builds evaluators from pre-imported keys.
 - Go FFI functions in `bindings.py` use `LattigoFunction` wrapper for type marshalling and `LattigoLibrary` for shared library lifecycle.
+- Go FFI serialization exports follow the pattern: `SerializeXxx() -> (*C.char, C.ulong)` returning `ArrayResultByte`. Loading uses `LoadXxx(dataPtr *C.char, lenData C.ulong)`.
 - HDF5 files (`.h5`) are used to persist diagonals and keys for reuse across runs.

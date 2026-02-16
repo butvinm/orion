@@ -78,7 +78,9 @@ func Rotate(ciphertextID, amount C.int) C.int {
 		AddRotationKey(amount)
 	}
 
-	scheme.Evaluator.Rotate(ctIn, int(amount), ctIn)
+	if err := scheme.Evaluator.Rotate(ctIn, int(amount), ctIn); err != nil {
+		panic(err)
+	}
 
 	return ciphertextID
 }

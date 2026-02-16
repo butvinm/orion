@@ -53,8 +53,8 @@ class Scheme:
         self.traced = None
         self.keyless = False
 
-    def init_scheme(self, config: Union[str, Dict[str, Any]]):
-        """Initializes the scheme."""
+    def _parse_config(self, config: Union[str, Dict[str, Any]]) -> dict:
+        """Parses config from a file path or dict."""
         if isinstance(config, str):
             try:
                 with open(config, "r") as f:
@@ -63,9 +63,15 @@ class Scheme:
                 raise ValueError(f"Configuration file '{config}' not found.")
         elif not isinstance(config, dict):
             raise TypeError("Config must be a file path (str) or a dictionary.")
+        return config
+
+    def init_scheme(self, config: Union[str, Dict[str, Any]]):
+        """Initializes the scheme."""
+        config = self._parse_config(config)
 
         self.params = parameters.NewParameters(config)
         self.backend = self.setup_backend(self.params)
+        self.keyless = False
 
         self.keygen = key_generator.NewKeyGenerator(self)
         self.encoder = encoder.NewEncoder(self)
@@ -84,14 +90,7 @@ class Scheme:
         generate diagonal packing, and collect key requirements without
         generating any cryptographic keys.
         """
-        if isinstance(config, str):
-            try:
-                with open(config, "r") as f:
-                    config = yaml.safe_load(f)
-            except FileNotFoundError:
-                raise ValueError(f"Configuration file '{config}' not found.")
-        elif not isinstance(config, dict):
-            raise TypeError("Config must be a file path (str) or a dictionary.")
+        config = self._parse_config(config)
 
         self.params = parameters.NewParameters(config)
         self.backend = self.setup_backend(self.params)

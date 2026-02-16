@@ -214,7 +214,7 @@ decrypt(result_ct, sk) → result
 | PublicKey (pk)           | KeyGen + sk    | Encrypt                   | Yes                 |
 | RelinearizationKey (rlk) | KeyGen + sk    | Ciphertext multiplication | Yes                 |
 | GaloisKey (per element)  | KeyGen + sk    | Ciphertext rotation       | Yes                 |
-| BootstrapEvalKeys        | btpParams + sk | Bootstrap (level refresh) | TBD (Experiment 2)  |
+| BootstrapEvalKeys        | btpParams + sk | Bootstrap (level refresh) | Yes (MarshalBinary) |
 
 ### Expected manifest format
 
