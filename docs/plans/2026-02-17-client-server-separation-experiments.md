@@ -125,18 +125,18 @@ decrypt(result_ct, sk) → result
 - Skip `bootstrapper.generate_bootstrapper()` calls, collect slot counts into manifest
 - Skip `NewEvaluator()` call (not needed for compilation planning)
 
-- [ ] Create `experiments/03_keyless_compile/` directory
-- [ ] Add `init_params_only()` method to `Scheme` class — creates backend + encoder, skips keygen/encryptor/evaluators. Document the change.
-- [ ] Add `collect_keys_only` mode to `lt_evaluator.NewEvaluator` — when enabled, `generate_rotation_keys()` appends to a `required_galois_elements` set instead of calling Go keygen. Document the change.
-- [ ] Modify `compile()` flow to skip `bootstrapper.generate_bootstrapper()` when in keyless mode, collecting `bootstrapper_slots` into the manifest instead. Document the change.
-- [ ] Collect **all** required Galois elements, including:
+- [x] Create `experiments/03_keyless_compile/` directory
+- [x] Add `init_params_only()` method to `Scheme` class — creates backend + encoder, skips keygen/encryptor/evaluators. Document the change.
+- [x] Add `collect_keys_only` mode to `lt_evaluator.NewEvaluator` — when enabled, `generate_rotation_keys()` appends to a `required_galois_elements` set instead of calling Go keygen. Document the change.
+- [x] Modify `compile()` flow to skip `bootstrapper.generate_bootstrapper()` when in keyless mode, collecting `bootstrapper_slots` into the manifest instead. Document the change.
+- [x] Collect **all** required Galois elements, including:
   - Linear transform rotation keys (from `GetLinearTransformRotationKeys`)
   - Power-of-2 rotation keys (from `AddPo2RotationKeys` — `1, 2, 4, ...` up to `MaxSlots`)
   - Hybrid method output rotations (from `linear.py:71-72` — `slots // (2**i)` for each linear layer's `output_rotations`)
-- [ ] Write experiment script that: inits params only → loads MLP model → fits → compiles in keyless mode → prints manifest
-- [ ] Verify Go `Encoder` works without keygen (expected: yes, it only needs `scheme.Params`)
-- [ ] Document all library modifications made (file, function, what changed, why)
-- [ ] Run experiment — compilation must complete and produce a valid manifest
+- [x] Write experiment script that: inits params only → loads MLP model → fits → compiles in keyless mode → prints manifest
+- [x] Verify Go `Encoder` works without keygen (expected: yes, it only needs `scheme.Params`)
+- [x] Document all library modifications made (file, function, what changed, why)
+- [x] Run experiment — compilation must complete and produce a valid manifest
 
 ### Task 4: Experiment 4 — Server-side evaluator from imported keys via FFI
 

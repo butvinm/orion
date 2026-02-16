@@ -186,6 +186,18 @@ class LattigoLibrary:
 
         self.NewScheme(logn, logq, logp, logscale, h, ringtype, keys_path, io_mode)
 
+        self.GetGaloisElement = LattigoFunction(
+            self.lib.GetGaloisElement,
+            argtypes=[ctypes.c_int],
+            restype=ctypes.c_ulong
+        )
+
+        self.GetMaxSlots = LattigoFunction(
+            self.lib.GetMaxSlots,
+            argtypes=[],
+            restype=ctypes.c_int
+        )
+
     def setup_tensor_binds(self):
         self.DeletePlaintext = LattigoFunction(
             self.lib.DeletePlaintext,

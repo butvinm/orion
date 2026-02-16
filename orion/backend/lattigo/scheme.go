@@ -85,6 +85,16 @@ func NewScheme(
 	}
 }
 
+//export GetGaloisElement
+func GetGaloisElement(rotation C.int) C.ulong {
+	return C.ulong(scheme.Params.GaloisElement(int(rotation)))
+}
+
+//export GetMaxSlots
+func GetMaxSlots() C.int {
+	return C.int(scheme.Params.MaxSlots())
+}
+
 //export DeleteScheme
 func DeleteScheme() {
 	scheme = Scheme{}

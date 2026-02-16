@@ -6,11 +6,14 @@ from orion.backend.python.tensors import CipherTensor
 
 
 class NewEvaluator:
-    def __init__(self, scheme):
-        self.scheme = scheme 
+    def __init__(self, scheme, keyless=False):
+        self.scheme = scheme
         self.params = scheme.params
         self.backend = scheme.backend
-        self.evaluator = scheme.evaluator
+        self.keyless = keyless
+
+        if not keyless:
+            self.evaluator = scheme.evaluator
 
         self.embed_method = self.params.get_embedding_method()
         self.io_mode = self.params.get_io_mode()
@@ -18,9 +21,16 @@ class NewEvaluator:
         self.keys_path = self.params.get_keys_path()
 
         self.saved_rotation_keys = set()
+        self.required_galois_elements = set()
         self.new_evaluator()
 
     def new_evaluator(self):
+        if self.keyless:
+            # In keyless mode, we skip creating the linear transform
+            # evaluator since it requires EvalKeys (which need sk).
+            # We can still generate linear transforms (packing diagonals)
+            # and query their rotation key requirements.
+            return
         self.backend.NewLinearTransformEvaluator()
 
     def generate_transforms(self, linear_layer):
@@ -58,6 +68,12 @@ class NewEvaluator:
     def generate_rotation_keys(self, transform_id):
         curr_keys = self.get_required_rotation_keys(transform_id)
 
+        if self.keyless:
+            # In keyless mode, collect Galois elements into the manifest
+            # instead of generating actual rotation keys.
+            self.required_galois_elements.update(curr_keys)
+            return
+
         # Only generate keys that don't exist yet. Depending on the I/O
         # mode, we may also save these keys immediately rather than keep
         # them in RAM.
@@ -74,7 +90,7 @@ class NewEvaluator:
                     key_str = str(key)
                     if key_str in f: # don't regenerate the key
                         continue
-                    
+
                     # We'll generate, serialize, and then save the key
                     serial_key, ptr = self.backend.GenerateAndSerializeRotationKey(key)
                     try:
