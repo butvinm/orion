@@ -57,7 +57,14 @@ ROTATIONS_TO_TEST = [1, 2, 4, 8, 16]
 
 def serialize_to_numpy(backend, serialize_fn, *args):
     """Call a serialize function and return a numpy array of bytes + free the C pointer."""
-    c_args = [ctypes.c_int(a) if isinstance(a, int) else a for a in args]
+    c_args = []
+    for arg in args:
+        curr_argtype = serialize_fn.func.argtypes[len(c_args)]
+        c_arg = serialize_fn.convert_to_ctypes(arg, curr_argtype)
+        if isinstance(c_arg, tuple):
+            c_args.extend(c_arg)
+        else:
+            c_args.append(c_arg)
     result = serialize_fn.func(*c_args)
     length = int(result.Length)
     buffer = ctypes.cast(

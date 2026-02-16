@@ -74,7 +74,14 @@ TOLERANCE = 0.005  # Same as test_mlp.py
 
 def serialize_to_numpy(backend, serialize_fn, *args):
     """Call a serialize function and return a numpy array of bytes, freeing the C pointer."""
-    c_args = [ctypes.c_int(a) if isinstance(a, int) else a for a in args]
+    c_args = []
+    for arg in args:
+        curr_argtype = serialize_fn.func.argtypes[len(c_args)]
+        c_arg = serialize_fn.convert_to_ctypes(arg, curr_argtype)
+        if isinstance(c_arg, tuple):
+            c_args.extend(c_arg)
+        else:
+            c_args.append(c_arg)
     result = serialize_fn.func(*c_args)
     length = int(result.Length)
     buffer = ctypes.cast(
@@ -313,6 +320,13 @@ def main():
     print("Server Phase 2: Load keys + inference")
     print("=" * 70)
     server2_start = time.time()
+
+    # Clear the secret key and keygen from the Go singleton to truly
+    # simulate server-side isolation. Without this, the Rotate/RotateNew
+    # guards (scheme.KeyGen != nil && scheme.SecretKey != nil) would
+    # allow lazy key generation, masking any manifest incompleteness.
+    backend.ClearSecretKey()
+    print("  Cleared SK + KeyGen from Go singleton (server has no secret key)")
 
     # Load eval keys from serialized data (as a real server would)
     backend.LoadRelinKey(rlk_data)

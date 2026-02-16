@@ -338,6 +338,12 @@ class LattigoLibrary:
             restype=None
         )
 
+        self.ClearSecretKey = LattigoFunction(
+            self.lib.ClearSecretKey,
+            argtypes=[],
+            restype=None
+        )
+
         self.SerializeSecretKey = LattigoFunction(
             self.lib.SerializeSecretKey,
             argtypes=[],

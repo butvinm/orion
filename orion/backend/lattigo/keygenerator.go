@@ -32,6 +32,12 @@ func GenerateEvaluationKeys() {
 	scheme.EvalKeys = rlwe.NewMemEvaluationKeySet(scheme.RelinKey)
 }
 
+//export ClearSecretKey
+func ClearSecretKey() {
+	scheme.SecretKey = nil
+	scheme.KeyGen = nil
+}
+
 //export SerializeSecretKey
 func SerializeSecretKey() (*C.char, C.ulong) {
 	data, err := scheme.SecretKey.MarshalBinary()
