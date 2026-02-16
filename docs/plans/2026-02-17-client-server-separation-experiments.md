@@ -191,7 +191,7 @@ decrypt(result_ct, sk) → result
 
 ### Task 6: Document experiment results in REPORT.md
 
-- [ ] Create `experiments/REPORT.md` documenting:
+- [x] Create `experiments/REPORT.md` documenting:
   - Each experiment's hypothesis, approach, and result (confirmed/refuted/modified)
   - Lattigo API patterns discovered for key serialization/deserialization
   - Serialized key sizes for each key type (important for transfer protocol design)
@@ -201,8 +201,8 @@ decrypt(result_ct, sk) → result
   - Minimal set of Python-side changes needed
   - Recommended architecture for Phase 2 production implementation
   - Open questions and risks for Phase 2
-- [ ] Include code snippets for key patterns discovered (e.g., how to construct evaluator from deserialized keys, how to serialize bootstrap keys)
-- [ ] Format and review report
+- [x] Include code snippets for key patterns discovered (e.g., how to construct evaluator from deserialized keys, how to serialize bootstrap keys)
+- [x] Format and review report
 
 ## Technical Details
 
