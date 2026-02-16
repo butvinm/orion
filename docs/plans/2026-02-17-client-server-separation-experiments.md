@@ -92,17 +92,17 @@ decrypt(result_ct, sk) → result
 
 **What this proves**: That the most complex key type (bootstrap keys — generated via `btpParams.GenEvaluationKeys(sk)`) can be serialized, transferred, and used independently. This is critical because bootstrap is the operation that refreshes ciphertext noise budget.
 
-- [ ] Create `experiments/02_bootstrap_imported/` with `go.mod`
-- [ ] Investigate `bootstrapping.EvaluationKeys` struct — does it implement `MarshalBinary` directly, or must component keys be serialized individually?
-- [ ] Write `main.go` with client-server simulation:
+- [x] Create `experiments/02_bootstrap_imported/` with `go.mod`
+- [x] Investigate `bootstrapping.EvaluationKeys` struct — does it implement `MarshalBinary` directly, or must component keys be serialized individually?
+- [x] Write `main.go` with client-server simulation:
   - Client: create CKKS params + bootstrap params, generate sk, call `btpParams.GenEvaluationKeys(sk)` to get bootstrap eval keys, serialize the key bundle (top-level or component-wise depending on investigation above)
   - Server: deserialize bootstrap keys, construct `bootstrapping.Evaluator` via `bootstrapping.NewEvaluator(btpParams, btpKeys)` — verify it accepts deserialized keys without needing sk
   - Client: encrypt a low-level ciphertext and send to server
   - Server: bootstrap the ciphertext (refresh level), send back
   - Client: decrypt, verify values are approximately correct (bootstrap introduces small error)
-- [ ] If `bootstrapping.NewEvaluator` doesn't directly accept deserialized keys, document what wrapper or workaround is needed
-- [ ] Document the serialized size of bootstrap keys (these are large — important for transfer planning)
-- [ ] Run experiment — must produce correct results within acceptable error bounds
+- [x] If `bootstrapping.NewEvaluator` doesn't directly accept deserialized keys, document what wrapper or workaround is needed
+- [x] Document the serialized size of bootstrap keys (these are large — important for transfer planning)
+- [x] Run experiment — must produce correct results within acceptable error bounds
 
 ### Task 3: Experiment 3 — Python keyless compilation
 
