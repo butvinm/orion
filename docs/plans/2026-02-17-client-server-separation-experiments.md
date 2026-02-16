@@ -176,18 +176,18 @@ decrypt(result_ct, sk) → result
 
 **Depends on**: Task 3 (keyless compilation + manifest) and Task 4 (key import FFI).
 
-- [ ] Create `experiments/05_full_roundtrip/` directory
-- [ ] Write a Python script simulating the full flow:
+- [x] Create `experiments/05_full_roundtrip/` directory
+- [x] Write a Python script simulating the full flow:
   - **Server phase 1**: `init_params_only()`, load MLP model, fit, compile in keyless mode → get key manifest
   - **Client phase**: `init_scheme()` normally, generate all keys from manifest (sk + pk + rlk + galois keys for all listed elements + bootstrap keys for listed slots), serialize eval keys (everything except sk)
   - **Server phase 2**: load eval keys via Task 4's FFI functions, construct evaluators via `NewEvaluatorFromKeys`, construct bootstrappers via `LoadBootstrapKeys`
   - **Client**: encode + encrypt test input
   - **Server**: `net.he()` → forward pass on ciphertext
   - **Client**: decrypt + decode, compare with cleartext reference
-- [ ] Verify ALL required Galois elements from manifest are loaded before inference (no lazy generation possible after Task 4's `Rotate` change)
-- [ ] Measure and document: key manifest size, serialized eval key sizes, inference accuracy vs. monolithic baseline
-- [ ] Document all additional changes needed beyond Tasks 3-4
-- [ ] Run experiment — inference results must match monolithic Orion within acceptable FHE error tolerance
+- [x] Verify ALL required Galois elements from manifest are loaded before inference (no lazy generation possible after Task 4's `Rotate` change)
+- [x] Measure and document: key manifest size, serialized eval key sizes, inference accuracy vs. monolithic baseline
+- [x] Document all additional changes needed beyond Tasks 3-4
+- [x] Run experiment — inference results must match monolithic Orion within acceptable FHE error tolerance
 
 ### Task 6: Document experiment results in REPORT.md
 
