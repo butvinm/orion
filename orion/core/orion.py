@@ -96,6 +96,13 @@ class Scheme:
         self.backend = self.setup_backend(self.params)
         self.keyless = True
 
+        # These are not available in params-only mode.
+        self.keygen = None
+        self.encryptor = None
+        self.evaluator = None
+        self.poly_evaluator = None
+        self.bootstrapper = None
+
         # Encoder only needs scheme.Params — no keys required.
         self.encoder = encoder.NewEncoder(self)
 
@@ -363,15 +370,7 @@ class Scheme:
 
         # 2. Power-of-2 rotation keys (from AddPo2RotationKeys in Go)
         #    These are GaloisElement(1), GaloisElement(2), ...,
-        #    GaloisElement(MaxSlots/2). We compute them from params.
-        max_slots = self.params.get_slots()
-        logn = self.params.get_logn()
-        ringtype = self.params.get_ringtype()
-        # GaloisElement for rotation by k in CKKS standard ring:
-        #   galEl = 5^k mod (2*N)
-        # For conjugate invariant ring:
-        #   galEl = 2*k+1 (simplified)
-        # We call the Go backend to compute these.
+        #    GaloisElement(MaxSlots/2). Computed via Go backend.
         po2_elements = self._get_po2_galois_elements()
         galois_elements.update(po2_elements)
 

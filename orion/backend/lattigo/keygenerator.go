@@ -93,7 +93,7 @@ func SerializeRelinKey() (*C.char, C.ulong) {
 func LoadRelinKey(dataPtr *C.char, lenData C.ulong) {
 	rlkSerial := CArrayToByteSlice(unsafe.Pointer(dataPtr), uint64(lenData))
 
-	rlk := &rlwe.RelinearizationKey{}
+	rlk := rlwe.NewRelinearizationKey(scheme.Params)
 	if err := rlk.UnmarshalBinary(rlkSerial); err != nil {
 		panic(err)
 	}
