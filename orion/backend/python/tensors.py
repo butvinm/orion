@@ -7,6 +7,7 @@ class PlainTensor:
         self.context = context
         self.backend = context.backend
         self.encoder = context.encoder
+        self.evaluator = getattr(context, 'evaluator', None)
 
         self.ids = [ptxt_ids] if isinstance(ptxt_ids, int) else ptxt_ids
         self.shape = shape
