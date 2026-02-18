@@ -2,6 +2,7 @@ package main
 
 import (
 	"C"
+	"encoding/binary"
 	"math"
 	"unsafe"
 
@@ -190,6 +191,115 @@ func LoadPlaintextDiagonal(
 		panic(err)
 	}
 	transform.Vec[int(diagIdx)] = poly
+}
+
+//export SerializeLinearTransform
+func SerializeLinearTransform(transformID C.int) (*C.char, C.ulong) {
+	lt := RetrieveLinearTransform(int(transformID))
+
+	// Serialize MetaData
+	metaBytes, err := lt.MetaData.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+
+	// Estimate buffer size: metadata + 4 int64s + vec entries
+	buf := make([]byte, 0, len(metaBytes)+256)
+
+	// Write MetaData: [8 bytes length][data]
+	tmp := make([]byte, 8)
+	binary.LittleEndian.PutUint64(tmp, uint64(len(metaBytes)))
+	buf = append(buf, tmp...)
+	buf = append(buf, metaBytes...)
+
+	// Write int fields as int64
+	binary.LittleEndian.PutUint64(tmp, uint64(lt.LogBabyStepGiantStepRatio))
+	buf = append(buf, tmp...)
+	binary.LittleEndian.PutUint64(tmp, uint64(lt.N1))
+	buf = append(buf, tmp...)
+	binary.LittleEndian.PutUint64(tmp, uint64(lt.LevelQ))
+	buf = append(buf, tmp...)
+	binary.LittleEndian.PutUint64(tmp, uint64(lt.LevelP))
+	buf = append(buf, tmp...)
+
+	// Write Vec map: [8 bytes count] then for each entry [8 bytes diagIndex][8 bytes polyLen][polyData]
+	binary.LittleEndian.PutUint64(tmp, uint64(len(lt.Vec)))
+	buf = append(buf, tmp...)
+
+	for diagIdx, poly := range lt.Vec {
+		// Diagonal index (signed -> uint64 via two's complement)
+		binary.LittleEndian.PutUint64(tmp, uint64(int64(diagIdx)))
+		buf = append(buf, tmp...)
+
+		polyBytes, err := poly.MarshalBinary()
+		if err != nil {
+			panic(err)
+		}
+		binary.LittleEndian.PutUint64(tmp, uint64(len(polyBytes)))
+		buf = append(buf, tmp...)
+		buf = append(buf, polyBytes...)
+	}
+
+	arrPtr, length := SliceToCArray(buf, convertByteToCChar)
+	return arrPtr, length
+}
+
+//export LoadLinearTransform
+func LoadLinearTransform(dataPtr *C.char, lenData C.ulong) C.int {
+	data := CArrayToByteSlice(unsafe.Pointer(dataPtr), uint64(lenData))
+	off := 0
+
+	// Read MetaData
+	metaLen := int(binary.LittleEndian.Uint64(data[off : off+8]))
+	off += 8
+	var meta rlwe.MetaData
+	if err := meta.UnmarshalBinary(data[off : off+metaLen]); err != nil {
+		panic(err)
+	}
+	off += metaLen
+
+	// Read int fields
+	logBSGS := int(int64(binary.LittleEndian.Uint64(data[off : off+8])))
+	off += 8
+	n1 := int(int64(binary.LittleEndian.Uint64(data[off : off+8])))
+	off += 8
+	levelQ := int(int64(binary.LittleEndian.Uint64(data[off : off+8])))
+	off += 8
+	levelP := int(int64(binary.LittleEndian.Uint64(data[off : off+8])))
+	off += 8
+
+	// Read Vec map
+	vecLen := int(binary.LittleEndian.Uint64(data[off : off+8]))
+	off += 8
+
+	vec := make(map[int]ringqp.Poly, vecLen)
+	for i := 0; i < vecLen; i++ {
+		diagIdx := int(int64(binary.LittleEndian.Uint64(data[off : off+8])))
+		off += 8
+
+		polyLen := int(binary.LittleEndian.Uint64(data[off : off+8]))
+		off += 8
+
+		var poly ringqp.Poly
+		if err := poly.UnmarshalBinary(data[off : off+polyLen]); err != nil {
+			panic(err)
+		}
+		off += polyLen
+
+		vec[diagIdx] = poly
+	}
+
+	lt := lintrans.LinearTransformation{
+		MetaData:                  &meta,
+		LogBabyStepGiantStepRatio: logBSGS,
+		N1:                        n1,
+		LevelQ:                    levelQ,
+		LevelP:                    levelP,
+		Vec:                       vec,
+	}
+
+	ltID := ltHeap.Add(lt)
+	return C.int(ltID)
 }
 
 //export RemovePlaintextDiagonals

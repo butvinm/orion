@@ -782,6 +782,18 @@ class LattigoLibrary:
             restype=None
         )
 
+        self.SerializeLinearTransform = LattigoFunction(
+            self.lib.SerializeLinearTransform,
+            argtypes=[ctypes.c_int],
+            restype=ArrayResultByte
+        )
+
+        self.LoadLinearTransform = LattigoFunction(
+            self.lib.LoadLinearTransform,
+            argtypes=[ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong],
+            restype=ctypes.c_int
+        )
+
         self.RemovePlaintextDiagonals = LattigoFunction(
             self.lib.RemovePlaintextDiagonals,
             argtypes=[ctypes.c_int],

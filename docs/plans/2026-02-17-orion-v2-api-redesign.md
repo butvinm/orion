@@ -172,17 +172,17 @@ Pure additive — no existing code changes, old test suite untouched.
 
 Pure additive — new Go exports, old test suite untouched.
 
-- [ ] Add `SerializeLinearTransform(transformID C.int) (*C.char, C.ulong)` to `lineartransform.go`:
+- [x] Add `SerializeLinearTransform(transformID C.int) (*C.char, C.ulong)` to `lineartransform.go`:
   - Retrieve the LinearTransform by ID from the Go heap
   - Custom serialization (~70 LOC): encode MetaData via `MarshalBinary()`, encode int fields (LogBabyStepGiantStepRatio, N1, LevelQ, LevelP), encode Vec map length, then for each `(diagIndex, poly)` pair encode index + `poly.MarshalBinary()`. Note: `lintrans.LinearTransformation` does NOT implement `encoding.BinaryMarshaler` — custom marshaling is required.
   - Return the byte array via `SliceToCArray`
-- [ ] Add `LoadLinearTransform(dataPtr *C.char, lenData C.ulong) C.int` to `lineartransform.go`:
+- [x] Add `LoadLinearTransform(dataPtr *C.char, lenData C.ulong) C.int` to `lineartransform.go`:
   - Custom deserialization (reverse of above)
   - Push to Go heap, return ID
-- [ ] Add Python FFI bindings in `bindings.py`:
+- [x] Add Python FFI bindings in `bindings.py`:
   - `self.SerializeLinearTransform = LattigoFunction(self.lib.SerializeLinearTransform, argtypes=[ctypes.c_int], restype=ArrayResultByte)`
   - `self.LoadLinearTransform = LattigoFunction(self.lib.LoadLinearTransform, argtypes=[ctypes.POINTER(ctypes.c_ubyte), ctypes.c_ulong], restype=ctypes.c_int)`
-- [ ] Rebuild shared library: `python tools/build_lattigo.py`
+- [x] Rebuild shared library: `python tools/build_lattigo.py`
 
 **Tests:** Serialize/deserialize roundtrip — create a LinearTransform via `GenerateLinearTransform`, serialize, deserialize, verify loaded ID is valid. Run old test suite — must still pass.
 
