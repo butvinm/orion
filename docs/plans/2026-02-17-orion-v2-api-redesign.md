@@ -244,14 +244,14 @@ Build all three classes together. The primary test is the end-to-end roundtrip: 
 
 **4a — Compiler:**
 
-- [ ] Create `Compiler.__init__(self, net: Module, params: CKKSParams, config: CompilerConfig | None = None)`:
+- [x] Create `Compiler.__init__(self, net: Module, params: CKKSParams, config: CompilerConfig | None = None)`:
   - Create `NewParameters` via the adapter from Task 1
   - Initialize Go backend with params (no keys — `init_params_only` equivalent)
   - Build compilation context: `backend`, `params`, `encoder`, `poly_evaluator` (`PolynomialGenerator`), `lt_evaluator` (`TransformEncoder`), `config` (with `config.margin` for fit)
-- [ ] Implement `fit()` — extract from `Scheme.fit()`:
+- [x] Implement `fit()` — extract from `Scheme.fit()`:
   - `OrionTracer.trace_model(net)`, `StatsTracker.propagate()`, `tracer.sync_module_attributes()`
   - Call `module.fit(context=self.context)` on activations and bootstraps
-- [ ] Implement `compile()` — extract from `Scheme.compile()`, all steps in order:
+- [x] Implement `compile()` — extract from `Scheme.compile()`, all steps in order:
   - Build `NetworkDAG`, call `build_dag()`
   - `init_orion_params()` on all modules (clones weights/biases into `on_weight`, `on_bias`)
   - `update_params()` on pooling modules
@@ -268,22 +268,22 @@ Build all three classes together. The primary test is the end-to-end roundtrip: 
     - Store raw bias float64 as blob
   - Collect Galois elements: from transforms, power-of-2, hybrid output
   - Build `KeyManifest` and `CompiledModel`
-- [ ] Implement `_extract_module_metadata()` and `_extract_topology()` helpers
+- [x] Implement `_extract_module_metadata()` and `_extract_topology()` helpers
 
 **4b — Client:**
 
-- [ ] Create `PlainText` class wrapping backend plaintext IDs (local-only, no cross-process serialization)
-- [ ] Create `CipherText` class wrapping backend ciphertext IDs with `to_bytes()` / `from_bytes()`
-- [ ] Create `Client.__init__(self, params: CKKSParams)`:
+- [x] Create `PlainText` class wrapping backend plaintext IDs (local-only, no cross-process serialization)
+- [x] Create `CipherText` class wrapping backend ciphertext IDs with `to_bytes()` / `from_bytes()`
+- [x] Create `Client.__init__(self, params: CKKSParams)`:
   - Initialize Go backend with full key generation
   - Create `NewKeyGenerator`, `NewEncoder`, `NewEncryptor`
-- [ ] Implement `generate_keys(manifest: KeyManifest) -> EvalKeys`:
+- [x] Implement `generate_keys(manifest: KeyManifest) -> EvalKeys`:
   - Generate and serialize rlk, rotation keys (per Galois element), bootstrap keys (per slot count)
-- [ ] Implement `encode`/`decode`/`encrypt`/`decrypt`
+- [x] Implement `encode`/`decode`/`encrypt`/`decrypt`
 
 **4c — Evaluator:**
 
-- [ ] Implement `Evaluator.__init__(self, net: Module, compiled: CompiledModel, keys: EvalKeys)`:
+- [x] Implement `Evaluator.__init__(self, net: Module, compiled: CompiledModel, keys: EvalKeys)`:
   1. Init Go backend with params, no keys
   2. Create encoder
   3. Load rlk, rotation keys, bootstrap keys into Go backend
@@ -299,7 +299,7 @@ Build all three classes together. The primary test is the end-to-end roundtrip: 
      - LinearTransform: `LoadLinearTransform(blob)` → set `module.transform_ids`, encode bias
      - Activations: set coeffs/prescale/etc, `module.compile(context)` to regenerate polynomial objects
      - Bootstrap hooks: create Bootstrap instances, register forward hooks on targets
-- [ ] Implement `Evaluator.run(ct: CipherText) -> CipherText`:
+- [x] Implement `Evaluator.run(ct: CipherText) -> CipherText`:
   - Convert to `CipherTensor(self.context, ...)`, `net.he()`, forward pass, convert back
 
 **Tests:** Integration tests: Compiler→Client→Evaluator roundtrip with simple MLP, CompiledModel `to_bytes()`→`from_bytes()`→Evaluator works, verify modules have correct levels/depths after Evaluator construction, verify CipherText serialization roundtrip.

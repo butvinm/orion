@@ -19,9 +19,9 @@ class NewEncoder:
                 f"Expected 'values' passed to encode() to be a either a list "
                 f"or a torch.Tensor, but got {type(values)}.")
 
-        if not level:
+        if level is None:
             level = self.params.get_max_level()
-        if not scale:
+        if scale is None:
             scale = self.params.get_default_scale()
 
         num_slots = self.params.get_slots()

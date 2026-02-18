@@ -244,6 +244,7 @@ class NewParameters:
                 "fuse_modules": config.fuse_modules,
                 "backend": "lattigo",
                 "io_mode": "none",
+                "debug": False,
             },
         }
 
