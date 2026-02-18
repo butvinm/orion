@@ -147,7 +147,7 @@ class BootstrapSolver:
                     self.network_dag.nodes[node]["level"] = level
                     if node_module:
                         node_module.level = level
-                continue
+                    break
 
     def mark_bootstrap_locations(self):
         node_map = {}
