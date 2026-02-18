@@ -202,6 +202,9 @@ class Evaluator:
             elif mod_meta["type"] in ("BatchNorm1d", "BatchNorm2d"):
                 self._reconstruct_batchnorm(module, mod_meta)
 
+            elif mod_meta["type"] == "ReLU":
+                self._reconstruct_relu(module, mod_meta)
+
         # Reconstruct bootstrap hooks
         self._reconstruct_bootstrap_hooks(net, meta, module_map)
 
@@ -252,6 +255,11 @@ class Evaluator:
 
         # Regenerate polynomial object
         module.compile(self._context)
+
+    def _reconstruct_relu(self, module, meta):
+        """Reconstruct a ReLU module from metadata."""
+        module.prescale = meta["prescale"]
+        module.postscale = meta["postscale"]
 
     def _reconstruct_batchnorm(self, module, meta):
         """Reconstruct a BatchNorm module."""

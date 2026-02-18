@@ -1,5 +1,3 @@
-import h5py 
-
 class NewKeyGenerator:
     def __init__(self, scheme):
         self.backend = scheme.backend
@@ -20,12 +18,14 @@ class NewKeyGenerator:
             
             # Save key if in "save" mode
             if self.io_mode == "save":
+                import h5py
                 sk_serial, _ = self.backend.SerializeSecretKey()
                 with h5py.File(self.keys_path, "a") as f:
                     f.create_dataset("sk", data=sk_serial)
-        
+
         # Load key if in "load" mode
         elif self.io_mode == "load":
+            import h5py
             with h5py.File(self.keys_path, "r") as f:
                 serial_sk = f["sk"][()]
                 self.backend.LoadSecretKey(serial_sk)

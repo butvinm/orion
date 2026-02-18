@@ -71,7 +71,10 @@ def timer(func):
         if debug_enabled:
             layer_name = getattr(self, "name", self.__class__.__name__)
             print(f"\n{layer_name}:")
-            print(f"Clear input min/max: {self.input_min:.3f} / {self.input_max:.3f}")
+            input_min = getattr(self, "input_min", None)
+            input_max = getattr(self, "input_max", None)
+            if input_min is not None:
+                print(f"Clear input min/max: {input_min:.3f} / {input_max:.3f}")
             print(f"FHE input min/max: {args[0].min():.3f} / {args[0].max():.3f}")
             start = time.time()
 
@@ -81,12 +84,15 @@ def timer(func):
             if hasattr(self, "output_min"):
                 output_min = self.output_min
                 output_max = self.output_max
+            elif input_min is not None:
+                output_min = input_min
+                output_max = input_max
             else:
-                output_min = self.input_min
-                output_max = self.input_max
+                output_min = output_max = None
 
             elapsed = time.time() - start
-            print(f"Clear output min/max: {output_min:.3f} / {output_max:.3f}")
+            if output_min is not None:
+                print(f"Clear output min/max: {output_min:.3f} / {output_max:.3f}")
             print(f"FHE output min/max: {result.min():.3f} / {result.max():.3f}")
             print(f"done! [{elapsed:.3f} secs.]")
 

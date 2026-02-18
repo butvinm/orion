@@ -375,6 +375,7 @@ class Compiler:
             Activation,
             Chebyshev,
             Quad,
+            ReLU,
         )
         from orion.nn.normalization import BatchNorm1d, BatchNorm2d
         from orion.nn.operations import Bootstrap
@@ -460,6 +461,21 @@ class Compiler:
                 "constant": module.constant,
                 "fhe_input_shape": list(module.fhe_input_shape)
                 if hasattr(module, "fhe_input_shape")
+                else None,
+            }
+
+        if isinstance(module, ReLU):
+            return {
+                "type": "ReLU",
+                "level": module.level,
+                "depth": module.depth,
+                "prescale": module.prescale,
+                "postscale": module.postscale,
+                "fhe_input_shape": list(module.fhe_input_shape)
+                if hasattr(module, "fhe_input_shape")
+                else None,
+                "fhe_output_shape": list(module.fhe_output_shape)
+                if hasattr(module, "fhe_output_shape")
                 else None,
             }
 
