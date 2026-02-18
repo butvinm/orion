@@ -58,12 +58,17 @@ class PolynomialEvaluator(PolynomialGenerator):
     which crashes with nil panic at polyeval.go:75 without it.
     """
 
-    def __init__(self, backend):
+    def __init__(self, backend, params=None):
         super().__init__(backend)
+        self.params = params
         self.backend.NewPolynomialEvaluator()
 
     def evaluate_polynomial(self, ciphertensor, poly, out_scale=None):
-        out_scale = out_scale or self.backend.GetDefaultScale()
+        if out_scale is None:
+            if self.params is not None:
+                out_scale = self.params.get_default_scale()
+            else:
+                out_scale = 1 << 40  # fallback default logscale
 
         cts_out = []
         for ctxt in ciphertensor.ids:

@@ -66,7 +66,7 @@ class Evaluator:
         self._lt_evaluator = TransformEvaluator(
             self.backend, self._evaluator
         )
-        self._poly_evaluator = PolynomialEvaluator(self.backend)
+        self._poly_evaluator = PolynomialEvaluator(self.backend, self.params)
 
         # 6. Create bootstrapper evaluators
         self._bootstrapper = BootstrapperEvaluator(self)

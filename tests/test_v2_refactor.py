@@ -51,12 +51,12 @@ class TestPolynomialGeneratorSplit:
         params = list(sig.parameters.keys())
         assert params == ['self', 'backend']
 
-    def test_evaluator_takes_backend_only(self):
-        """PolynomialEvaluator.__init__ takes only backend, no scheme."""
+    def test_evaluator_takes_backend_and_optional_params(self):
+        """PolynomialEvaluator.__init__ takes backend and optional params, no scheme."""
         import inspect
         sig = inspect.signature(PolynomialEvaluator.__init__)
         params = list(sig.parameters.keys())
-        assert params == ['self', 'backend']
+        assert params == ['self', 'backend', 'params']
 
 
 class TestTransformEncoderSplit:
