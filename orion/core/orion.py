@@ -52,6 +52,11 @@ class Scheme:
         self.backend = None
         self.traced = None
         self.keyless = False
+        self._margin = None
+
+    @property
+    def margin(self):
+        return self._margin
 
     def _parse_config(self, config: Union[str, Dict[str, Any]]) -> dict:
         """Parses config from a file path or dict."""
@@ -155,8 +160,7 @@ class Scheme:
     def fit(self, net, input_data, batch_size=128):
         self._check_initialization()
 
-        net.set_scheme(self)
-        net.set_margin(self.params.get_margin())
+        self._margin = self.params.get_margin()
         
         tracer = OrionTracer()
         traced = tracer.trace_model(net)
@@ -221,7 +225,7 @@ class Scheme:
         start = time.time()
         for module in net.modules():
             if hasattr(module, "fit") and callable(module.fit):
-                module.fit()
+                module.fit(self)
         print(f"done! [{time.time()-start:.3f} secs.]")
 
     def compile(self, net):
@@ -283,6 +287,12 @@ class Scheme:
         # usually for more ciphertext rotations).
         topo_sort = list(network_dag.topological_sort())
 
+        # Set scheme ref on all modules for backward compat with packing.py
+        # which reads layer.scheme.params.get_slots() etc.
+        for module in net.modules():
+            if hasattr(module, "he_mode"):
+                module.scheme = self
+
         last_linear = None
         for node in reversed(topo_sort):
             module = network_dag.nodes[node]["module"]
@@ -308,7 +318,7 @@ class Scheme:
         print("\n{4} Running bootstrap placement... ", end="", flush=True)
         start = time.time()
         l_eff = len(self.params.get_logq()) - 1
-        btp_solver = BootstrapSolver(net, network_dag, l_eff=l_eff)
+        btp_solver = BootstrapSolver(net, network_dag, l_eff=l_eff, context=self)
         input_level, num_bootstraps, bootstrapper_slots = btp_solver.solve()
         print(f"done! [{time.time()-start:.3f} secs.]", flush=True)
         print(f"├── Network requires {num_bootstraps} bootstrap "
@@ -337,7 +347,7 @@ class Scheme:
                     self.bootstrapper.generate_bootstrapper(slot_count)
                 print(f"done! [{time.time()-start:.3f} secs.]")
 
-        btp_placer = BootstrapPlacer(net, network_dag)
+        btp_placer = BootstrapPlacer(net, network_dag, self)
         btp_placer.place_bootstraps()
 
         #------------------------------------------#
@@ -348,9 +358,9 @@ class Scheme:
         for node in topo_sort:
             node_attrs = network_dag.nodes[node]
             module = node_attrs["module"]
-            if isinstance(module, Module):
+            if isinstance(module, Module) and self._has_own_compile(module):
                 print(f"├── {node} @ level={module.level}", flush=True)
-                module.compile()
+                module.compile(self)
 
         # In keyless mode, build and return the key requirements manifest
         if self.keyless:
@@ -413,6 +423,16 @@ class Scheme:
     def _rotation_to_galois_element(self, rotation):
         """Convert a rotation amount to a Galois element via Go backend."""
         return self.backend.GetGaloisElement(rotation)
+
+    @staticmethod
+    def _has_own_compile(module):
+        """Check if a module defines its own compile() (not inherited from nn.Module)."""
+        for cls in type(module).__mro__:
+            if cls is Module or cls is object:
+                return False
+            if 'compile' in cls.__dict__:
+                return True
+        return False
 
     def _check_initialization(self):
         if self.backend is None:

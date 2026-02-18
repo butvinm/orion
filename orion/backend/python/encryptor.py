@@ -1,9 +1,9 @@
 from .tensors import PlainTensor, CipherTensor
 
 class NewEncryptor:
-    def __init__(self, scheme):
-        self.scheme = scheme
-        self.backend = scheme.backend
+    def __init__(self, context):
+        self.context = context
+        self.backend = context.backend
         self.new_encryptor()
         self.new_decryptor()
 
@@ -20,7 +20,7 @@ class NewEncryptor:
             ciphertext_ids.append(ciphertext_id)
 
         return CipherTensor(
-            self.scheme, ciphertext_ids, plaintensor.shape, plaintensor.on_shape)
+            self.context, ciphertext_ids, plaintensor.shape, plaintensor.on_shape)
     
     def decrypt(self, ciphertensor):
         plaintext_ids = []
@@ -29,5 +29,5 @@ class NewEncryptor:
             plaintext_ids.append(plaintext_id)
 
         return PlainTensor(
-           self.scheme,  plaintext_ids, ciphertensor.shape, ciphertensor.on_shape
+           self.context,  plaintext_ids, ciphertensor.shape, ciphertensor.on_shape
         )

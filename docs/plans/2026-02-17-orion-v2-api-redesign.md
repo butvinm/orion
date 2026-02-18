@@ -196,37 +196,37 @@ This is the foundational refactor. **Old test suite will break here** — `Schem
 
 **3a — Evaluator type split:**
 
-- [ ] Split `poly_evaluator.py` into two classes:
+- [x] Split `poly_evaluator.py` into two classes:
   - `PolynomialGenerator(backend)` — compile-time only. Constructor stores `self.backend = backend`. Methods: `generate_chebyshev(coeffs)`, `generate_monomial(coeffs)`, `generate_minimax_sign_coeffs(...)`. These call standalone Go functions that do NOT need Go `PolyEvaluator`. Confirmed in Experiment 6 test 4.
   - `PolynomialEvaluator(backend)` inherits from `PolynomialGenerator`. Constructor additionally calls `self.backend.NewPolynomialEvaluator()`. Adds method: `evaluate_polynomial(ciphertensor, poly, out_scale)`. Output `CipherTensor` must propagate context from input tensor.
-- [ ] Split `lt_evaluator.py` into two classes:
+- [x] Split `lt_evaluator.py` into two classes:
   - `TransformEncoder(backend, params)` — compile-time only. Methods: `generate_transforms(linear_layer)`, `get_galois_elements(transform_id)`. Accumulates `self.required_galois_elements: set[int]`. No Go evaluator needed.
   - `TransformEvaluator(backend, evaluator)` — inference-time only. Stores Python evaluator wrapper, calls `backend.NewLinearTransformEvaluator()`. Method: `evaluate_transforms(linear_layer, in_ctensor)`. Output `CipherTensor` propagates `in_ctensor.context`.
   - Remove `keyless` boolean, HDF5 methods, `io_mode`/`diags_path`/`keys_path` fields.
 
 **3b — Context-on-tensor:**
 
-- [ ] Add `context` field to `CipherTensor` and `PlainTensor`:
+- [x] Add `context` field to `CipherTensor` and `PlainTensor`:
   - `CipherTensor.__init__(self, context, ctxt_ids, shape, on_shape=None)` — stores `self.context = context` and derives `self.backend`, `self.evaluator`, etc. from it
   - `PlainTensor.__init__(self, context, ptxt_ids, shape, on_shape=None)` — stores `self.context = context` and derives `self.backend`, `self.encoder` from it
 
 **3c — Module refactor:**
 
-- [ ] Change `module.compile()` → `module.compile(context)` across all nn modules:
+- [x] Change `module.compile()` → `module.compile(context)` across all nn modules:
   - Every module that reads `self.scheme.encoder`, `self.scheme.lt_evaluator`, `self.scheme.poly_evaluator` in `compile()` now reads `context.encoder`, `context.lt_evaluator`, `context.poly_evaluator`
-- [ ] Change all HE-mode `forward()` methods to read context from input tensor:
+- [x] Change all HE-mode `forward()` methods to read context from input tensor:
   - Replace `self.scheme.evaluator` → `x.context.evaluator` (or first CipherTensor arg's context)
   - Replace `self.scheme.encoder` → `x.context.encoder`, etc.
   - When constructing output `CipherTensor`/`PlainTensor`, propagate `x.context`
   - Update `@timer` decorator to read debug status from `args[0].context.params` instead of `self.scheme.params`
-- [ ] Delete `Module.scheme` class variable, `Module.set_scheme()` static method, `Module.margin` class variable, and `Module.set_margin()` static method
+- [x] Delete `Module.scheme` class variable, `Module.set_scheme()` static method, `Module.margin` class variable, and `Module.set_margin()` static method
 
 **3d — BootstrapPlacer and fit():**
 
-- [ ] Update `BootstrapPlacer` to accept `context` parameter:
+- [x] Update `BootstrapPlacer` to accept `context` parameter:
   - `BootstrapPlacer.__init__(self, net, network_dag, context)` — stores `self.context = context`
   - `_create_bootstrapper(module)`: pass context to `bootstrapper.fit(context)` and `bootstrapper.compile(context)`. Margin comes from `context.margin`.
-- [ ] Update all `module.fit()` methods to accept context: `module.fit(context)`:
+- [x] Update all `module.fit()` methods to accept context: `module.fit(context)`:
   - `Bootstrap.fit(context)`: replace `self.margin` → `context.margin`
   - `Chebyshev.fit(context)`: replace `self.margin` → `context.margin`
   - `ReLU.fit(context)`: replace `self.margin` → `context.margin`

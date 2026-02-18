@@ -2,10 +2,10 @@ import torch
 from .tensors import PlainTensor
 
 class NewEncoder:
-    def __init__(self, scheme):
-        self.scheme = scheme
-        self.params = scheme.params
-        self.backend = scheme.backend
+    def __init__(self, context):
+        self.context = context
+        self.params = context.params
+        self.backend = context.backend
         self.setup_encoder()
 
     def setup_encoder(self):
@@ -39,7 +39,7 @@ class NewEncoder:
             plaintext_id = self.backend.Encode(to_encode, level, scale)
             plaintext_ids.append(plaintext_id)
 
-        return PlainTensor(self.scheme, plaintext_ids, values.shape)
+        return PlainTensor(self.context, plaintext_ids, values.shape)
 
     def decode(self, plaintensor: PlainTensor):
         values = []

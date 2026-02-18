@@ -1,39 +1,31 @@
-import torch 
+import torch
 import numpy as np
 
 from .tensors import CipherTensor
 
-class NewEvaluator:
-    def __init__(self, scheme):
-        self.scheme = scheme 
-        self.backend = scheme.backend
-        self.new_polynomial_evaluator()
 
-    def new_polynomial_evaluator(self):
-        self.backend.NewPolynomialEvaluator()
+class PolynomialGenerator:
+    """Compile-time polynomial generation. No Go PolyEvaluator needed.
+
+    Standalone Go functions (GenerateChebyshev, GenerateMonomial,
+    GenerateMinimaxSignCoeffs) work without NewPolynomialEvaluator().
+    Validated in Experiment 6 test 4.
+    """
+
+    def __init__(self, backend):
+        self.backend = backend
 
     def generate_monomial(self, coeffs):
         if isinstance(coeffs, (torch.Tensor, np.ndarray)):
             coeffs = coeffs.tolist()
         return self.backend.GenerateMonomial(coeffs[::-1])
-    
+
     def generate_chebyshev(self, coeffs):
         if isinstance(coeffs, (torch.Tensor, np.ndarray)):
             coeffs = coeffs.tolist()
         return self.backend.GenerateChebyshev(coeffs)
 
-    def evaluate_polynomial(self, ciphertensor, poly, out_scale=None):
-        out_scale = out_scale or self.scheme.params.get_default_scale()
-
-        cts_out = []  
-        for ctxt in ciphertensor.ids:
-            ct_out = self.backend.EvaluatePolynomial(ctxt, poly, out_scale)
-            cts_out.append(ct_out)
-
-        return CipherTensor(
-            self.scheme, cts_out, ciphertensor.shape, ciphertensor.on_shape)
-    
-    def generate_minimax_sign_coeffs(self, degrees, prec=128, logalpha=12, 
+    def generate_minimax_sign_coeffs(self, degrees, prec=128, logalpha=12,
                                      logerr=12, debug=False):
         if isinstance(degrees, int):
             degrees = [degrees]
@@ -57,3 +49,58 @@ class NewEvaluator:
 
     def get_depth(self, poly):
         return self.backend.GetPolyDepth(poly)
+
+
+class PolynomialEvaluator(PolynomialGenerator):
+    """Inference-time polynomial evaluation. Needs Go PolyEvaluator.
+
+    Constructor calls NewPolynomialEvaluator(). Adds evaluate_polynomial()
+    which crashes with nil panic at polyeval.go:75 without it.
+    """
+
+    def __init__(self, backend):
+        super().__init__(backend)
+        self.backend.NewPolynomialEvaluator()
+
+    def evaluate_polynomial(self, ciphertensor, poly, out_scale=None):
+        out_scale = out_scale or self.backend.GetDefaultScale()
+
+        cts_out = []
+        for ctxt in ciphertensor.ids:
+            ct_out = self.backend.EvaluatePolynomial(ctxt, poly, out_scale)
+            cts_out.append(ct_out)
+
+        return CipherTensor(
+            ciphertensor.context, cts_out, ciphertensor.shape, ciphertensor.on_shape)
+
+
+# Backward-compatible alias for old Scheme-based code
+class NewEvaluator:
+    def __init__(self, scheme):
+        self.scheme = scheme
+        self.backend = scheme.backend
+        self._impl = PolynomialEvaluator(self.backend)
+
+    def generate_monomial(self, coeffs):
+        return self._impl.generate_monomial(coeffs)
+
+    def generate_chebyshev(self, coeffs):
+        return self._impl.generate_chebyshev(coeffs)
+
+    def evaluate_polynomial(self, ciphertensor, poly, out_scale=None):
+        out_scale = out_scale or self.scheme.params.get_default_scale()
+
+        cts_out = []
+        for ctxt in ciphertensor.ids:
+            ct_out = self.backend.EvaluatePolynomial(ctxt, poly, out_scale)
+            cts_out.append(ct_out)
+
+        return CipherTensor(
+            self.scheme, cts_out, ciphertensor.shape, ciphertensor.on_shape)
+
+    def generate_minimax_sign_coeffs(self, degrees, prec=128, logalpha=12,
+                                     logerr=12, debug=False):
+        return self._impl.generate_minimax_sign_coeffs(degrees, prec, logalpha, logerr, debug)
+
+    def get_depth(self, poly):
+        return self._impl.get_depth(poly)

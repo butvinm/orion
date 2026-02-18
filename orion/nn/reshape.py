@@ -9,8 +9,8 @@ class Flatten(Module):
 
     def extra_repr(self):
         return super().extra_repr() + ", start_dim=1"
-    
+
     def forward(self, x):
         if self.he_mode:
-            return x 
+            return x
         return torch.flatten(x, start_dim=1)
