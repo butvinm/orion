@@ -77,35 +77,3 @@ class PolynomialEvaluator(PolynomialGenerator):
 
         return CipherTensor(
             ciphertensor.context, cts_out, ciphertensor.shape, ciphertensor.on_shape)
-
-
-# Backward-compatible alias for old Scheme-based code
-class NewEvaluator:
-    def __init__(self, scheme):
-        self.scheme = scheme
-        self.backend = scheme.backend
-        self._impl = PolynomialEvaluator(self.backend)
-
-    def generate_monomial(self, coeffs):
-        return self._impl.generate_monomial(coeffs)
-
-    def generate_chebyshev(self, coeffs):
-        return self._impl.generate_chebyshev(coeffs)
-
-    def evaluate_polynomial(self, ciphertensor, poly, out_scale=None):
-        out_scale = out_scale or self.scheme.params.get_default_scale()
-
-        cts_out = []
-        for ctxt in ciphertensor.ids:
-            ct_out = self.backend.EvaluatePolynomial(ctxt, poly, out_scale)
-            cts_out.append(ct_out)
-
-        return CipherTensor(
-            self.scheme, cts_out, ciphertensor.shape, ciphertensor.on_shape)
-
-    def generate_minimax_sign_coeffs(self, degrees, prec=128, logalpha=12,
-                                     logerr=12, debug=False):
-        return self._impl.generate_minimax_sign_coeffs(degrees, prec, logalpha, logerr, debug)
-
-    def get_depth(self, poly):
-        return self._impl.get_depth(poly)

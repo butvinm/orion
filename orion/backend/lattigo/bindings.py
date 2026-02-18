@@ -744,13 +744,13 @@ class LattigoLibrary:
 
         self.GenerateLinearTransformRotationKey = LattigoFunction(
             self.lib.GenerateLinearTransformRotationKey,
-            argtypes=[ctypes.c_int],
+            argtypes=[ctypes.c_ulong],
             restype=None
         )
 
         self.GenerateAndSerializeRotationKey = LattigoFunction(
             self.lib.GenerateAndSerializeRotationKey,
-            argtypes=[ctypes.c_int],
+            argtypes=[ctypes.c_ulong],
             restype=ArrayResultByte
         )
         

@@ -123,13 +123,13 @@ func GetLinearTransformRotationKeys(transformID C.int) (*C.int, C.ulong) {
 }
 
 //export GenerateLinearTransformRotationKey
-func GenerateLinearTransformRotationKey(galEl C.int) {
+func GenerateLinearTransformRotationKey(galEl C.ulong) {
 	rotKey := scheme.KeyGen.GenGaloisKeyNew(uint64(galEl), scheme.SecretKey)
 	scheme.EvalKeys.GaloisKeys[uint64(galEl)] = rotKey
 }
 
 //export GenerateAndSerializeRotationKey
-func GenerateAndSerializeRotationKey(galEl C.int) (*C.char, C.ulong) {
+func GenerateAndSerializeRotationKey(galEl C.ulong) (*C.char, C.ulong) {
 	rotKey := scheme.KeyGen.GenGaloisKeyNew(uint64(galEl), scheme.SecretKey)
 	data, err := rotKey.MarshalBinary() // Marshal the key to binary
 	if err != nil {

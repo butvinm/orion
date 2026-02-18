@@ -118,7 +118,7 @@ class Compiler:
         param = next(iter(net.parameters()), None)
         device = param.device if param is not None else torch.device("cpu")
 
-        print("\n{1} Finding per-layer input/output ranges and shapes...",
+        print("\n[1/5] Finding per-layer input/output ranges and shapes...",
               flush=True)
         start = time.time()
         if isinstance(input_data, DataLoader):
@@ -151,7 +151,7 @@ class Compiler:
             )
 
         # Fit polynomial activations
-        print("\n{2} Fitting polynomials... ", end="", flush=True)
+        print("\n[2/5] Fitting polynomials... ", end="", flush=True)
         start = time.time()
         for module in net.modules():
             if hasattr(module, "fit") and callable(module.fit):
@@ -211,7 +211,7 @@ class Compiler:
                 break
 
         # Generate diagonals
-        print("\n{3} Generating matrix diagonals...", flush=True)
+        print("\n[3/5] Generating matrix diagonals...", flush=True)
         for node in topo_sort:
             module = network_dag.nodes[node]["module"]
             if isinstance(module, LinearTransform):
@@ -222,7 +222,7 @@ class Compiler:
         network_dag.find_residuals()
 
         # Solve bootstrap placement
-        print("\n{4} Running bootstrap placement... ", end="", flush=True)
+        print("\n[4/5] Running bootstrap placement... ", end="", flush=True)
         start = time.time()
         l_eff = len(self.params.get_logq()) - 1
         btp_solver = BootstrapSolver(
@@ -248,7 +248,7 @@ class Compiler:
         btp_placer.place_bootstraps()
 
         # Compile all modules and collect artifacts
-        print("\n{5} Compiling network layers...", flush=True)
+        print("\n[5/5] Compiling network layers...", flush=True)
         blobs = []
         module_metadata = {}
         topology = []

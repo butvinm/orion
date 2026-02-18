@@ -114,6 +114,8 @@ class CipherTensor:
         return len(self.ids)
 
     def __str__(self):
+        if self.encryptor is None:
+            return f"<CipherTensor(encrypted, shape={self.shape}, no decryptor)>"
         ptxt = self.decrypt()
         return str(ptxt.decode())
 
@@ -251,9 +253,13 @@ class CipherTensor:
         return self.backend.GetCiphertextDegree(self.ids[0])
 
     def min(self):
+        if self.encryptor is None:
+            raise RuntimeError("Cannot decrypt on server side (no secret key)")
         return self.decrypt().min()
 
     def max(self):
+        if self.encryptor is None:
+            raise RuntimeError("Cannot decrypt on server side (no secret key)")
         return self.decrypt().max()
 
     def moduli(self):
@@ -272,4 +278,6 @@ class CipherTensor:
         return CipherTensor(self.context, btp_ids, self.shape, self.on_shape)
 
     def decrypt(self):
+        if self.encryptor is None:
+            raise RuntimeError("Cannot decrypt on server side (no secret key)")
         return self.encryptor.decrypt(self)
