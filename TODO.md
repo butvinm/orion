@@ -1,0 +1,5 @@
+- [ ] Split client, compiler and evaluator, extract keys generation from main workflow and allow to accept keys from lattigo
+- [ ] Generate keys one-by-one
+- [ ] Get rid of python client, provide only Go API
+- [ ] Create demo with threshold encryption and WASM
+- [ ] Far future: work with ONNX, implement everything purely in Go
