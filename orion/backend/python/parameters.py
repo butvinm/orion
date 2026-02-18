@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 import os
-from typing import Literal, List
+from typing import Literal, List, TYPE_CHECKING
 from dataclasses import dataclass, field
+
+if TYPE_CHECKING:
+    from orion.params import CKKSParams, CompilerConfig
 
 
 @dataclass
@@ -201,3 +206,48 @@ class NewParameters:
 
     def reset_stored_keys(self):
         self.reset_stored_file(self.get_keys_path(), "keys")
+
+    @classmethod
+    def from_ckks_params(
+        cls, ckks_params: CKKSParams, config: CompilerConfig | None = None
+    ) -> NewParameters:
+        """Build NewParameters from the v2 CKKSParams and CompilerConfig.
+
+        Maps v2 naming conventions to the existing params_json dict format
+        that __post_init__ expects.
+        """
+        from orion.params import CompilerConfig as _CC
+
+        if config is None:
+            config = _CC()
+
+        # Map v2 ring_type ("conjugate_invariant") to legacy ("ConjugateInvariant")
+        ring_type_map = {
+            "conjugate_invariant": "ConjugateInvariant",
+            "standard": "Standard",
+        }
+        legacy_ring_type = ring_type_map[ckks_params.ring_type]
+
+        params_json = {
+            "ckks_params": {
+                "LogN": ckks_params.logn,
+                "LogQ": list(ckks_params.logq),
+                "LogP": list(ckks_params.logp),
+                "LogScale": ckks_params.logscale,
+                "H": ckks_params.h,
+                "RingType": legacy_ring_type,
+            },
+            "boot_params": {},
+            "orion": {
+                "margin": config.margin,
+                "embedding_method": config.embedding_method,
+                "fuse_modules": config.fuse_modules,
+                "backend": "lattigo",
+                "io_mode": "none",
+            },
+        }
+
+        if ckks_params.boot_logp is not None:
+            params_json["boot_params"]["LogP"] = list(ckks_params.boot_logp)
+
+        return cls(params_json=params_json)

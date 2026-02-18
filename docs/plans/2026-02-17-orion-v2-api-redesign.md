@@ -142,25 +142,25 @@ Pure additive — no existing code changes, old test suite untouched.
 
 **1a — CKKSParams and CompilerConfig:**
 
-- [ ] Create `CKKSParams` frozen dataclass with fields: `logn`, `logq`, `logp`, `logscale`, `h` (default 192), `ring_type` (default "conjugate_invariant"), `boot_logp` (optional)
-- [ ] Add computed properties: `max_level` (= `len(logq) - 1`), `max_slots` (= `2^logn` for conjugate_invariant, `2^(logn-1)` for standard), `ring_degree` (= `2^logn`)
-- [ ] Create `CompilerConfig` frozen dataclass with fields: `margin` (default 2), `embedding_method` (default "hybrid"), `fuse_modules` (default True)
-- [ ] Add `__post_init__` validation (logn > 0, logq/logp non-empty, ring_type in allowed values, embedding_method in allowed values)
+- [x] Create `CKKSParams` frozen dataclass with fields: `logn`, `logq`, `logp`, `logscale`, `h` (default 192), `ring_type` (default "conjugate_invariant"), `boot_logp` (optional)
+- [x] Add computed properties: `max_level` (= `len(logq) - 1`), `max_slots` (= `2^logn` for conjugate_invariant, `2^(logn-1)` for standard), `ring_degree` (= `2^logn`)
+- [x] Create `CompilerConfig` frozen dataclass with fields: `margin` (default 2), `embedding_method` (default "hybrid"), `fuse_modules` (default True)
+- [x] Add `__post_init__` validation (logn > 0, logq/logp non-empty, ring_type in allowed values, embedding_method in allowed values)
 
 **1b — KeyManifest, CompiledModel, EvalKeys:**
 
-- [ ] Create `KeyManifest` frozen dataclass with fields: `galois_elements` (frozenset[int]), `bootstrap_slots` (tuple[int, ...]), `boot_logp` (tuple[int, ...] | None), `needs_rlk` (bool). Validate: if `bootstrap_slots` is non-empty, `boot_logp` must not be None.
-- [ ] Implement `CompiledModel` internal structure: `params`, `manifest`, `input_level`, `module_metadata` (dict), `topology` (list[str]), `blobs` (list[bytes])
-- [ ] Implement `CompiledModel.to_bytes()` / `from_bytes()` binary format (see Technical Details): magic + metadata JSON + length-prefixed blobs + CRC32
-- [ ] Implement `EvalKeys` with `to_bytes()` / `from_bytes()`:
+- [x] Create `KeyManifest` frozen dataclass with fields: `galois_elements` (frozenset[int]), `bootstrap_slots` (tuple[int, ...]), `boot_logp` (tuple[int, ...] | None), `needs_rlk` (bool). Validate: if `bootstrap_slots` is non-empty, `boot_logp` must not be None.
+- [x] Implement `CompiledModel` internal structure: `params`, `manifest`, `input_level`, `module_metadata` (dict), `topology` (list[str]), `blobs` (list[bytes])
+- [x] Implement `CompiledModel.to_bytes()` / `from_bytes()` binary format (see Technical Details): magic + metadata JSON + length-prefixed blobs + CRC32
+- [x] Implement `EvalKeys` with `to_bytes()` / `from_bytes()`:
   - Internal storage: `rlk_data: bytes | None`, `galois_keys: dict[int, bytes]`, `bootstrap_keys: dict[int, bytes]`
   - Distinct magic (`ORKEY\x00\x01\x00`), same container pattern
   - Properties: `galois_elements` (set of ints), `has_rlk` (bool)
 
 **1c — Backend adapter:**
 
-- [ ] Add `NewParameters.from_ckks_params(ckks_params: CKKSParams, config: CompilerConfig)` classmethod that builds the `params_json` dict from the new dataclasses and delegates to existing `__post_init__`
-- [ ] Ensure all existing `get_*()` methods work correctly with the new construction path
+- [x] Add `NewParameters.from_ckks_params(ckks_params: CKKSParams, config: CompilerConfig)` classmethod that builds the `params_json` dict from the new dataclasses and delegates to existing `__post_init__`
+- [x] Ensure all existing `get_*()` methods work correctly with the new construction path
 
 **Tests:** Unit tests for all dataclasses (construction, validation, computed properties, serialization roundtrips, CRC32 corruption detection). Run old test suite — must still pass.
 
