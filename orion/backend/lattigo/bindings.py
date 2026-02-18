@@ -27,9 +27,7 @@ class LattigoFunction:
         py_result = self.convert_from_ctypes(c_result)
         
         # If the result is a list, then we'll need to manually free the
-        # memory we allocated for this list in Go with the below. We'll
-        # defer freeing byte data (from serialization) until after that
-        # data has been saved to HDF5.
+        # memory we allocated for this list in Go with the below.
         if isinstance(py_result, list):
             LattigoFunction.FreeCArray(
                 ctypes.cast(c_result.Data, ctypes.c_void_p))
@@ -150,13 +148,11 @@ class LattigoLibrary:
         self.NewScheme = LattigoFunction(
             self.lib.NewScheme,
             argtypes=[
-                ctypes.c_int, 
+                ctypes.c_int,
                 ctypes.POINTER(ctypes.c_int), ctypes.c_int,
                 ctypes.POINTER(ctypes.c_int), ctypes.c_int,
                 ctypes.c_int,
                 ctypes.c_int,
-                ctypes.c_char_p,
-                ctypes.c_char_p,
                 ctypes.c_char_p,
             ],
             restype=None
@@ -181,10 +177,8 @@ class LattigoLibrary:
         logscale = orion_params.get_logscale()
         h = orion_params.get_hamming_weight()
         ringtype = orion_params.get_ringtype()
-        keys_path = orion_params.get_keys_path()
-        io_mode = orion_params.get_io_mode()
 
-        self.NewScheme(logn, logq, logp, logscale, h, ringtype, keys_path, io_mode)
+        self.NewScheme(logn, logq, logp, logscale, h, ringtype)
 
         self.GetGaloisElement = LattigoFunction(
             self.lib.GetGaloisElement,
@@ -716,7 +710,6 @@ class LattigoLibrary:
                 ctypes.POINTER(ctypes.c_float), ctypes.c_int, # diags_data
                 ctypes.c_int, # level
                 ctypes.c_float, # bsgs_ratio
-                ctypes.c_char_p, # io_mode
             ],
             restype=ctypes.c_int
         )

@@ -39,8 +39,6 @@ func NewScheme(
 	logScale C.int,
 	h C.int,
 	ringType *C.char,
-	keysPath *C.char,
-	ioMode *C.char,
 ) {
 	// Convert LogQ and LogP to Go slices
 	logQ := CArrayToSlice(logQPtr, lenQ, convertCIntToInt)

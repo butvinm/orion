@@ -40,10 +40,7 @@ func GenerateLinearTransform(
 	diagDataC *C.float, diagDataLen C.int,
 	level C.int,
 	bsgsRatio C.float,
-	ioModeC *C.char,
 ) C.int {
-	ioMode := C.GoString(ioModeC)
-
 	// Unload diags data
 	diagIdxs := CArrayToSlice(diagIdxsC, diagIdxsLen, convertCIntToInt)
 	diagDataFlat := CArrayToSlice(diagDataC, diagDataLen, convertCFloatToFloat)
@@ -70,22 +67,8 @@ func GenerateLinearTransform(
 
 	lt := lintrans.NewTransformation(scheme.Params, ltparams)
 
-	// ---------------------------- //
-	//  Diagonal Generation/Saving  //
-	// ---------------------------- //
-
-	// If ioMode is "load", then we expect the diagonals to have already been
-	// generated and serialized, so there's no need to regenerate them here.
-	// We do, however, still need to instantiate empty plaintext diagonals.
-	if ioMode == "load" {
-		lt.Vec = make(map[int]ringqp.Poly)
-		for _, diag := range diagIdxs {
-			lt.Vec[diag] = ringqp.Poly{}
-		}
-	} else { // otherwise, generate diagonals here.
-		if err := lintrans.Encode(scheme.Encoder, diagonals, lt); err != nil {
-			panic(err)
-		}
+	if err := lintrans.Encode(scheme.Encoder, diagonals, lt); err != nil {
+		panic(err)
 	}
 
 	// Return reference to linear transform object we just created

@@ -26,7 +26,7 @@ class TransformEncoder:
                 diags_data.extend(diag)
 
             lintransf_id = self.backend.GenerateLinearTransform(
-                diags_idxs, diags_data, level, bsgs_ratio, "none"
+                diags_idxs, diags_data, level, bsgs_ratio
             )
             lintransf_ids[(row, col)] = lintransf_id
             self._collect_galois_elements(lintransf_id)

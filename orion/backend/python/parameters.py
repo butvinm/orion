@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Literal, List, TYPE_CHECKING
 from dataclasses import dataclass, field
 
@@ -79,9 +78,6 @@ class OrionParameters:
     debug: bool = True
     embedding_method: Literal["hybrid", "square"] = "hybrid"
     backend: Literal["lattigo", "openfhe", "heaan"] = "lattigo"
-    io_mode: Literal["none", "save", "load"] = "none"
-    diags_path: str = ""
-    keys_path: str = ""
 
     def __str__(self) -> str:
         output = [
@@ -92,13 +88,7 @@ class OrionParameters:
             f"  Fuse Modules: {self.fuse_modules}",
             f"  Debug Mode: {self.debug}"
         ]
-        
-        output.append(f"  I/O Mode: {self.io_mode}")
-        if self.diags_path:
-            output.append(f"  Diagonals Path: {self.diags_path}")
-        if self.keys_path:
-            output.append(f"  Keys Path: {self.keys_path}")
-        
+
         return "\n".join(output)
 
 
@@ -121,12 +111,6 @@ class NewParameters:
             **ckks_params, boot_logp=boot_params.get("logp")
         )
         self.orion_params = OrionParameters(**orion_params)
-
-        # Finally, we'll delete existing keys/diagonals if the user  
-        # specifies to overwrite them.
-        if self.get_io_mode() == "save" and self.io_paths_exist():
-            self.reset_stored_keys()
-            self.reset_stored_diags()
 
     def __str__(self) -> str:
         border = "=" * 50
@@ -177,35 +161,8 @@ class NewParameters:
     def get_embedding_method(self):
         return self.orion_params.embedding_method.lower()
 
-    def get_diags_path(self):
-        path = self.orion_params.diags_path
-        return os.path.abspath(os.path.join(os.getcwd(), path))
-
-    def get_keys_path(self):
-        path = self.orion_params.keys_path
-        return os.path.abspath(os.path.join(os.getcwd(), path))
-
-    def get_io_mode(self):
-        return self.orion_params.io_mode.lower()
-
     def get_boot_logp(self):
         return self.ckks_params.boot_logp
-
-    def io_paths_exist(self):
-        return bool(self.get_diags_path()) and bool(self.get_keys_path())
-
-    def reset_stored_file(self, path: str, file_type: str):
-        if self.get_io_mode() == "save" and path:
-            print(f"Deleting existing {file_type} at {path}")
-            abs_path = os.path.abspath(os.path.join(os.getcwd(), path))
-            if os.path.exists(abs_path):
-                os.remove(abs_path)
-
-    def reset_stored_diags(self):
-        self.reset_stored_file(self.get_diags_path(), "diagonals")
-
-    def reset_stored_keys(self):
-        self.reset_stored_file(self.get_keys_path(), "keys")
 
     @classmethod
     def from_ckks_params(
@@ -243,7 +200,6 @@ class NewParameters:
                 "embedding_method": config.embedding_method,
                 "fuse_modules": config.fuse_modules,
                 "backend": "lattigo",
-                "io_mode": "none",
                 "debug": False,
             },
         }

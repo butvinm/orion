@@ -436,5 +436,4 @@ class TestNewParametersAdapter:
         np.get_debug_status()
         np.get_backend()
         np.get_embedding_method()
-        np.get_io_mode()
         np.get_boot_logp()
