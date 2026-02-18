@@ -22,7 +22,7 @@ poetry build
 pytest tests/
 
 # Run a single test
-pytest tests/test_imports.py::test_linear_transforms
+pytest tests/test_v2_api.py::TestEvaluator::test_full_roundtrip
 
 # Run tests for a specific model
 pytest tests/models/test_mlp.py
@@ -32,21 +32,61 @@ The build process compiles Go code in `orion/backend/lattigo/` into a platform-s
 
 ## Architecture
 
-### Three-phase pipeline (`orion/core/orion.py` — `Scheme` class)
+### v2 API — Three-class pipeline
 
-1. **`fit(net, dataloader)`** — Runs cleartext forward passes, uses `StatsTracker` to record per-layer min/max ranges. These ranges parameterize Chebyshev polynomial approximations for activations.
-2. **`compile(net)`** — Traces the network into a DAG (`NetworkDAG`), computes multiplicative depth levels (`LevelDAG`), solves bootstrap placement (`BootstrapSolver`/`BootstrapPlacer`), and generates packed diagonal matrices for linear transforms. Returns `input_level` in normal mode, or `(input_level, manifest)` in keyless mode.
-3. **Inference** — `encode` → `encrypt` → `net.he()` → forward pass on ciphertexts → `decrypt` → `decode`.
+The API uses three purpose-built classes: `Compiler`, `Client`, and `Evaluator`. No global state, no YAML configs, no HDF5 files. All artifacts serialize to bytes.
 
-#### Client-server split (experimental, v2 branch)
+**End-to-end usage:**
 
-The pipeline can be split into keyless compilation and key-imported inference:
+```python
+import orion
+from orion.models import MLP
 
-1. **`init_params_only(config)`** — Creates backend + encoder only, no keys. Sets `scheme.keyless = True`.
-2. **`compile(net)` in keyless mode** — Returns `(input_level, manifest)` where manifest lists all required Galois elements, bootstrap slot counts, and RLK flag. Rotation key generation is replaced by manifest collection via `lt_evaluator.required_galois_elements`.
-3. **Key import path** — Server loads eval keys via `LoadRelinKey`, `LoadRotationKey`, `LoadBootstrapKeys` FFI functions, then constructs evaluators via `NewEvaluatorFromKeys()`.
+# 1. Compile (requires Go backend, no keys)
+compiler = orion.Compiler(net, orion.CKKSParams(logn=14, logq=[...], logp=[...], logscale=40))
+compiler.fit(dataloader)
+compiled = compiler.compile()  # -> CompiledModel
+open("model.bin", "wb").write(compiled.to_bytes())
 
-The Go `Scheme` struct has an `EvalKeys *rlwe.MemEvaluationKeySet` field for holding imported evaluation keys. `Rotate()`/`RotateNew()` no longer lazy-generate keys when `scheme.SecretKey` is nil. See `experiments/REPORT.md` for detailed findings.
+# 2. Client (has secret key)
+compiled = orion.CompiledModel.from_bytes(open("model.bin", "rb").read())
+client = orion.Client(compiled.params)
+keys = client.generate_keys(compiled.manifest)
+pt = client.encode(input_tensor, level=compiled.input_level)
+ct = client.encrypt(pt)
+
+# 3. Server (has model class definition, no trained weights needed)
+compiled = orion.CompiledModel.from_bytes(open("model.bin", "rb").read())
+net_skeleton = MLP()  # fresh instance — weights baked into CompiledModel blobs
+evaluator = orion.Evaluator(net_skeleton, compiled, keys)
+ct_result = evaluator.run(ct)
+result = client.decode(client.decrypt(ct_result))
+```
+
+**Key files:**
+
+- `orion/params.py` — `CKKSParams` (frozen dataclass for CKKS parameters), `CompilerConfig` (compilation settings)
+- `orion/compiler.py` — `Compiler` class: traces, fits, and compiles networks. No keys needed.
+- `orion/client.py` — `Client` class: key generation, encode/decode, encrypt/decrypt. `PlainText` and `CipherText` wrappers.
+- `orion/evaluator.py` — `Evaluator` class: loads compiled model + keys, runs FHE inference. No secret key.
+- `orion/compiled_model.py` — `CompiledModel`, `KeyManifest`, `EvalKeys` with binary serialization (`to_bytes()`/`from_bytes()`).
+
+### Context passing (no global state)
+
+Modules receive context via explicit parameters, not class variables:
+
+- **Compile time:** `module.compile(context)` and `module.fit(context)` take a namespace with `backend`, `params`, `encoder`, `lt_evaluator`, `poly_evaluator`, `margin`, `config`.
+- **Inference time:** `CipherTensor` carries a `context` attribute. Each module reads `x.context.evaluator`, `x.context.encoder`, etc. Output tensors propagate context automatically.
+- `Module.scheme` and `Module.margin` class variables are deleted. No `set_scheme()` or `set_margin()`.
+
+### Evaluator type split
+
+Compile-time and inference-time evaluators are separate types:
+
+- `PolynomialGenerator` (compile-time) / `PolynomialEvaluator` (inference-time, inherits Generator)
+- `TransformEncoder` (compile-time) / `TransformEvaluator` (inference-time)
+
+No `keyless` boolean — the type system enforces which operations are available.
 
 ### Custom NN modules (`orion/nn/`)
 
@@ -72,20 +112,27 @@ Each module carries a `level` (multiplicative depth) and `depth` (consumed depth
 
 - **Lattigo (Go):** `orion/backend/lattigo/` — Go implementation of CKKS operations (12 files), exposed to Python via ctypes FFI in `bindings.py`. This is the only fully implemented backend.
 - **Python:** `orion/backend/python/` — Python-side wrappers that call into Lattigo: `parameters.py`, `key_generator.py`, `encoder.py`, `encryptor.py`, `evaluator.py`, `poly_evaluator.py`, `lt_evaluator.py`, `bootstrapper.py`, `tensors.py` (`PlainTensor`/`CipherTensor`).
-- **HEAAN, OpenFHE:** Placeholder directories, not yet implemented.
 
 ### Models (`orion/models/`)
 
 Pre-built architectures using Orion's custom layers: LoLA, LeNet, MLP, VGG, AlexNet, ResNet, YOLOv1.
 
-### Configuration (`configs/*.yml`)
+### Serialization formats
 
-YAML files specifying CKKS parameters (`LogN`, `LogQ`, `LogP`, `LogScale`, `H`, `RingType`) and Orion settings (`margin`, `embedding_method`, `backend`, `fuse_modules`, `diags_path`, `keys_path`, `io_mode`).
+All artifacts use binary containers with magic headers, JSON metadata, length-prefixed blobs, and CRC32 checksums:
+
+- `CompiledModel`: magic `ORMDL\x00\x01\x00` — stores params, manifest, module metadata, LinearTransform blobs
+- `EvalKeys`: magic `ORKEY\x00\x01\x00` — stores RLK, Galois keys, bootstrap keys
+- `CipherText`: custom format with per-ciphertext length-prefixed Lattigo binary
+
+### Known constraint — Go backend singleton
+
+The Lattigo shared library uses process-global state. Only one set of CKKS parameters and one set of evaluation keys can be active at a time. Python-side design is clean (no global state), but the Go layer enforces single-tenant semantics.
 
 ## Conventions
 
-- Top-level API is flat: `orion.init_scheme()`, `orion.init_params_only()`, `orion.fit()`, `orion.compile()`, `orion.encode()`, `orion.encrypt()`, etc. (re-exported from `orion/core/`).
-- Backend objects follow a `NewXxx(scheme)` factory pattern (e.g., `NewEncoder`, `NewEvaluator`). `NewEvaluatorFromKeys()` is a server-side variant that builds evaluators from pre-imported keys.
+- Top-level API: `orion.Compiler`, `orion.Client`, `orion.Evaluator`, `orion.CompiledModel`, `orion.CKKSParams`, etc. (re-exported from `orion/__init__.py`).
 - Go FFI functions in `bindings.py` use `LattigoFunction` wrapper for type marshalling and `LattigoLibrary` for shared library lifecycle.
 - Go FFI serialization exports follow the pattern: `SerializeXxx() -> (*C.char, C.ulong)` returning `ArrayResultByte`. Loading uses `LoadXxx(dataPtr *C.char, lenData C.ulong)`.
-- HDF5 files (`.h5`) are used to persist diagonals and keys for reuse across runs.
+- Parameters are defined as frozen dataclasses (`CKKSParams`, `CompilerConfig`) — no YAML configs.
+- Binary serialization (`to_bytes()`/`from_bytes()`) for all cross-process artifacts — no HDF5.

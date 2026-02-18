@@ -374,8 +374,6 @@ class Compiler:
         from orion.nn.activation import (
             Activation,
             Chebyshev,
-            _Sign,
-            ReLU,
             Quad,
         )
         from orion.nn.normalization import BatchNorm1d, BatchNorm2d

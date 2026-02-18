@@ -335,17 +335,17 @@ Single atomic cut: old API out, new API in, all tests rewritten.
 
 ### Task 6: Verification and cleanup
 
-- [ ] Verify Compiler produces correct CompiledModel for both smooth-activation and ReLU networks
-- [ ] Verify CompiledModel serialization roundtrip preserves all data
-- [ ] Verify EvalKeys serialization roundtrip works
-- [ ] Verify CipherText serialization roundtrip works (client → bytes → server)
-- [ ] Verify no global state: no `Module.scheme`, no module-level `scheme` variable, no YAML file paths, no HDF5 file paths
-- [ ] Verify context-on-tensor: two `Evaluator` instances in one process don't interfere at Python level
-- [ ] Remove unused imports across modified files
-- [ ] Update CLAUDE.md with new API documentation and architecture description
-- [ ] Verify `pip install -e .` still works with new structure
-- [ ] Run full test suite
-- [ ] Run linter — all issues must be fixed
+- [x] Verify Compiler produces correct CompiledModel for both smooth-activation and ReLU networks
+- [x] Verify CompiledModel serialization roundtrip preserves all data
+- [x] Verify EvalKeys serialization roundtrip works
+- [x] Verify CipherText serialization roundtrip works (client → bytes → server)
+- [x] Verify no global state: no `Module.scheme`, no module-level `scheme` variable, no YAML file paths, no HDF5 file paths
+- [x] Verify context-on-tensor: two `Evaluator` instances in one process don't interfere at Python level
+- [x] Remove unused imports across modified files
+- [x] Update CLAUDE.md with new API documentation and architecture description
+- [x] Verify `pip install -e .` still works with new structure
+- [x] Run full test suite
+- [x] Run linter — all issues must be fixed
 
 ## Technical Details
 

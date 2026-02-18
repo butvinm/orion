@@ -162,7 +162,6 @@ class NewEvaluator:
 
     def save_transforms(self, linear_layer):
         import h5py
-        import torch
 
         layer_name = linear_layer.name
         diagonals = linear_layer.diagonals
@@ -200,7 +199,6 @@ class NewEvaluator:
 
     def load_transforms(self, linear_layer):
         import h5py
-        import torch
 
         self._verify_layer_compatibility(linear_layer)
 

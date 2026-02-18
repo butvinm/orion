@@ -4,13 +4,11 @@ No secret key. Reconstructs module state from CompiledModel metadata,
 loads evaluation keys, and runs the forward pass on CipherTexts.
 """
 
-import math
 import types
 
 import numpy as np
 import torch
 
-from orion.params import CKKSParams
 from orion.compiled_model import CompiledModel, EvalKeys
 from orion.client import CipherText
 from orion.nn.module import Module
