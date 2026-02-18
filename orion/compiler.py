@@ -319,6 +319,13 @@ class Compiler:
                     module_metadata[node] = meta
                     topology.append(node)
 
+        # Record modules not in the DAG (e.g. fused BatchNorms removed by Fuser)
+        for mod_name, module in net.named_modules():
+            if mod_name not in module_metadata and isinstance(module, Module):
+                meta = self._extract_module_metadata(mod_name, module)
+                if meta is not None:
+                    module_metadata[mod_name] = meta
+
         # Extract bootstrap hook metadata
         self._extract_bootstrap_metadata(
             net, network_dag, module_metadata, topology, blobs

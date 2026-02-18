@@ -312,7 +312,7 @@ Build all three classes together. The primary test is the end-to-end roundtrip: 
 
 Single atomic cut: old API out, new API in, all tests rewritten.
 
-- [ ] Rewrite `orion/__init__.py`:
+- [x] Rewrite `orion/__init__.py`:
   ```python
   from orion.params import CKKSParams, CompilerConfig
   from orion.compiler import Compiler
@@ -321,13 +321,13 @@ Single atomic cut: old API out, new API in, all tests rewritten.
   from orion.compiled_model import CompiledModel, KeyManifest, EvalKeys
   __version__ = "2.0.0"
   ```
-- [ ] Remove flat API re-exports from `orion/core/__init__.py`
-- [ ] Delete `orion/core/orion.py` entirely
-- [ ] Remove YAML config parsing
-- [ ] Rewrite all existing tests to new API pattern (Compiler→Client→Evaluator)
-- [ ] Add integration test: full roundtrip with MLP/MNIST
-- [ ] Add test: CompiledModel `to_bytes()` → `from_bytes()` → `Evaluator()` works
-- [ ] Rewrite examples (`run_mlp.py`, `run_lola.py`, `run_resnet.py`) to new API
+- [x] Remove flat API re-exports from `orion/core/__init__.py`
+- [x] Delete `orion/core/orion.py` entirely
+- [x] Remove YAML config parsing
+- [x] Rewrite all existing tests to new API pattern (Compiler→Client→Evaluator)
+- [x] Add integration test: full roundtrip with MLP/MNIST
+- [x] Add test: CompiledModel `to_bytes()` → `from_bytes()` → `Evaluator()` works
+- [x] Rewrite examples (`run_mlp.py`, `run_lola.py`, `run_resnet.py`) to new API
 
 **Tests:** Full test suite must pass. All old `orion.init_scheme`/`orion.fit`/etc. references eliminated.
 

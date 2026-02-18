@@ -1,13 +1,7 @@
-from .core import (
-    init_scheme,
-    init_params_only,
-    delete_scheme,
-    encode,
-    decode,
-    encrypt,
-    decrypt,
-    fit,
-    compile
-)
+from orion.params import CKKSParams, CompilerConfig
+from orion.compiler import Compiler
+from orion.client import Client, PlainText, CipherText
+from orion.evaluator import Evaluator
+from orion.compiled_model import CompiledModel, KeyManifest, EvalKeys
 
-__version__ = "1.0.2"
+__version__ = "2.0.0"

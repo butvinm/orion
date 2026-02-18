@@ -293,18 +293,3 @@ class TestBootstrapPlacerContext:
         assert params == ['self', 'net', 'network_dag', 'context']
 
 
-# -----------------------------------------------------------------------
-# Backward compat: NewEvaluator wrappers still exist
-# -----------------------------------------------------------------------
-
-
-class TestBackwardCompat:
-    def test_poly_new_evaluator_exists(self):
-        """poly_evaluator.NewEvaluator still exists for Scheme compat."""
-        from orion.backend.python.poly_evaluator import NewEvaluator
-        assert NewEvaluator is not None
-
-    def test_lt_new_evaluator_exists(self):
-        """lt_evaluator.NewEvaluator still exists for Scheme compat."""
-        from orion.backend.python.lt_evaluator import NewEvaluator
-        assert NewEvaluator is not None

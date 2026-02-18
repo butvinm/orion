@@ -257,7 +257,10 @@ class Evaluator:
 
     def _reconstruct_batchnorm(self, module, meta):
         """Reconstruct a BatchNorm module."""
-        # BatchNorm needs init_orion_params + compile
+        if meta.get("fused", False):
+            # Fused BN is skipped during forward -- no need to encode plaintexts
+            return
+        # Non-fused BatchNorm needs init_orion_params + compile
         if hasattr(module, "init_orion_params"):
             module.init_orion_params()
         module.compile(self._context)
