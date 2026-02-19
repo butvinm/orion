@@ -75,15 +75,15 @@ demo/wasm-fhe-demo/
 
 ### Task 1: Project scaffolding and model compilation script
 
-- [ ] Create `demo/wasm-fhe-demo/` directory structure as shown above
-- [ ] Create `demo/wasm-fhe-demo/tools/compile_model.py`:
+- [x] Create `demo/wasm-fhe-demo/` directory structure as shown above
+- [x] Create `demo/wasm-fhe-demo/tools/compile_model.py`:
   - Uses `orion.Compiler` to compile `MLP()` with the params above
   - Calls `compiler.fit()` with random MNIST-shaped data (1×1×28×28)
   - Saves `compiled.to_bytes()` as `demo/wasm-fhe-demo/model.bin`
   - Also prints manifest info (galois_elements count, needs_rlk, bootstrap_slots) for verification
-- [ ] Create `demo/wasm-fhe-demo/server/requirements.txt` with fastapi, uvicorn, python-multipart
-- [ ] Run `compile_model.py` to generate `model.bin` and verify it loads back
-- [ ] Write test: load model.bin, verify params, manifest, input_level match expected values
+- [x] Create `demo/wasm-fhe-demo/server/requirements.txt` with fastapi, uvicorn, python-multipart
+- [x] Run `compile_model.py` to generate `model.bin` and verify it loads back
+- [x] Write test: load model.bin, verify params, manifest, input_level match expected values
 
 ### Task 2: Go WASM module — scheme and key generation
 
