@@ -181,12 +181,12 @@ demo/wasm-fhe-demo/
 
 ### Task 8: Web UI — encryption, inference, and decryption
 
-- [ ] Wire up Step 3: capture canvas pixel data → normalize to [0,1] float64 → call `orionClient.encryptInput()` → POST to `/api/infer` → call `orionClient.decryptOutput()` → display result
-- [ ] Add digit drawing canvas: 280×280 pixel canvas that downsamples to 28×28 for input
-- [ ] Display results: bar chart of class probabilities (0-9), highlight predicted digit
-- [ ] Add timing display: key gen time, encryption time, server inference time, decryption time
-- [ ] Add "Reset" button that calls `/api/reset` and clears client state
-- [ ] Manual browser test: full end-to-end flow
+- [x] Wire up Step 3: capture canvas pixel data → normalize to [0,1] float64 → call `orionClient.encryptInput()` → POST to `/api/infer` → call `orionClient.decryptOutput()` → display result
+- [x] Add digit drawing canvas: 280×280 pixel canvas that downsamples to 28×28 for input
+- [x] Display results: bar chart of class probabilities (0-9), highlight predicted digit
+- [x] Add timing display: key gen time, encryption time, server inference time, decryption time
+- [x] Add "Reset" button that calls `/api/reset` and clears client state
+- [x] Manual browser test: full end-to-end flow
 
 ### Task 9: Verify acceptance criteria
 
