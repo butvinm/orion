@@ -173,8 +173,11 @@ async def infer(request: Request):
         raise HTTPException(status_code=400, detail="Empty body")
 
     evaluator: orion.Evaluator = session["evaluator"]
-    ct_in = orion.CipherText.from_bytes(body, evaluator.backend)
-    ct_out = evaluator.run(ct_in)
+    try:
+        ct_in = orion.CipherText.from_bytes(body, evaluator.backend)
+        ct_out = evaluator.run(ct_in)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
     result_bytes = ct_out.to_bytes()
 
     return Response(content=result_bytes, media_type="application/octet-stream")

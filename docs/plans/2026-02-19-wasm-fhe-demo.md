@@ -155,14 +155,14 @@ demo/wasm-fhe-demo/
 
 ### Task 6: FastAPI server — inference endpoint
 
-- [ ] Add to `app.py`:
+- [x] Add to `app.py`:
   - `POST /api/infer` — accepts raw bytes body (serialized CipherText), calls `evaluator.run()`, returns serialized result CipherText as `application/octet-stream`
   - Error handling: return 400 if evaluator not initialized, 500 if inference fails
   - Response headers: include `Content-Type: application/octet-stream`
-- [ ] Add `POST /api/reset` — clears session state (allows new client to connect). Destroys evaluator and Go backend
-- [ ] Write tests: test infer without evaluator returns 400, test reset clears session
-- [ ] Integration test in `test_app.py`: full flow using real Orion backend (skip if Go backend not available — mark with `pytest.mark.skipif`)
-- [ ] Run tests
+- [x] Add `POST /api/reset` — clears session state (allows new client to connect). Destroys evaluator and Go backend
+- [x] Write tests: test infer without evaluator returns 400, test reset clears session
+- [x] Integration test in `test_app.py`: full flow using real Orion backend (skip if Go backend not available — mark with `pytest.mark.skipif`)
+- [x] Run tests
 
 ### Task 7: Web UI — initialization and key generation flow
 
