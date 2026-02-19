@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -27,14 +26,14 @@ from orion.models import MLP
 # -- Session state (single-tenant demo) --
 
 session: dict = {}
+_backend_lock = asyncio.Lock()
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "model.bin"
 
 
 def _load_model() -> orion.CompiledModel:
     if not MODEL_PATH.exists():
-        print(f"ERROR: model.bin not found at {MODEL_PATH}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"model.bin not found at {MODEL_PATH}")
     data = MODEL_PATH.read_bytes()
     return orion.CompiledModel.from_bytes(data)
 
@@ -148,9 +147,11 @@ async def finalize_keys():
     )
 
     # Create Evaluator (initializes Go backend, loads keys — CPU-bound)
+    # Lock serializes access to the Go backend singleton
     net = MLP()
-    evaluator = await asyncio.to_thread(orion.Evaluator, net, compiled, keys)
-    session["evaluator"] = evaluator
+    async with _backend_lock:
+        evaluator = await asyncio.to_thread(orion.Evaluator, net, compiled, keys)
+        session["evaluator"] = evaluator
 
     return {"status": "ready"}
 
@@ -181,7 +182,8 @@ async def infer(request: Request):
     evaluator: orion.Evaluator = session["evaluator"]
     try:
         ct_in = orion.CipherText.from_bytes(body, evaluator.backend)
-        ct_out = await asyncio.to_thread(evaluator.run, ct_in)
+        async with _backend_lock:
+            ct_out = await asyncio.to_thread(evaluator.run, ct_in)
     except Exception:
         logger.exception("Inference failed")
         raise HTTPException(status_code=500, detail="Inference failed")
