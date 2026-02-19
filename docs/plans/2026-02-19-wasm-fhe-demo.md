@@ -87,24 +87,24 @@ demo/wasm-fhe-demo/
 
 ### Task 2: Go WASM module — scheme and key generation
 
-- [ ] Create `demo/wasm-fhe-demo/wasm/go.mod` importing `github.com/baahl-nyu/lattigo/v6`
-- [ ] Create `demo/wasm-fhe-demo/wasm/crypto.go` (no `syscall/js` — pure Lattigo, testable on any platform):
+- [x] Create `demo/wasm-fhe-demo/wasm/go.mod` importing `github.com/baahl-nyu/lattigo/v6`
+- [x] Create `demo/wasm-fhe-demo/wasm/crypto.go` (no `syscall/js` — pure Lattigo, testable on any platform):
   - Global `scheme` struct (Params, KeyGen, SecretKey, PublicKey, RelinKey, Encoder, Encryptor, Decryptor)
   - `InitScheme(logN int, logQ, logP []int, logScale, h int, ringType string) error`
   - `GetMaxSlots() int`
   - `SerializeRelinKey() ([]byte, error)`
   - `GenerateAndSerializeGaloisKey(galEl uint64) ([]byte, error)`
   - `SerializeBootstrapKeys(numSlots int, logP []int) ([]byte, error)`
-- [ ] Create `demo/wasm-fhe-demo/wasm/bindings_js.go` (`//go:build js && wasm`):
+- [x] Create `demo/wasm-fhe-demo/wasm/bindings_js.go` (`//go:build js && wasm`):
   - `syscall/js` wrappers that call `crypto.go` functions
   - Each wrapper converts `js.Value` args → Go types, calls crypto func, converts result → JS
   - All heavy functions return JS Promises via goroutine pattern for non-blocking browser execution
   - Registers functions on `js.Global()` in `main()`: `orionInit`, `orionGetMaxSlots`, `orionSerializeRelinKey`, `orionGenerateAndSerializeGaloisKey`, `orionSerializeBootstrapKeys`
   - Helper: `goBytesToJSUint8Array([]byte) js.Value`
-- [ ] Create `demo/wasm-fhe-demo/wasm/Makefile` with target: `GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o ../client/orion.wasm .`
-- [ ] Create `demo/wasm-fhe-demo/tools/build_wasm.sh` that runs make and copies `wasm_exec.js` from `$(go env GOROOT)/misc/wasm/`
-- [ ] Write `crypto_test.go`: init scheme with MLP params, generate keys, serialize/deserialize round-trip (runs with normal `go test` — no WASM target needed)
-- [ ] Build WASM binary with `GOOS=js GOARCH=wasm` and verify it compiles without errors
+- [x] Create `demo/wasm-fhe-demo/wasm/Makefile` with target: `GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o ../client/orion.wasm .`
+- [x] Create `demo/wasm-fhe-demo/tools/build_wasm.sh` that runs make and copies `wasm_exec.js` from `$(go env GOROOT)/misc/wasm/`
+- [x] Write `crypto_test.go`: init scheme with MLP params, generate keys, serialize/deserialize round-trip (runs with normal `go test` — no WASM target needed)
+- [x] Build WASM binary with `GOOS=js GOARCH=wasm` and verify it compiles without errors
 
 ### Task 3: Go WASM module — encode, encrypt, decrypt
 
