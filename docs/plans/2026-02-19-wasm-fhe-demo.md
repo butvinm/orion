@@ -108,18 +108,18 @@ demo/wasm-fhe-demo/
 
 ### Task 3: Go WASM module — encode, encrypt, decrypt
 
-- [ ] Add to `crypto.go`:
+- [x] Add to `crypto.go`:
   - `Encode(values []float64, level int, scale uint64) (int, error)` — encodes into plaintext, stores in internal heap, returns plaintext ID
   - `Encrypt(ptxtID int) ([]byte, error)` — encrypts plaintext → serializes raw Lattigo ciphertext → returns bytes (no wire format header — JS wrapper handles framing)
   - `Decrypt(ctBytes []byte) ([]float64, error)` — loads ciphertext from raw Lattigo bytes → decrypts → decodes → returns flat float64 slice
   - `GetDefaultScale() uint64`
   - Internal plaintext heap (slice-based, matching the minheap pattern in existing Go code)
-- [ ] Add to `bindings_js.go`:
+- [x] Add to `bindings_js.go`:
   - `orionEncode`, `orionEncrypt`, `orionDecrypt`, `orionGetDefaultScale` wrappers
   - `orionEncrypt` converts Go `[]byte` → JS `Uint8Array`
   - `orionDecrypt` converts JS `Uint8Array` → Go `[]byte`, returns JS `Float64Array`
-- [ ] Write `crypto_test.go`: encode → encrypt → decrypt → decode round-trip with tolerance check (runs with `go test`)
-- [ ] Rebuild WASM, verify compile
+- [x] Write `crypto_test.go`: encode → encrypt → decrypt → decode round-trip with tolerance check (runs with `go test`)
+- [x] Rebuild WASM, verify compile
 
 ### Task 4: JavaScript WASM wrapper
 

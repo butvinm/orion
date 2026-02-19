@@ -130,3 +130,102 @@ func TestMultipleGaloisKeys(t *testing.T) {
 		t.Logf("GaloisKey(rot=%d, galEl=%d): %d bytes", rot, galEl, len(data))
 	}
 }
+
+func TestGetDefaultScale(t *testing.T) {
+	initTestScheme(t)
+
+	scale := GetDefaultScale()
+	// logScale=26, so default scale should be 2^26 = 67108864
+	expected := uint64(1) << uint64(testLogScale)
+	if scale != expected {
+		t.Errorf("GetDefaultScale() = %d, want %d", scale, expected)
+	}
+	t.Logf("DefaultScale = %d (2^%d)", scale, testLogScale)
+}
+
+func TestEncodeEncryptDecryptRoundTrip(t *testing.T) {
+	initTestScheme(t)
+
+	// Prepare test values: some floats that represent a small input vector.
+	inputValues := []float64{0.1, 0.5, -0.3, 1.0, 0.0, -1.0, 0.42, 0.99}
+	level := s.Params.MaxLevel()
+	scale := GetDefaultScale()
+
+	// Encode
+	ptID, err := Encode(inputValues, level, scale)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+	t.Logf("Encoded plaintext ID: %d", ptID)
+
+	// Encrypt
+	ctBytes, err := Encrypt(ptID)
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+	if len(ctBytes) == 0 {
+		t.Fatal("Encrypt returned empty bytes")
+	}
+	t.Logf("Ciphertext: %d bytes", len(ctBytes))
+
+	// Decrypt (includes decode)
+	result, err := Decrypt(ctBytes)
+	if err != nil {
+		t.Fatalf("Decrypt failed: %v", err)
+	}
+	if len(result) == 0 {
+		t.Fatal("Decrypt returned empty result")
+	}
+	t.Logf("Decrypted %d slots", len(result))
+
+	// Verify the first N values match within CKKS tolerance.
+	const tol = 1e-3
+	for i, want := range inputValues {
+		got := result[i]
+		diff := got - want
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff > tol {
+			t.Errorf("result[%d] = %f, want %f (diff=%e, tol=%e)", i, got, want, diff, tol)
+		}
+	}
+	t.Logf("Round-trip first %d values match within tolerance %e", len(inputValues), tol)
+}
+
+func TestEncryptInvalidID(t *testing.T) {
+	initTestScheme(t)
+
+	// Should fail for non-existent plaintext ID.
+	_, err := Encrypt(999)
+	if err == nil {
+		t.Fatal("Encrypt(999) should have failed for invalid ID")
+	}
+	t.Logf("Expected error: %v", err)
+}
+
+func TestEncryptConsumesThenRejects(t *testing.T) {
+	initTestScheme(t)
+
+	values := []float64{1.0, 2.0, 3.0}
+	level := s.Params.MaxLevel()
+	scale := GetDefaultScale()
+
+	ptID, err := Encode(values, level, scale)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	// First encrypt should succeed.
+	_, err = Encrypt(ptID)
+	if err != nil {
+		t.Fatalf("First Encrypt failed: %v", err)
+	}
+
+	// Second encrypt of same ID should fail (plaintext was consumed).
+	_, err = Encrypt(ptID)
+	if err == nil {
+		t.Fatal("Second Encrypt should have failed (plaintext consumed)")
+	}
+	t.Logf("Expected error on reuse: %v", err)
+}

@@ -100,6 +100,76 @@ func orionSerializeBootstrapKeys(_ js.Value, args []js.Value) interface{} {
 	})
 }
 
+// jsUint8ArrayToGoBytes copies a JS Uint8Array into a Go byte slice.
+func jsUint8ArrayToGoBytes(arr js.Value) []byte {
+	length := arr.Get("length").Int()
+	buf := make([]byte, length)
+	js.CopyBytesToGo(buf, arr)
+	return buf
+}
+
+// goFloat64sToJSFloat64Array copies a Go []float64 into a JS Float64Array.
+func goFloat64sToJSFloat64Array(vals []float64) js.Value {
+	arr := js.Global().Get("Float64Array").New(len(vals))
+	for i, v := range vals {
+		arr.SetIndex(i, v)
+	}
+	return arr
+}
+
+// orionGetDefaultScale: () => number
+func orionGetDefaultScale(_ js.Value, _ []js.Value) interface{} {
+	return js.ValueOf(GetDefaultScale())
+}
+
+// orionEncode: (values: Float64Array, level: number, scale: number) => Promise<number>
+func orionEncode(_ js.Value, args []js.Value) interface{} {
+	valuesJS := args[0]
+	level := args[1].Int()
+	scale := uint64(args[2].Float())
+
+	// Copy Float64Array values into Go slice.
+	length := valuesJS.Get("length").Int()
+	values := make([]float64, length)
+	for i := 0; i < length; i++ {
+		values[i] = valuesJS.Index(i).Float()
+	}
+
+	return promisify(func() (js.Value, error) {
+		id, err := Encode(values, level, scale)
+		if err != nil {
+			return js.Undefined(), err
+		}
+		return js.ValueOf(id), nil
+	})
+}
+
+// orionEncrypt: (ptxtID: number) => Promise<Uint8Array>
+func orionEncrypt(_ js.Value, args []js.Value) interface{} {
+	ptxtID := args[0].Int()
+
+	return promisify(func() (js.Value, error) {
+		data, err := Encrypt(ptxtID)
+		if err != nil {
+			return js.Undefined(), err
+		}
+		return goBytesToJSUint8Array(data), nil
+	})
+}
+
+// orionDecrypt: (ctBytes: Uint8Array) => Promise<Float64Array>
+func orionDecrypt(_ js.Value, args []js.Value) interface{} {
+	ctBytes := jsUint8ArrayToGoBytes(args[0])
+
+	return promisify(func() (js.Value, error) {
+		result, err := Decrypt(ctBytes)
+		if err != nil {
+			return js.Undefined(), err
+		}
+		return goFloat64sToJSFloat64Array(result), nil
+	})
+}
+
 func main() {
 	g := js.Global()
 	g.Set("orionInit", js.FuncOf(orionInit))
@@ -107,6 +177,10 @@ func main() {
 	g.Set("orionSerializeRelinKey", js.FuncOf(orionSerializeRelinKey))
 	g.Set("orionGenerateAndSerializeGaloisKey", js.FuncOf(orionGenerateAndSerializeGaloisKey))
 	g.Set("orionSerializeBootstrapKeys", js.FuncOf(orionSerializeBootstrapKeys))
+	g.Set("orionGetDefaultScale", js.FuncOf(orionGetDefaultScale))
+	g.Set("orionEncode", js.FuncOf(orionEncode))
+	g.Set("orionEncrypt", js.FuncOf(orionEncrypt))
+	g.Set("orionDecrypt", js.FuncOf(orionDecrypt))
 
 	// Block forever so the Go runtime stays alive in the browser.
 	select {}
