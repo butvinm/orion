@@ -123,8 +123,8 @@ demo/wasm-fhe-demo/
 
 ### Task 4: JavaScript WASM wrapper
 
-- [ ] Copy `wasm_exec.js` from Go toolchain into `demo/wasm-fhe-demo/client/`
-- [ ] Create `demo/wasm-fhe-demo/client/orion-client.js`:
+- [x] Copy `wasm_exec.js` from Go toolchain into `demo/wasm-fhe-demo/client/`
+- [x] Create `demo/wasm-fhe-demo/client/orion-client.js`:
   - `OrionClient` class:
     - `async init(wasmUrl)` — loads WASM binary, instantiates Go runtime
     - `async setupScheme(params)` — calls `orionInit` with CKKSParams fields
@@ -136,7 +136,7 @@ demo/wasm-fhe-demo/
     - `async decryptOutput(uint8Array, numElements)` — strip wire format header in JS, pass raw ciphertext bytes to WASM decrypt → `Float64Array` (trimmed to numElements)
   - Progress callback support: `onProgress(stage, current, total)`
   - Error handling: catches Go panics (which become JS errors) and wraps them
-- [ ] No automated tests (JS tested via browser integration)
+- [x] No automated tests (JS tested via browser integration)
 
 ### Task 5: FastAPI server — manifest and key upload endpoints
 
