@@ -123,7 +123,7 @@ class Compiler:
         start = time.time()
         if isinstance(input_data, DataLoader):
             user_batch_size = input_data.batch_size
-            if batch_size > user_batch_size:
+            if user_batch_size is not None and batch_size > user_batch_size:
                 dataset = input_data.dataset
                 shuffle = (input_data.sampler is None or
                            isinstance(input_data.sampler, RandomSampler))

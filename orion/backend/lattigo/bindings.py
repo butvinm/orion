@@ -46,8 +46,11 @@ class LattigoFunction:
             return ctypes.c_float(arg)
         elif isinstance(arg, str):
             return arg.encode('utf-8')
-        elif (isinstance(arg, np.ndarray) and 
-            arg.dtype == np.uint8 and 
+        elif isinstance(arg, bytes) and typ == ctypes.POINTER(ctypes.c_ubyte):
+            buf = (ctypes.c_ubyte * len(arg)).from_buffer_copy(arg)
+            return (buf, len(arg))
+        elif (isinstance(arg, np.ndarray) and
+            arg.dtype == np.uint8 and
             typ == ctypes.POINTER(ctypes.c_ubyte)):
             ptr = arg.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
             return (ptr, len(arg))
@@ -83,12 +86,11 @@ class LattigoFunction:
             return [float(res.Data[i]) for i in range(length)]
         elif type(res) == ArrayResultByte:
             length = int(res.Length)
-            # Create numpy array directly from the C buffer
             buffer = ctypes.cast(
-                res.Data, 
+                res.Data,
                 ctypes.POINTER(ctypes.c_ubyte * length)
             ).contents
-            array = np.frombuffer(buffer, dtype=np.uint8)
+            array = bytes(buffer)
             return array, res.Data
         else:
             return res

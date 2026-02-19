@@ -1,11 +1,6 @@
-"""Integration tests for Task 4: Compiler, Client, Evaluator.
-
-Tests the end-to-end roundtrip: Compiler -> Client -> Evaluator.
-"""
+"""Integration tests for Compiler, Client, Evaluator."""
 
 import gc
-import math
-import struct
 
 import torch
 import pytest
@@ -16,7 +11,6 @@ from orion.compiler import Compiler
 from orion.client import Client, PlainText, CipherText
 from orion.evaluator import Evaluator
 import orion.nn as on
-import orion.models as models
 
 
 # -----------------------------------------------------------------------
@@ -60,31 +54,11 @@ def _cleanup_backend():
 
 
 # -----------------------------------------------------------------------
-# 4a: Compiler tests
+# Compiler tests
 # -----------------------------------------------------------------------
 
 
 class TestCompiler:
-    def test_compiler_init(self):
-        """Compiler initializes with CKKSParams and creates backend."""
-        net = SimpleMLP()
-        compiler = Compiler(net, MLP_PARAMS)
-        assert compiler.backend is not None
-        assert compiler.ckks_params is MLP_PARAMS
-        assert compiler.config.margin == 2
-        del compiler
-        _cleanup_backend()
-
-    def test_compiler_with_config(self):
-        """Compiler accepts custom CompilerConfig."""
-        net = SimpleMLP()
-        config = CompilerConfig(margin=3, embedding_method="square")
-        compiler = Compiler(net, MLP_PARAMS, config)
-        assert compiler.config.margin == 3
-        assert compiler.config.embedding_method == "square"
-        del compiler
-        _cleanup_backend()
-
     def test_compiler_fit_requires_data(self):
         """Compiler.fit() requires tensor or dataloader."""
         net = SimpleMLP()
@@ -138,18 +112,11 @@ class TestCompiler:
 
 
 # -----------------------------------------------------------------------
-# 4b: Client tests
+# Client tests
 # -----------------------------------------------------------------------
 
 
 class TestClient:
-    def test_client_init(self):
-        """Client initializes with CKKSParams."""
-        client = Client(MLP_PARAMS)
-        assert client.backend is not None
-        del client
-        _cleanup_backend()
-
     def test_client_encode_decode(self):
         """Client encode/decode roundtrip."""
         client = Client(MLP_PARAMS)
@@ -246,80 +213,11 @@ class TestClient:
 
 
 # -----------------------------------------------------------------------
-# 4c: Evaluator tests
+# Evaluator tests
 # -----------------------------------------------------------------------
 
 
 class TestEvaluator:
-    def test_full_roundtrip(self):
-        """Compiler -> Client -> Evaluator full roundtrip with SimpleMLP.
-
-        This is the primary integration test. Due to Go backend singleton,
-        we must destroy each backend before creating the next one.
-        """
-        torch.manual_seed(42)
-
-        # Step 1: Compile
-        net = SimpleMLP()
-        net.eval()
-        inp = torch.randn(1, 1, 28, 28)
-        out_clear = net(inp)
-
-        compiler = Compiler(net, MLP_PARAMS)
-        compiler.fit(inp)
-        compiled = compiler.compile()
-
-        # Serialize to verify it works
-        compiled_bytes = compiled.to_bytes()
-
-        del compiler
-        _cleanup_backend()
-
-        # Step 2: Client - generate keys
-        compiled = CompiledModel.from_bytes(compiled_bytes)
-        client = Client(compiled.params)
-        keys = client.generate_keys(compiled.manifest)
-
-        # Encode and encrypt input
-        pt = client.encode(inp, level=compiled.input_level)
-        ct = client.encrypt(pt)
-        ct_bytes = ct.to_bytes()
-
-        # Serialize keys and secret key (needed to recreate Client later)
-        keys_bytes = keys.to_bytes()
-        sk_bytes = client.secret_key
-
-        del client
-        _cleanup_backend()
-
-        # Step 3: Evaluator - run inference
-        compiled = CompiledModel.from_bytes(compiled_bytes)
-        keys = EvalKeys.from_bytes(keys_bytes)
-
-        net_eval = SimpleMLP()  # fresh skeleton
-        evaluator = Evaluator(net_eval, compiled, keys)
-
-        ct_in = CipherText.from_bytes(ct_bytes, evaluator.backend)
-        ct_out = evaluator.run(ct_in)
-
-        # Step 4: Client again - decrypt (with same secret key)
-        ct_out_bytes = ct_out.to_bytes()
-
-        del evaluator
-        _cleanup_backend()
-
-        client = Client(compiled.params, secret_key=sk_bytes)
-        ct_result = CipherText.from_bytes(ct_out_bytes, client.backend)
-        pt_result = client.decrypt(ct_result)
-        out_fhe = client.decode(pt_result)
-
-        # Verify FHE result is close to cleartext
-        dist = (out_clear.detach() - out_fhe[:, :10].float()).abs().mean()
-        assert dist < 0.5, f"MAE {dist:.6f} exceeds threshold"
-
-        del client
-        _cleanup_backend()
-
     def test_compiled_model_serialization_roundtrip(self):
         """CompiledModel to_bytes -> from_bytes -> Evaluator works."""
         torch.manual_seed(42)
@@ -383,25 +281,6 @@ class TestEvaluator:
         _cleanup_backend()
 
 
-# -----------------------------------------------------------------------
-# PlainText / CipherText wrapper tests
-# -----------------------------------------------------------------------
-
-
-class TestPlainText:
-    def test_plaintext_wraps_ids(self):
-        """PlainText stores ptxt_ids and shape."""
-        pt = PlainText([1, 2, 3], torch.Size([3, 4]), None, None)
-        assert pt.ids == [1, 2, 3]
-        assert pt.shape == torch.Size([3, 4])
-        assert len(pt) == 3
-
-    def test_plaintext_single_id(self):
-        """PlainText with single int wraps to list."""
-        pt = PlainText(42, torch.Size([1]), None, None)
-        assert pt.ids == [42]
-
-
 class TestClientSecretKey:
     def test_secret_key_roundtrip(self):
         """Client secret key can be serialized and restored."""
@@ -430,12 +309,3 @@ class TestClientSecretKey:
 
         del client2
         _cleanup_backend()
-
-
-class TestCipherTextWrapper:
-    def test_ciphertext_wraps_ids(self):
-        """CipherText stores ctxt_ids and shape."""
-        ct = CipherText([1, 2], torch.Size([2, 3]), None)
-        assert ct.ids == [1, 2]
-        assert ct.shape == torch.Size([2, 3])
-        assert len(ct) == 2

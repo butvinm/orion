@@ -54,9 +54,9 @@ def get_mnist_datasets(data_dir, batch_size, test_samples=10000, seed=None):
             test_dataset = datasets.MNIST(
                 data_dir, train=False, download=True, transform=transform
             )
-        except Exception as e: 
+        except Exception as e:
             raise RuntimeError(
-                e + " Could not install MNIST dataset automatically " + 
+                str(e) + " Could not install MNIST dataset automatically " +
                 "You'll need to download it manually from torchvision.datasets.MNIST()"
             )
  

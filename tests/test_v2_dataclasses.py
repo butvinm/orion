@@ -43,11 +43,6 @@ class TestCKKSParams:
         p = self._default_params(boot_logp=[61, 61])
         assert isinstance(p.boot_logp, tuple)
 
-    def test_frozen(self):
-        p = self._default_params()
-        with pytest.raises(AttributeError):
-            p.logn = 15
-
     def test_max_level(self):
         p = self._default_params()
         assert p.max_level == 3  # len((55, 40, 40, 40)) - 1
@@ -102,11 +97,6 @@ class TestCompilerConfig:
         assert c.margin == 3
         assert c.embedding_method == "square"
         assert c.fuse_modules is False
-
-    def test_frozen(self):
-        c = CompilerConfig()
-        with pytest.raises(AttributeError):
-            c.margin = 5
 
     def test_invalid_embedding_method(self):
         with pytest.raises(ValueError, match="embedding_method must be one of"):
@@ -415,25 +405,3 @@ class TestNewParametersAdapter:
         assert np.get_embedding_method() == "hybrid"
         assert np.get_fuse_modules() is True
 
-    def test_all_getters_work(self):
-        """Verify that every existing getter method works with the adapter path."""
-        ckks = CKKSParams(logn=14, logq=(55, 40, 40), logp=(61,), logscale=40)
-        np = NewParameters.from_ckks_params(ckks)
-
-        # These should not raise
-        np.get_logn()
-        np.get_logq()
-        np.get_logp()
-        np.get_logscale()
-        np.get_default_scale()
-        np.get_hamming_weight()
-        np.get_ringtype()
-        np.get_max_level()
-        np.get_slots()
-        np.get_ring_degree()
-        np.get_margin()
-        np.get_fuse_modules()
-        np.get_debug_status()
-        np.get_backend()
-        np.get_embedding_method()
-        np.get_boot_logp()

@@ -39,7 +39,7 @@ class PlainTensor:
 
         mul_ids = []
         for i in range(len(self.ids)):
-            mul_id = self.evaluator.mul_ciphertext(
+            mul_id = self.evaluator.mul_plaintext(
                 other.ids[i], self.ids[i], in_place)
             mul_ids.append(mul_id)
 
@@ -227,6 +227,9 @@ class CipherTensor:
             rot_id = self.evaluator.rotate(ctxt, amount, in_place)
             rot_ids.append(rot_id)
 
+        if in_place:
+            self.ids = rot_ids
+            return self
         return CipherTensor(self.context, rot_ids, self.shape, self.on_shape)
 
     def _check_valid(self, other):

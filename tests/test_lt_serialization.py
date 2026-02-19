@@ -39,7 +39,7 @@ def test_serialize_deserialize_roundtrip():
         bsgs_ratio = 1.0
 
         orig_id = backend.GenerateLinearTransform(
-            diag_idxs, diag_data, level, bsgs_ratio, "none"
+            diag_idxs, diag_data, level, bsgs_ratio
         )
 
         orig_gal_els = backend.GetLinearTransformRotationKeys(orig_id)
@@ -85,7 +85,7 @@ def test_serialize_deserialize_evaluate():
         bsgs_ratio = 1.0
 
         orig_id = backend.GenerateLinearTransform(
-            diag_idxs, diag_data, level, bsgs_ratio, "none"
+            diag_idxs, diag_data, level, bsgs_ratio
         )
 
         serialized_data, c_ptr = backend.SerializeLinearTransform(orig_id)
@@ -144,7 +144,7 @@ def test_serialized_size_reasonable():
         bsgs_ratio = 1.0
 
         lt_id = backend.GenerateLinearTransform(
-            diag_idxs, diag_data, level, bsgs_ratio, "none"
+            diag_idxs, diag_data, level, bsgs_ratio
         )
 
         serialized_data, c_ptr = backend.SerializeLinearTransform(lt_id)

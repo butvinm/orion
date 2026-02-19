@@ -320,7 +320,7 @@ def plot_toeplitz(matrix, save_path=""):
 def pack_bn1d(bn1d_layer):
     N = bn1d_layer.input_shape[0]
     on_running_mean = bn1d_layer.on_running_mean
-    on_inv_running_std = 1 / torch.sqrt(bn1d_layer.running_var + bn1d_layer.eps)
+    on_inv_running_std = 1 / torch.sqrt(bn1d_layer.on_running_var + bn1d_layer.eps)
     on_weight = bn1d_layer.on_weight if bn1d_layer.affine else None 
     on_bias = bn1d_layer.on_bias if bn1d_layer.affine else None 
 

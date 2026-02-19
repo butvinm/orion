@@ -87,7 +87,7 @@ class BootstrapSolver:
                     next_level_dag = LevelDAG(
                         l_eff=self.l_eff, network_dag=self.network_dag, path=node_dag
                     )
-                    visited.update(node)
+                    visited.add(node)
 
                 self.full_level_dag.append(next_level_dag)
 
@@ -109,9 +109,8 @@ class BootstrapSolver:
         if latency == float("inf"):
             raise ValueError(
                 "Automatic bootstrap placement failed. First try increasing "
-                "the length of your LogQ moduli chain the associated "
-                "parameters YAML file. If this fails, double check that the "
-                "network was instantiated properly."
+                "the length of your LogQ moduli chain in CKKSParams. If this "
+                "fails, double check that the network was instantiated properly."
             )
 
         shortest_path = shortest_path[1:-1]

@@ -38,7 +38,7 @@ class Fuser:
         else: # conv2d layer
             linear.on_weight *= scale.reshape(-1, 1, 1, 1)
 
-        linear.on_bias = scale * (linear.on_bias - bn.running_mean) + bn.on_bias
+        linear.on_bias = scale * (linear.on_bias - bn.on_running_mean) + bn.on_bias
 
         bn.fused = True 
         bn.depth -= (2 if bn.affine else 1)

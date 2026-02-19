@@ -19,8 +19,8 @@ class Activation(Module):
     def extra_repr(self):
         return super().extra_repr() + f", degree={len(self.coeffs)-1}"
 
-    def set_depth(self):
-        self.depth = int(math.ceil(math.log2(len(self.coeffs))))
+    def set_depth(self, depth=None):
+        self.depth = depth if depth is not None else int(math.ceil(math.log2(len(self.coeffs))))
 
     def set_output_scale(self, output_scale):
         self.output_scale = output_scale
@@ -93,10 +93,13 @@ class Chebyshev(Module):
     def set_coeffs(self, coeffs):
         self.coeffs = coeffs
 
-    def set_depth(self):
-        self.depth = int(math.ceil(math.log2(self.degree+1)))
-        if self.prescale != 1:
-            self.depth += 1
+    def set_depth(self, depth=None):
+        if depth is not None:
+            self.depth = depth
+        else:
+            self.depth = int(math.ceil(math.log2(self.degree+1)))
+            if self.prescale != 1:
+                self.depth += 1
 
     def set_output_scale(self, output_scale):
         self.output_scale = output_scale
