@@ -190,12 +190,12 @@ demo/wasm-fhe-demo/
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] Verify all requirements: WASM client, FastAPI server, streaming key upload, untrusted server model
-- [ ] Verify secret key never leaves browser (code review — no serialize/send of SK)
-- [ ] Verify edge cases: what happens if WASM fails to load, if server is down, if keys are incomplete
-- [ ] Run full test suite (pytest for server tests)
-- [ ] Run Go tests for WASM module
-- [ ] Verify WASM binary builds cleanly
+- [x] Verify all requirements: WASM client, FastAPI server, streaming key upload, untrusted server model
+- [x] Verify secret key never leaves browser (code review — no serialize/send of SK)
+- [x] Verify edge cases: what happens if WASM fails to load, if server is down, if keys are incomplete
+- [x] Run full test suite (pytest for server tests)
+- [x] Run Go tests for WASM module
+- [x] Verify WASM binary builds cleanly
 
 ### Task 10: [Final] Documentation
 
