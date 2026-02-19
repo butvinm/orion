@@ -1,6 +1,7 @@
 # Orion
 
 ## Installation
+
 We tested our implementation on `Ubuntu 22.04.5 LTS`. First, install the required dependencies:
 
 ```
@@ -35,3 +36,7 @@ pip install -e .
 cd examples/
 python3 run_lola.py
 ```
+
+### Browser Demo
+
+See [`demo/wasm-fhe-demo/`](demo/wasm-fhe-demo/) for a browser-based demo that performs encrypted MNIST inference. The client runs Lattigo compiled to WASM — the secret key never leaves the browser.

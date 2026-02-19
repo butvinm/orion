@@ -199,13 +199,13 @@ demo/wasm-fhe-demo/
 
 ### Task 10: [Final] Documentation
 
-- [ ] Create `demo/wasm-fhe-demo/README.md`:
+- [x] Create `demo/wasm-fhe-demo/README.md`:
   - Prerequisites (Go 1.22+, Python 3.9+, Orion installed)
   - Quick start: build WASM, compile model, start server, open browser
   - Architecture diagram (ASCII): Browser ↔ FastAPI ↔ Orion/Lattigo
   - Security model explanation
   - Known limitations (WASM binary size, single-tenant, performance)
-- [ ] Update main README.md to reference the demo
+- [x] Update main README.md to reference the demo
 
 ## Technical Details
 
