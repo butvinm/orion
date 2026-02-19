@@ -140,7 +140,7 @@ demo/wasm-fhe-demo/
 
 ### Task 5: FastAPI server — manifest and key upload endpoints
 
-- [ ] Create `demo/wasm-fhe-demo/server/app.py`:
+- [x] Create `demo/wasm-fhe-demo/server/app.py`:
   - On startup: load `model.bin` into `CompiledModel`
   - `GET /api/manifest` — returns JSON: `{params: {logn, logq, logp, logscale, h, ring_type}, manifest: {galois_elements, bootstrap_slots, boot_logp, needs_rlk}, input_level}`
   - `POST /api/keys/rlk` — accepts raw bytes body, stores in session dict
@@ -149,9 +149,9 @@ demo/wasm-fhe-demo/
   - `POST /api/keys/finalize` — constructs `EvalKeys(rlk_data=..., galois_keys=..., bootstrap_keys=...)`, creates `Evaluator(MLP(), compiled, keys)`, stores evaluator in session. Returns `{status: "ready"}`
   - `GET /api/keys/progress` — returns `{received_galois: N, total_galois: M, rlk: bool, bootstrap: [slot_counts]}` for client progress tracking
   - Session is a module-level dict (single-tenant demo, no auth needed)
-- [ ] Mount static files: `app.mount("/", StaticFiles(directory="../client", html=True))`
-- [ ] Write tests in `test_app.py`: test manifest endpoint returns correct structure, test key upload stores bytes, test finalize without all keys returns error
-- [ ] Run tests
+- [x] Mount static files: `app.mount("/", StaticFiles(directory="../client", html=True))`
+- [x] Write tests in `test_app.py`: test manifest endpoint returns correct structure, test key upload stores bytes, test finalize without all keys returns error
+- [x] Run tests
 
 ### Task 6: FastAPI server — inference endpoint
 
