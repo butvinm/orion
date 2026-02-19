@@ -194,6 +194,11 @@ class OrionClient {
     }
 
     // Trim to numElements
+    if (allValues.length < numElements) {
+      throw new Error(
+        `Expected at least ${numElements} decrypted values but got ${allValues.length}`,
+      );
+    }
     const output = new Float64Array(numElements);
     for (let i = 0; i < numElements; i++) {
       output[i] = allValues[i];

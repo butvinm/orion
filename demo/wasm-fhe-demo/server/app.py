@@ -9,12 +9,17 @@ Loads a pre-compiled MLP model and provides endpoints for:
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger(__name__)
 
 import orion
 from orion.models import MLP
@@ -50,6 +55,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # -- API endpoints --
@@ -141,9 +147,9 @@ async def finalize_keys():
         bootstrap_keys=dict(session["bootstrap_keys"]),
     )
 
-    # Create Evaluator (initializes Go backend, loads keys)
+    # Create Evaluator (initializes Go backend, loads keys — CPU-bound)
     net = MLP()
-    evaluator = orion.Evaluator(net, compiled, keys)
+    evaluator = await asyncio.to_thread(orion.Evaluator, net, compiled, keys)
     session["evaluator"] = evaluator
 
     return {"status": "ready"}
@@ -175,9 +181,10 @@ async def infer(request: Request):
     evaluator: orion.Evaluator = session["evaluator"]
     try:
         ct_in = orion.CipherText.from_bytes(body, evaluator.backend)
-        ct_out = evaluator.run(ct_in)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
+        ct_out = await asyncio.to_thread(evaluator.run, ct_in)
+    except Exception:
+        logger.exception("Inference failed")
+        raise HTTPException(status_code=500, detail="Inference failed")
     result_bytes = ct_out.to_bytes()
 
     return Response(content=result_bytes, media_type="application/octet-stream")

@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"math"
+	"math/bits"
 
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
@@ -37,9 +37,14 @@ var (
 // encoder/encryptor/decryptor. This is the only initialization function
 // the client needs to call.
 func InitScheme(logN int, logQ, logP []int, logScale, h int, ringType string) error {
-	ringT := ring.Standard
-	if ringType != "standard" {
+	var ringT ring.Type
+	switch ringType {
+	case "standard":
+		ringT = ring.Standard
+	case "conjugate_invariant":
 		ringT = ring.ConjugateInvariant
+	default:
+		return fmt.Errorf("unknown ring type: %q (expected \"standard\" or \"conjugate_invariant\")", ringType)
 	}
 
 	params, err := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
@@ -199,7 +204,7 @@ func SerializeBootstrapKeys(numSlots int, logP []int) ([]byte, error) {
 		LogN:     utils.Pointy(s.Params.LogN()),
 		LogP:     logP,
 		Xs:       s.Params.Xs(),
-		LogSlots: utils.Pointy(int(math.Log2(float64(numSlots)))),
+		LogSlots: utils.Pointy(bits.Len(uint(numSlots)) - 1),
 	}
 
 	btpParams, err := bootstrapping.NewParametersFromLiteral(*s.Params, btpLit)

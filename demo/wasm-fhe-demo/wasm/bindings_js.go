@@ -25,9 +25,11 @@ func jsArrayToIntSlice(arr js.Value) []int {
 
 // promisify wraps a blocking Go function as a JS Promise via a goroutine.
 func promisify(fn func() (js.Value, error)) js.Value {
-	handler := js.FuncOf(func(_ js.Value, pArgs []js.Value) interface{} {
+	var handler js.Func
+	handler = js.FuncOf(func(_ js.Value, pArgs []js.Value) interface{} {
 		resolve, reject := pArgs[0], pArgs[1]
 		go func() {
+			defer handler.Release()
 			result, err := fn()
 			if err != nil {
 				reject.Invoke(err.Error())

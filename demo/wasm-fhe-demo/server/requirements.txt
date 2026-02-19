@@ -1,3 +1,10 @@
 fastapi
 uvicorn
 python-multipart
+
+# Test dependencies
+httpx
+asgi-lifespan
+anyio[trio]
+pytest
+pytest-anyio

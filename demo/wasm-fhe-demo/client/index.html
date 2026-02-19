@@ -508,8 +508,15 @@
         .map(n => String(n).padStart(2, "0")).join(":");
       const entry = document.createElement("div");
       entry.className = "log-entry";
-      const clsAttr = cls ? ` class="log-${cls}"` : "";
-      entry.innerHTML = `<span class="log-time">${ts}</span> <span${clsAttr}>${msg}</span>`;
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "log-time";
+      timeSpan.textContent = ts;
+      const msgSpan = document.createElement("span");
+      if (cls) msgSpan.className = "log-" + cls;
+      msgSpan.textContent = msg;
+      entry.appendChild(timeSpan);
+      entry.appendChild(document.createTextNode(" "));
+      entry.appendChild(msgSpan);
       el.appendChild(entry);
       el.scrollTop = el.scrollHeight;
     }
@@ -794,9 +801,14 @@
     }
 
     function displayResults(scores) {
+      if (scores.length === 0 || Array.from(scores).some(s => isNaN(s))) {
+        log("Invalid scores received (empty or NaN)", "err");
+        return;
+      }
+
       // Softmax for probabilities
       const maxScore = Math.max(...scores);
-      const exps = scores.map(s => Math.exp(s - maxScore));
+      const exps = Array.from(scores).map(s => Math.exp(s - maxScore));
       const sumExps = exps.reduce((a, b) => a + b, 0);
       const probs = exps.map(e => e / sumExps);
 
@@ -812,10 +824,25 @@
         const pct = (probs[i] / maxProb) * 100;
         const row = document.createElement("div");
         row.className = "bar-row";
-        row.innerHTML =
-          `<span class="bar-digit">${i}</span>` +
-          `<div class="bar-track"><div class="bar-fill${i === predicted ? " predicted" : ""}" style="width:${pct}%"></div></div>` +
-          `<span class="bar-score">${(probs[i] * 100).toFixed(1)}%</span>`;
+
+        const digit = document.createElement("span");
+        digit.className = "bar-digit";
+        digit.textContent = i;
+
+        const track = document.createElement("div");
+        track.className = "bar-track";
+        const fill = document.createElement("div");
+        fill.className = "bar-fill" + (i === predicted ? " predicted" : "");
+        fill.style.width = pct + "%";
+        track.appendChild(fill);
+
+        const score = document.createElement("span");
+        score.className = "bar-score";
+        score.textContent = (probs[i] * 100).toFixed(1) + "%";
+
+        row.appendChild(digit);
+        row.appendChild(track);
+        row.appendChild(score);
         chart.appendChild(row);
       }
 
