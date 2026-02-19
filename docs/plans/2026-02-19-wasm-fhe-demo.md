@@ -166,7 +166,7 @@ demo/wasm-fhe-demo/
 
 ### Task 7: Web UI — initialization and key generation flow
 
-- [ ] Create `demo/wasm-fhe-demo/client/index.html`:
+- [x] Create `demo/wasm-fhe-demo/client/index.html`:
   - Clean, minimal UI with step-by-step flow panels:
     1. **Step 1: Initialize** — "Connect" button fetches manifest, loads WASM, initializes scheme
     2. **Step 2: Generate & Upload Keys** — Shows manifest summary (N Galois keys, RLK yes/no, bootstrap slots). "Generate Keys" button starts key gen + upload with progress bar
@@ -176,8 +176,8 @@ demo/wasm-fhe-demo/
   - Status log: shows each operation with timing
   - All network calls use `fetch()` API
   - Use CSS Grid/Flexbox, no external CSS frameworks
-- [ ] Wire up Steps 1-2: manifest fetch → WASM init → key generation with progress
-- [ ] Manual browser test: verify WASM loads, keys generate, progress updates
+- [x] Wire up Steps 1-2: manifest fetch → WASM init → key generation with progress
+- [x] Manual browser test: verify WASM loads, keys generate, progress updates
 
 ### Task 8: Web UI — encryption, inference, and decryption
 
