@@ -191,16 +191,16 @@ demo/wasm-fhe-demo/wasm/
 
 ### Tasks
 
-- [ ] Full Go test suite passes (`go test ./...` in `orionclient/`)
-- [ ] Full Python test suite passes (`pytest tests/`)
-- [ ] WASM demo builds and runs end-to-end (compile model → generate keys → encrypt → infer → decrypt)
-- [ ] No global state in Go: instantiate two `Client`s with different params simultaneously, verify independence
-- [ ] No memory leaks: run inference loop, verify Go heap doesn't grow unboundedly (use `runtime.ReadMemStats`)
-- [ ] Secret key containment: `Client.Close()` zeroes secret key memory, verify with test
-- [ ] Wire format compatibility: `Ciphertext.Marshal()` output from Go matches expected test vectors, `from_bytes()` in JS (WASM) can consume it
-- [ ] Error propagation: Go errors surface as Python exceptions with message, not crashes
-- [ ] No deleted code is still imported anywhere (`grep` for old module paths)
-- [ ] CLAUDE.md architecture section updated to reflect new structure
+- [x] Full Go test suite passes (`go test ./...` in `orionclient/`)
+- [x] Full Python test suite passes (`pytest tests/`)
+- [x] WASM demo builds and runs end-to-end (compile model → generate keys → encrypt → infer → decrypt)
+- [x] No global state in Go: instantiate two `Client`s with different params simultaneously, verify independence
+- [x] No memory leaks: run inference loop, verify Go heap doesn't grow unboundedly (use `runtime.ReadMemStats`)
+- [x] Secret key containment: `Client.Close()` zeroes secret key memory, verify with test
+- [x] Wire format compatibility: `Ciphertext.Marshal()` output from Go matches expected test vectors, `from_bytes()` in JS (WASM) can consume it
+- [x] Error propagation: Go errors surface as Python exceptions with message, not crashes
+- [x] No deleted code is still imported anywhere (`grep` for old module paths)
+- [x] CLAUDE.md architecture section updated to reflect new structure
 
 ## Out of Scope
 

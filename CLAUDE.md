@@ -67,7 +67,8 @@ result = client.decode(client.decrypt(ct_result))
 
 - `orion/params.py` — `CKKSParams` (frozen dataclass for CKKS parameters), `CompilerConfig` (compilation settings)
 - `orion/compiler.py` — `Compiler` class: traces, fits, and compiles networks. No keys needed.
-- `orion/client.py` — `Client` class: key generation, encode/decode, encrypt/decrypt. `PlainText` and `CipherText` wrappers.
+- `orion/client.py` — `Client` class: key generation, encode/decode, encrypt/decrypt. Thin FFI wrapper over `orionclient`.
+- `orion/ciphertext.py` — Unified `Ciphertext` class wrapping a Go `*orionclient.Ciphertext` via `cgo.Handle`. Replaces old `CipherText` and `CipherTensor`. Also contains `PlainText` wrapper.
 - `orion/evaluator.py` — `Evaluator` class: loads compiled model + keys, runs FHE inference. No secret key.
 - `orion/compiled_model.py` — `CompiledModel`, `KeyManifest`, `EvalKeys` with binary serialization (`to_bytes()`/`from_bytes()`).
 
@@ -76,7 +77,7 @@ result = client.decode(client.decrypt(ct_result))
 Modules receive context via explicit parameters, not class variables:
 
 - **Compile time:** `module.compile(context)` and `module.fit(context)` take a namespace with `backend`, `params`, `encoder`, `lt_evaluator`, `poly_evaluator`, `margin`, `config`.
-- **Inference time:** `CipherTensor` carries a `context` attribute. Each module reads `x.context.evaluator`, `x.context.encoder`, etc. Output tensors propagate context automatically.
+- **Inference time:** `Ciphertext` carries a `context` attribute with the evaluator FFI handle and param info. Each module reads `x.context.eval_handle`, `x.context.ckks_params`, etc. Output ciphertexts propagate context automatically.
 - `Module.scheme` and `Module.margin` class variables are deleted. No `set_scheme()` or `set_margin()`.
 
 ### Evaluator type split
@@ -93,7 +94,7 @@ No `keyless` boolean — the type system enforces which operations are available
 All layers extend `orion.nn.Module` (which extends `torch.nn.Module`) and operate in two modes toggled by `.he()`:
 
 - **Cleartext mode**: standard PyTorch forward pass
-- **FHE mode**: operates on `CipherTensor`/`PlainTensor` objects
+- **FHE mode**: operates on `Ciphertext`/`PlainText` objects (unified types from `orion/ciphertext.py`)
 
 Key modules: `Linear`, `Conv2d`, `AvgPool2d` (linear transforms with diagonal packing), `Quad`, `Sigmoid`, `SiLU`, `GELU`, `ReLU` (polynomial activations via Chebyshev), `BatchNorm1d/2d`, `Add`, `Mult`, `Bootstrap`, `Flatten`.
 
@@ -124,7 +125,7 @@ All artifacts use binary containers with magic headers, JSON metadata, length-pr
 
 - `CompiledModel`: magic `ORMDL\x00\x01\x00` — stores params, manifest, module metadata, LinearTransform blobs
 - `EvalKeys`: magic `ORKEY\x00\x01\x00` — stores RLK, Galois keys, bootstrap keys
-- `CipherText`: custom format with per-ciphertext length-prefixed Lattigo binary
+- `Ciphertext`: magic `ORTXT\x00\x01\x00` — stores per-ciphertext length-prefixed Lattigo binary, shape metadata, CRC32
 
 ### Go backend — instance-based
 
