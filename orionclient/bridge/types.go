@@ -314,3 +314,81 @@ func GeneratePolynomialChebyshev(coeffs *C.double, numCoeffs C.int) C.uintptr_t 
 	poly := orionclient.GenerateChebyshev(goCoeffs)
 	return C.uintptr_t(cgo.NewHandle(poly))
 }
+
+// =========================================================================
+// Compile-time linear transform generation
+// =========================================================================
+
+// GenerateLinearTransformFromParams generates a LinearTransform from diagonal data.
+// diagIndicesPtr/diagIndicesLen: flat array of diagonal indices
+// diagDataPtr/diagDataLen: flat array of all diagonal values (numDiags * slotsPerDiag)
+// numDiags: number of diagonals
+// slotsPerDiag: values per diagonal (must match slot count)
+// level: multiplicative level
+// bsgsRatio: baby-step-giant-step ratio
+//
+//export GenerateLinearTransformFromParams
+func GenerateLinearTransformFromParams(
+	paramsJSON *C.char,
+	diagIndicesPtr *C.int, diagIndicesLen C.int,
+	diagDataPtr *C.double, diagDataLen C.int,
+	slotsPerDiag C.int,
+	level C.int,
+	bsgsRatio C.double,
+	errOut **C.char,
+) C.uintptr_t {
+	params, err := parseParams(C.GoString(paramsJSON))
+	if err != nil {
+		setErr(errOut, "parsing params: "+err.Error())
+		return 0
+	}
+
+	indices := cIntsToGoInts(diagIndicesPtr, diagIndicesLen)
+	allData := cDoublesToGoFloat64s(diagDataPtr, diagDataLen)
+	spd := int(slotsPerDiag)
+
+	diagMap := make(map[int][]float64, len(indices))
+	for i, idx := range indices {
+		start := i * spd
+		end := start + spd
+		if end > len(allData) {
+			setErr(errOut, "diagonal data too short")
+			return 0
+		}
+		vals := make([]float64, spd)
+		copy(vals, allData[start:end])
+		diagMap[idx] = vals
+	}
+
+	lt, err := orionclient.GenerateLinearTransform(params, diagMap, int(level), float64(bsgsRatio))
+	if err != nil {
+		setErr(errOut, err.Error())
+		return 0
+	}
+	return C.uintptr_t(cgo.NewHandle(lt))
+}
+
+// =========================================================================
+// Minimax sign coefficients
+// =========================================================================
+
+//export GenerateMinimaxSignCoeffs
+func GenerateMinimaxSignCoeffs(
+	degreesPtr *C.int, numDegrees C.int,
+	prec C.int,
+	logAlpha C.int,
+	logErr C.int,
+	debug C.int,
+	outLen *C.int,
+	errOut **C.char,
+) *C.double {
+	degrees := cIntsToGoInts(degreesPtr, numDegrees)
+	flat, err := orionclient.GenerateMinimaxSignCoeffs(degrees, uint(prec), int(logAlpha), int(logErr), int(debug) != 0)
+	if err != nil {
+		setErr(errOut, err.Error())
+		return nil
+	}
+	ptr, length := goFloat64sToCDoubles(flat)
+	*outLen = length
+	return ptr
+}

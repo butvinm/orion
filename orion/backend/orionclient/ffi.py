@@ -296,6 +296,42 @@ def _setup_prototypes(lib):
     ]
     lib.GeneratePolynomialChebyshev.restype = _uintptr
 
+    # --- Client moduli chain ---
+    lib.ClientModuliChain.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_int)]
+    lib.ClientModuliChain.restype = ctypes.POINTER(ctypes.c_ulonglong)
+
+    lib.ClientAuxModuliChain.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_int)]
+    lib.ClientAuxModuliChain.restype = ctypes.POINTER(ctypes.c_ulonglong)
+
+    # --- Compile-time linear transform generation ---
+    lib.GenerateLinearTransformFromParams.argtypes = [
+        ctypes.c_char_p,                         # paramsJSON
+        ctypes.POINTER(ctypes.c_int), ctypes.c_int,   # diagIndices, len
+        ctypes.POINTER(ctypes.c_double), ctypes.c_int, # diagData, len
+        ctypes.c_int,                             # slotsPerDiag
+        ctypes.c_int,                             # level
+        ctypes.c_double,                          # bsgsRatio
+        _errout,
+    ]
+    lib.GenerateLinearTransformFromParams.restype = _uintptr
+
+    lib.LinearTransformRequiredGaloisElements.argtypes = [
+        _uintptr, ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), _errout,
+    ]
+    lib.LinearTransformRequiredGaloisElements.restype = ctypes.POINTER(ctypes.c_ulonglong)
+
+    # --- Minimax sign coefficients ---
+    lib.GenerateMinimaxSignCoeffs.argtypes = [
+        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # degrees, numDegrees
+        ctypes.c_int,                                  # prec
+        ctypes.c_int,                                  # logAlpha
+        ctypes.c_int,                                  # logErr
+        ctypes.c_int,                                  # debug
+        ctypes.POINTER(ctypes.c_int),                  # outLen
+        _errout,
+    ]
+    lib.GenerateMinimaxSignCoeffs.restype = ctypes.POINTER(ctypes.c_double)
+
 
 # =========================================================================
 # High-level wrapper functions
@@ -743,3 +779,101 @@ def generate_polynomial_monomial(coeffs):
 def generate_polynomial_chebyshev(coeffs):
     arr, n = _doubles_ptr(coeffs)
     return _get_lib().GeneratePolynomialChebyshev(arr, n)
+
+
+# --- Client moduli chain ---
+
+def client_moduli_chain(h):
+    lib = _get_lib()
+    out_len = ctypes.c_int(0)
+    ptr = lib.ClientModuliChain(_uintptr(h), ctypes.byref(out_len))
+    n = out_len.value
+    result = [int(ptr[i]) for i in range(n)]
+    lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
+    return result
+
+
+def client_aux_moduli_chain(h):
+    lib = _get_lib()
+    out_len = ctypes.c_int(0)
+    ptr = lib.ClientAuxModuliChain(_uintptr(h), ctypes.byref(out_len))
+    n = out_len.value
+    if n == 0:
+        return []
+    result = [int(ptr[i]) for i in range(n)]
+    lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
+    return result
+
+
+# --- Compile-time linear transform generation ---
+
+def generate_linear_transform(params_json, diag_indices, diag_data, slots_per_diag, level, bsgs_ratio):
+    lib = _get_lib()
+    err = _make_errout()
+    n_diags = len(diag_indices)
+    idx_arr = (ctypes.c_int * n_diags)(*diag_indices)
+    n_data = len(diag_data)
+    data_arr = (ctypes.c_double * n_data)(*diag_data)
+    h = lib.GenerateLinearTransformFromParams(
+        params_json.encode("utf-8"),
+        idx_arr, ctypes.c_int(n_diags),
+        data_arr, ctypes.c_int(n_data),
+        ctypes.c_int(slots_per_diag),
+        ctypes.c_int(level),
+        ctypes.c_double(bsgs_ratio),
+        ctypes.byref(err),
+    )
+    _check_err(err)
+    return h
+
+
+def linear_transform_marshal(h):
+    lib = _get_lib()
+    err = _make_errout()
+    out_len = ctypes.c_ulong(0)
+    ptr = lib.LinearTransformMarshal(_uintptr(h), ctypes.byref(out_len), ctypes.byref(err))
+    _check_err(err)
+    data = ctypes.string_at(ptr, out_len.value)
+    lib.FreeCArray(ptr)
+    return data
+
+
+def linear_transform_required_galois_elements(h, params_json):
+    lib = _get_lib()
+    err = _make_errout()
+    out_len = ctypes.c_int(0)
+    ptr = lib.LinearTransformRequiredGaloisElements(
+        _uintptr(h), params_json.encode("utf-8"),
+        ctypes.byref(out_len), ctypes.byref(err),
+    )
+    _check_err(err)
+    n = out_len.value
+    if n == 0:
+        return []
+    result = [int(ptr[i]) for i in range(n)]
+    lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
+    return result
+
+
+# --- Minimax sign coefficients ---
+
+def generate_minimax_sign_coeffs(degrees, prec, log_alpha, log_err, debug):
+    lib = _get_lib()
+    err = _make_errout()
+    out_len = ctypes.c_int(0)
+    n = len(degrees)
+    deg_arr = (ctypes.c_int * n)(*degrees)
+    ptr = lib.GenerateMinimaxSignCoeffs(
+        deg_arr, ctypes.c_int(n),
+        ctypes.c_int(prec),
+        ctypes.c_int(log_alpha),
+        ctypes.c_int(log_err),
+        ctypes.c_int(int(debug)),
+        ctypes.byref(out_len),
+        ctypes.byref(err),
+    )
+    _check_err(err)
+    n_out = out_len.value
+    result = [float(ptr[i]) for i in range(n_out)]
+    lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
+    return result

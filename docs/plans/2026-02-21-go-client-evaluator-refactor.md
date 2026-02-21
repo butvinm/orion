@@ -182,10 +182,10 @@ demo/wasm-fhe-demo/wasm/
 
 ### Tasks
 
-- [ ] Delete `orion/backend/python/` (9 files, 864 lines)
-- [ ] Delete `orion/backend/lattigo/*.go` (12 files)
-- [ ] Delete `orion/backend/lattigo/bindings.py`
-- [ ] Update imports, CLAUDE.md
+- [x] Delete `orion/backend/python/` (9 files, 864 lines)
+- [x] Delete `orion/backend/lattigo/*.go` (12 files)
+- [x] Delete `orion/backend/lattigo/bindings.py`
+- [x] Update imports, CLAUDE.md
 
 ## Phase 7: Validation, Verification and Acceptance
 

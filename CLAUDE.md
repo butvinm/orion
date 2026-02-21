@@ -28,7 +28,7 @@ pytest tests/test_v2_api.py::TestEvaluator::test_full_roundtrip
 pytest tests/models/test_mlp.py
 ```
 
-The build process compiles Go code in `orion/backend/lattigo/` into a platform-specific shared library (`.so`/`.dylib`/`.dll`) that Python loads via ctypes.
+The build process compiles Go code in `orionclient/bridge/` into a platform-specific shared library (`.so`/`.dylib`/`.dll`) that Python loads via ctypes.
 
 ## Architecture
 
@@ -110,8 +110,9 @@ Each module carries a `level` (multiplicative depth) and `depth` (consumed depth
 
 ### Backend layer
 
-- **Lattigo (Go):** `orion/backend/lattigo/` — Go implementation of CKKS operations (12 files), exposed to Python via ctypes FFI in `bindings.py`. This is the only fully implemented backend.
-- **Python:** `orion/backend/python/` — Python-side wrappers that call into Lattigo: `parameters.py`, `key_generator.py`, `encoder.py`, `encryptor.py`, `evaluator.py`, `poly_evaluator.py`, `lt_evaluator.py`, `bootstrapper.py`, `tensors.py` (`PlainTensor`/`CipherTensor`).
+- **orionclient (Go):** `orionclient/` — Instance-based Go library with `Client` (keygen, encrypt, decrypt) and `Evaluator` (FHE ops). No global state; multiple instances coexist. Bridge layer at `orionclient/bridge/` exports C functions via `cgo.Handle`.
+- **Python FFI:** `orion/backend/orionclient/ffi.py` — ctypes bindings for the bridge shared library. All Go objects are opaque handles (`uintptr_t`). Error propagation via `errOut` pattern.
+- **Compile-time helpers:** `orion/core/compiler_backend.py` — `CompilerBackend` (adapter wrapping FFI for the compiler), `NewEncoder`, `PolynomialGenerator`, `TransformEncoder`, `NewParameters`.
 
 ### Models (`orion/models/`)
 
@@ -125,14 +126,13 @@ All artifacts use binary containers with magic headers, JSON metadata, length-pr
 - `EvalKeys`: magic `ORKEY\x00\x01\x00` — stores RLK, Galois keys, bootstrap keys
 - `CipherText`: custom format with per-ciphertext length-prefixed Lattigo binary
 
-### Known constraint — Go backend singleton
+### Go backend — instance-based
 
-The Lattigo shared library uses process-global state. Only one set of CKKS parameters and one set of evaluation keys can be active at a time. Python-side design is clean (no global state), but the Go layer enforces single-tenant semantics.
+The `orionclient` library is fully instance-based. Multiple `Client` and `Evaluator` instances with different parameters can coexist in the same process. No global state.
 
 ## Conventions
 
 - Top-level API: `orion.Compiler`, `orion.Client`, `orion.Evaluator`, `orion.CompiledModel`, `orion.CKKSParams`, etc. (re-exported from `orion/__init__.py`).
-- Go FFI functions in `bindings.py` use `LattigoFunction` wrapper for type marshalling and `LattigoLibrary` for shared library lifecycle.
-- Go FFI serialization exports follow the pattern: `SerializeXxx() -> (*C.char, C.ulong)` returning `ArrayResultByte`. Loading uses `LoadXxx(dataPtr *C.char, lenData C.ulong)`.
+- Go FFI uses `cgo.Handle` for opaque pointer passing. Bridge functions return `(result, errOut)` pairs. Python wrapper checks `errOut` and raises `RuntimeError`.
 - Parameters are defined as frozen dataclasses (`CKKSParams`, `CompilerConfig`) — no YAML configs.
 - Binary serialization (`to_bytes()`/`from_bytes()`) for all cross-process artifacts — no HDF5.

@@ -17,10 +17,13 @@ from orion.params import CKKSParams, CompilerConfig
 from orion.compiled_model import CompiledModel, KeyManifest
 from orion.nn.module import Module
 from orion.nn.linear import LinearTransform
-from orion.backend.lattigo import bindings as lgo
-from orion.backend.python import parameters, encoder
-from orion.backend.python.poly_evaluator import PolynomialGenerator
-from orion.backend.python.lt_evaluator import TransformEncoder
+from orion.core.compiler_backend import (
+    CompilerBackend,
+    NewParameters,
+    NewEncoder,
+    PolynomialGenerator,
+    TransformEncoder,
+)
 from orion.core.tracer import StatsTracker, OrionTracer
 from orion.core.fuser import Fuser
 from orion.core.network_dag import NetworkDAG
@@ -47,16 +50,16 @@ class Compiler:
         self.config = config or CompilerConfig()
 
         # Build legacy NewParameters from v2 dataclasses
-        self.params = parameters.NewParameters.from_ckks_params(
+        self.params = NewParameters.from_ckks_params(
             params, self.config
         )
 
         # Initialize Go backend (no keys)
-        self.backend = lgo.LattigoLibrary()
+        self.backend = CompilerBackend()
         self.backend.setup_bindings(self.params)
 
         # Build compile-time wrappers
-        self._encoder = encoder.NewEncoder(self)
+        self._encoder = NewEncoder(self)
         self._poly_evaluator = PolynomialGenerator(self.backend)
         self._lt_evaluator = TransformEncoder(self.backend, self.params)
 

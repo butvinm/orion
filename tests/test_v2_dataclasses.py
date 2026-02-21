@@ -5,7 +5,7 @@ import pytest
 
 from orion.params import CKKSParams, CompilerConfig
 from orion.compiled_model import CompiledModel, KeyManifest, EvalKeys
-from orion.backend.python.parameters import NewParameters
+from orion.core.compiler_backend import NewParameters
 
 
 # ---------------------------------------------------------------------------

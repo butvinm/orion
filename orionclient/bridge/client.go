@@ -220,3 +220,41 @@ func ClientGaloisElement(clientH C.uintptr_t, rotation C.int) C.ulonglong {
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	return C.ulonglong(client.GaloisElement(int(rotation)))
 }
+
+//export ClientModuliChain
+func ClientModuliChain(clientH C.uintptr_t, outLen *C.int) *C.ulonglong {
+	client := cgo.Handle(clientH).Value().(*orionclient.Client)
+	chain := client.ModuliChain()
+	n := len(chain)
+	if n == 0 {
+		*outLen = 0
+		return nil
+	}
+	size := C.size_t(n) * C.size_t(unsafe.Sizeof(C.ulonglong(0)))
+	ptr := (*C.ulonglong)(C.malloc(size))
+	slice := unsafe.Slice(ptr, n)
+	for i, v := range chain {
+		slice[i] = C.ulonglong(v)
+	}
+	*outLen = C.int(n)
+	return ptr
+}
+
+//export ClientAuxModuliChain
+func ClientAuxModuliChain(clientH C.uintptr_t, outLen *C.int) *C.ulonglong {
+	client := cgo.Handle(clientH).Value().(*orionclient.Client)
+	chain := client.AuxModuliChain()
+	n := len(chain)
+	if n == 0 {
+		*outLen = 0
+		return nil
+	}
+	size := C.size_t(n) * C.size_t(unsafe.Sizeof(C.ulonglong(0)))
+	ptr := (*C.ulonglong)(C.malloc(size))
+	slice := unsafe.Slice(ptr, n)
+	for i, v := range chain {
+		slice[i] = C.ulonglong(v)
+	}
+	*outLen = C.int(n)
+	return ptr
+}

@@ -283,3 +283,13 @@ func (c *Client) DefaultScale() uint64 {
 func (c *Client) GaloisElement(rotation int) uint64 {
 	return c.ckksParams.GaloisElement(rotation)
 }
+
+// ModuliChain returns the actual Q moduli (NTT-friendly primes) used by the scheme.
+func (c *Client) ModuliChain() []uint64 {
+	return c.ckksParams.Q()
+}
+
+// AuxModuliChain returns the P (auxiliary) moduli used by the scheme.
+func (c *Client) AuxModuliChain() []uint64 {
+	return c.ckksParams.P()
+}
