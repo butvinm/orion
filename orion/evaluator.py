@@ -5,7 +5,6 @@ loads evaluation keys, and runs the forward pass on Ciphertexts.
 Uses the orionclient FFI bridge (handle-based, no global state).
 """
 
-import json
 import types
 
 import numpy as np
@@ -17,21 +16,6 @@ from orion.nn.module import Module
 from orion.nn.linear import LinearTransform
 from orion.nn.operations import Bootstrap
 from orion.backend.orionclient import ffi
-
-
-def _params_json(ckks_params) -> str:
-    """Serialize CKKSParams to JSON for the Go bridge."""
-    d = {
-        "logn": ckks_params.logn,
-        "logq": list(ckks_params.logq),
-        "logp": list(ckks_params.logp),
-        "logscale": ckks_params.logscale,
-        "h": ckks_params.h,
-        "ring_type": ckks_params.ring_type,
-    }
-    if ckks_params.boot_logp is not None:
-        d["boot_logp"] = list(ckks_params.boot_logp)
-    return json.dumps(d)
 
 
 class _EvalContext:
@@ -214,7 +198,7 @@ class Evaluator:
         self.compiled = compiled
         self.ckks_params = compiled.params
 
-        pj = _params_json(compiled.params)
+        pj = compiled.params.to_bridge_json()
 
         # Build the EvalKeyBundle handle from serialized keys
         keys_handle = ffi.new_eval_key_bundle()

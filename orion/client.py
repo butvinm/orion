@@ -4,29 +4,12 @@ Has secret key. Produces EvalKeys for the Evaluator.
 Thin wrapper over orionclient FFI -- one FFI call per method.
 """
 
-import json
-
 import torch
 
 from orion.params import CKKSParams
 from orion.compiled_model import KeyManifest, EvalKeys
 from orion.ciphertext import Ciphertext, PlainText
 from orion.backend.orionclient import ffi
-
-
-def _params_json(params: CKKSParams) -> str:
-    """Serialize CKKSParams to JSON for the Go bridge."""
-    d = {
-        "logn": params.logn,
-        "logq": list(params.logq),
-        "logp": list(params.logp),
-        "logscale": params.logscale,
-        "h": params.h,
-        "ring_type": params.ring_type,
-    }
-    if params.boot_logp is not None:
-        d["boot_logp"] = list(params.boot_logp)
-    return json.dumps(d)
 
 
 class Client:
@@ -48,7 +31,7 @@ class Client:
 
     def __init__(self, params: CKKSParams, secret_key: bytes | None = None):
         self.ckks_params = params
-        self._params_json_str = _params_json(params)
+        self._params_json_str = params.to_bridge_json()
 
         if secret_key is not None:
             self._handle = ffi.new_client_from_secret_key(
@@ -65,13 +48,9 @@ class Client:
     def generate_keys(self, manifest: KeyManifest) -> EvalKeys:
         """Generate all evaluation keys specified by manifest.
 
-        Returns an EvalKeys and stores the Go EvalKeyBundle handle for
-        direct use by the Evaluator.
+        Returns an EvalKeys with serialized key blobs. The Evaluator
+        deserializes these when constructing the Go EvalKeyBundle.
         """
-        manifest_json = json.dumps(manifest.to_dict())
-        self._keys_handle = ffi.client_generate_keys(self._handle, manifest_json)
-
-        # Also build the Python EvalKeys for serialization compatibility
         keys = EvalKeys()
 
         if manifest.needs_rlk:
@@ -180,7 +159,14 @@ class Client:
                 ct_handles.append(ct_h)
             if len(ct_handles) == 1:
                 return Ciphertext(ct_handles[0], shape=plaintext.shape)
-            return Ciphertext(ct_handles[0], shape=plaintext.shape)
+            # Combine single-ct handles into one multi-ct Ciphertext
+            combined_h = ffi.combine_single_ciphertexts(
+                ct_handles, list(plaintext.shape),
+            )
+            # Delete the individual handles (now owned by the combined ct)
+            for h in ct_handles:
+                ffi.delete_handle(h)
+            return Ciphertext(combined_h, shape=plaintext.shape)
         else:
             ct_h = ffi.client_encrypt(self._handle, plaintext.handle)
             return Ciphertext(ct_h, shape=plaintext.shape)

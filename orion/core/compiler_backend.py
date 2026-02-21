@@ -300,7 +300,6 @@ class CompilerBackend:
         """Release the Go client."""
         if self._client_h:
             ffi.client_close(self._client_h)
-            ffi.delete_handle(self._client_h)
             self._client_h = None
 
 

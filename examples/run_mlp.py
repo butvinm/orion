@@ -59,7 +59,7 @@ keys = orion.EvalKeys.from_bytes(keys_bytes)
 net_eval = models.MLP()
 evaluator = orion.Evaluator(net_eval, compiled, keys)
 
-ct_in = orion.CipherText.from_bytes(ct_bytes, evaluator.backend)
+ct_in = orion.Ciphertext.from_bytes(ct_bytes)
 
 print("\nStarting FHE inference", flush=True)
 start = time.time()
@@ -71,7 +71,7 @@ del evaluator
 
 # Client: decrypt
 client = orion.Client(compiled.params, secret_key=sk_bytes)
-ct_result = orion.CipherText.from_bytes(ct_out_bytes, client.backend)
+ct_result = orion.Ciphertext.from_bytes(ct_out_bytes)
 pt_result = client.decrypt(ct_result)
 out_fhe = client.decode(pt_result)
 

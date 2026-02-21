@@ -9,6 +9,7 @@ import ctypes
 import os
 import platform
 import sys
+import threading
 
 # C types
 _uintptr = ctypes.c_size_t  # uintptr_t
@@ -16,7 +17,7 @@ _handle = _uintptr
 _errout = ctypes.POINTER(ctypes.c_char_p)
 
 _lib = None
-_lib_lock = None
+_lib_lock = threading.Lock()
 
 
 def _load_library():
@@ -46,8 +47,11 @@ def _get_lib():
     """Get the shared library, loading it on first access."""
     global _lib
     if _lib is None:
-        _lib = _load_library()
-        _setup_prototypes(_lib)
+        with _lib_lock:
+            if _lib is None:
+                lib = _load_library()
+                _setup_prototypes(lib)
+                _lib = lib
     return _lib
 
 
@@ -235,6 +239,16 @@ def _setup_prototypes(lib):
 
     lib.CiphertextNumCiphertexts.argtypes = [_uintptr]
     lib.CiphertextNumCiphertexts.restype = ctypes.c_int
+
+    try:
+        lib.CombineSingleCiphertexts.argtypes = [
+            ctypes.POINTER(_uintptr), ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int), ctypes.c_int,
+            _errout,
+        ]
+        lib.CombineSingleCiphertexts.restype = _uintptr
+    except AttributeError:
+        pass  # Old library without CombineSingleCiphertexts
 
     # --- Plaintext type ops ---
     lib.PlaintextLevel.argtypes = [_uintptr]
@@ -707,6 +721,21 @@ def ciphertext_shape(h):
 
 def ciphertext_num_ciphertexts(h):
     return int(_get_lib().CiphertextNumCiphertexts(_uintptr(h)))
+
+
+def combine_single_ciphertexts(handles, shape):
+    """Combine multiple single-ct handles into one multi-ct handle."""
+    lib = _get_lib()
+    err = _make_errout()
+    n = len(handles)
+    h_arr = (_uintptr * n)(*[_uintptr(h) for h in handles])
+    nd = len(shape)
+    s_arr = (ctypes.c_int * nd)(*shape)
+    r = lib.CombineSingleCiphertexts(
+        h_arr, ctypes.c_int(n), s_arr, ctypes.c_int(nd), ctypes.byref(err),
+    )
+    _check_err(err)
+    return r
 
 
 # --- Plaintext type ops ---

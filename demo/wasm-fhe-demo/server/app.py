@@ -181,7 +181,7 @@ async def infer(request: Request):
 
     evaluator: orion.Evaluator = session["evaluator"]
     try:
-        ct_in = orion.CipherText.from_bytes(body, evaluator.backend)
+        ct_in = orion.Ciphertext.from_bytes(body)
         async with _backend_lock:
             ct_out = await asyncio.to_thread(evaluator.run, ct_in)
     except Exception:

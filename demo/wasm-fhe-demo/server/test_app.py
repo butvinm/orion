@@ -18,13 +18,13 @@ from httpx import ASGITransport, AsyncClient
 MODEL_PATH = Path(__file__).resolve().parent.parent / "model.bin"
 
 # Check if Go backend shared library is available
-_LATTIGO_DIR = Path(__file__).resolve().parent.parent.parent.parent / "orion" / "backend" / "lattigo"
+_ORIONCLIENT_DIR = Path(__file__).resolve().parent.parent.parent.parent / "orion" / "backend" / "orionclient"
 _LIB_NAMES = {
-    "Linux": "lattigo-linux.so",
-    "Darwin": "lattigo-mac-arm64.dylib" if platform.machine().lower() in ("arm64", "aarch64") else "lattigo-mac.dylib",
-    "Windows": "lattigo-windows.dll",
+    "Linux": "orionclient-linux.so",
+    "Darwin": "orionclient-mac-arm64.dylib" if platform.machine().lower() in ("arm64", "aarch64") else "orionclient-mac.dylib",
+    "Windows": "orionclient-windows.dll",
 }
-GO_BACKEND_AVAILABLE = (_LATTIGO_DIR / _LIB_NAMES.get(platform.system(), "")).exists()
+GO_BACKEND_AVAILABLE = (_ORIONCLIENT_DIR / _LIB_NAMES.get(platform.system(), "")).exists()
 
 pytestmark = pytest.mark.skipif(
     not MODEL_PATH.exists(),
@@ -295,7 +295,7 @@ async def test_integration_full_flow(client):
 
     # 12. Create new client with saved secret key to decrypt
     orion_client2 = orion.Client(compiled.params, secret_key=sk_bytes)
-    ct_result = orion.CipherText.from_bytes(result_bytes, orion_client2.backend)
+    ct_result = orion.Ciphertext.from_bytes(result_bytes)
     pt_result = orion_client2.decrypt(ct_result)
     result = orion_client2.decode(pt_result)
 

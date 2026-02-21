@@ -5,6 +5,7 @@ CompilerConfig holds compilation settings.
 Both are frozen (immutable) and validated at construction.
 """
 
+import json
 from dataclasses import dataclass
 from typing import Literal
 
@@ -71,6 +72,20 @@ class CKKSParams:
     def ring_degree(self) -> int:
         """Ring degree N = 2^logn."""
         return 1 << self.logn
+
+    def to_bridge_json(self) -> str:
+        """Serialize to JSON for the Go bridge."""
+        d = {
+            "logn": self.logn,
+            "logq": list(self.logq),
+            "logp": list(self.logp),
+            "logscale": self.logscale,
+            "h": self.h,
+            "ring_type": self.ring_type,
+        }
+        if self.boot_logp is not None:
+            d["boot_logp"] = list(self.boot_logp)
+        return json.dumps(d)
 
 
 @dataclass(frozen=True)

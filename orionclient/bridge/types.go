@@ -84,6 +84,27 @@ func CiphertextNumCiphertexts(ctH C.uintptr_t) C.int {
 	return C.int(ct.NumCiphertexts())
 }
 
+// CombineSingleCiphertexts takes N single-ct Ciphertext handles and combines
+// them into one multi-ct Ciphertext. The input handles are NOT deleted.
+//
+//export CombineSingleCiphertexts
+func CombineSingleCiphertexts(handles *C.uintptr_t, numHandles C.int, shapeDims *C.int, numDims C.int, errOut **C.char) C.uintptr_t {
+	n := int(numHandles)
+	if n == 0 {
+		setErr(errOut, "no ciphertext handles provided")
+		return 0
+	}
+	hSlice := unsafe.Slice(handles, n)
+	cts := make([]*orionclient.Ciphertext, n)
+	for i := range cts {
+		cts[i] = cgo.Handle(hSlice[i]).Value().(*orionclient.Ciphertext)
+	}
+
+	shape := cIntsToGoInts(shapeDims, numDims)
+	combined := orionclient.CombineCiphertexts(cts, shape)
+	return C.uintptr_t(cgo.NewHandle(combined))
+}
+
 // =========================================================================
 // Plaintext type operations
 // =========================================================================

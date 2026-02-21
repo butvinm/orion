@@ -63,8 +63,10 @@ func NewClientFromSecretKey(paramsJSON *C.char, skData *C.char, skLen C.ulong, e
 
 //export ClientClose
 func ClientClose(clientH C.uintptr_t) {
-	client := cgo.Handle(clientH).Value().(*orionclient.Client)
+	h := cgo.Handle(clientH)
+	client := h.Value().(*orionclient.Client)
 	client.Close()
+	h.Delete()
 }
 
 //export ClientSecretKey

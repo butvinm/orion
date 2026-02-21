@@ -91,8 +91,8 @@ The server loads a pre-compiled model (`model.bin`) and evaluation keys uploaded
 ```
 demo/wasm-fhe-demo/
 ├── wasm/                        # Go source for WASM crypto module
-│   ├── crypto.go                # CKKS operations (testable without WASM)
-│   ├── bindings_js.go           # syscall/js wrappers (WASM-only)
+│   ├── bindings_js.go           # syscall/js wrappers (wraps orionclient.Client)
+│   ├── stub.go                  # Non-WASM stub for go test
 │   ├── crypto_test.go           # Go tests (run with: go test ./...)
 │   ├── go.mod / go.sum
 │   └── Makefile
@@ -130,7 +130,7 @@ pytest test_app.py -v
 ## Known Limitations
 
 - **WASM binary size**: The Lattigo WASM binary is ~15–30 MB uncompressed. The server serves it with gzip compression (~5–10 MB transfer).
-- **Single-tenant**: The Go backend uses process-global state, so only one client session can be active at a time. Use the "Reset" button between sessions.
+- **Single-tenant**: The demo server uses a single session dictionary, so only one client session can be active at a time. The underlying Go backend (`orionclient`) supports multiple concurrent instances, but this demo is deliberately single-tenant for simplicity. Use the "Reset" button between sessions.
 - **Key generation time**: Generating all evaluation keys in WASM takes 30–120 seconds depending on the browser and hardware.
 - **Memory usage**: Lattigo is memory-intensive. The browser tab may use 500 MB–1 GB during key generation and inference.
 - **Browser compatibility**: Tested with Chrome and Firefox. Safari support for Go WASM may vary.

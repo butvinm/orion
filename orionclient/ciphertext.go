@@ -27,6 +27,15 @@ func (c *Ciphertext) Raw() []*rlwe.Ciphertext {
 	return c.cts
 }
 
+// CombineCiphertexts merges multiple single-ct Ciphertexts into one multi-ct Ciphertext.
+func CombineCiphertexts(cts []*Ciphertext, shape []int) *Ciphertext {
+	var all []*rlwe.Ciphertext
+	for _, ct := range cts {
+		all = append(all, ct.cts...)
+	}
+	return &Ciphertext{cts: all, shape: shape}
+}
+
 // NumCiphertexts returns the number of underlying ciphertexts.
 func (c *Ciphertext) NumCiphertexts() int {
 	return len(c.cts)

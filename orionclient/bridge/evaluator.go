@@ -31,8 +31,10 @@ func NewEvaluator(paramsJSON *C.char, keysH C.uintptr_t, errOut **C.char) C.uint
 
 //export EvaluatorClose
 func EvaluatorClose(evalH C.uintptr_t) {
-	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
+	h := cgo.Handle(evalH)
+	eval := h.Value().(*orionclient.Evaluator)
 	eval.Close()
+	h.Delete()
 }
 
 //export EvalEncode
