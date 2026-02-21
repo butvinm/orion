@@ -102,11 +102,11 @@ orionclient/
 
 ### Tasks
 
-- [ ] `evaluator.go`: `NewEvaluator(p Params, keys EvalKeyBundle) (*Evaluator, error)`. Methods: `Close`, `Encode`, `Add`, `Sub`, `Mul`, `AddPlaintext`, `SubPlaintext`, `MulPlaintext`, `AddScalar`, `MulScalar`, `Negate`, `Rotate`, `Rescale`, `Bootstrap`. All take/return `*Ciphertext`.
-- [ ] `lineartransform.go`: `LoadLinearTransform(blob []byte) (*LinearTransform, error)` for loading pre-compiled LTs from `CompiledModel` blobs. `GenerateLinearTransform(...)` for compile-time generation. `EvalLinearTransform(ct, lt)`. `(*LinearTransform).Marshal()`/`UnmarshalLinearTransform()`. `RequiredGaloisElements()`
-- [ ] `polynomial.go`: `Polynomial` type, `GenerateMonomial`, `GenerateChebyshev`, `EvalPoly`
-- [ ] `bootstrapper.go`: per-slot-count bootstrap evaluators, integrated into `Evaluator.Bootstrap()`
-- [ ] `evaluator_test.go`: key loading, LT load from blob, arithmetic round-trips, polynomial eval, linear transform
+- [x] `evaluator.go`: `NewEvaluator(p Params, keys EvalKeyBundle) (*Evaluator, error)`. Methods: `Close`, `Encode`, `Add`, `Sub`, `Mul`, `AddPlaintext`, `SubPlaintext`, `MulPlaintext`, `AddScalar`, `MulScalar`, `Negate`, `Rotate`, `Rescale`, `Bootstrap`. All take/return `*Ciphertext`.
+- [x] `lineartransform.go`: `LoadLinearTransform(blob []byte) (*LinearTransform, error)` for loading pre-compiled LTs from `CompiledModel` blobs. `GenerateLinearTransform(...)` for compile-time generation. `EvalLinearTransform(ct, lt)`. `(*LinearTransform).Marshal()`/`UnmarshalLinearTransform()`. `RequiredGaloisElements()`
+- [x] `polynomial.go`: `Polynomial` type, `GenerateMonomial`, `GenerateChebyshev`, `EvalPoly`
+- [x] `bootstrapper.go`: per-slot-count bootstrap evaluators, integrated into `Evaluator.Bootstrap()`
+- [x] `evaluator_test.go`: key loading, LT load from blob, arithmetic round-trips, polynomial eval, linear transform
 
 ## Phase 3: FFI Bridge
 
