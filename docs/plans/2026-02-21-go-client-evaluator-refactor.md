@@ -136,11 +136,11 @@ func DeleteHandle(h C.uintptr_t) { cgo.Handle(h).Delete() }
 
 ### Tasks
 
-- [ ] `bridge/client.go`: `NewClient`, `ClientEncode`, `ClientEncrypt`, `ClientDecrypt`, `ClientDecode → float64[]`, `ClientGenerateRLK → bytes`, etc. `ClientEncrypt` returns a `cgo.Handle` to `*Ciphertext` (not bytes). All with `errOut **C.char`.
-- [ ] `bridge/evaluator.go`: `NewEvaluator`, `EvalAdd`, `EvalRotate`, `EvalLoadLinearTransform`, etc. All ciphertext args and returns are `cgo.Handle`s to the same `*orionclient.Ciphertext` type.
-- [ ] `bridge/types.go`: `CiphertextMarshal(ctH) → bytes`, `CiphertextUnmarshal(bytes) → uintptr_t`, `CiphertextLevel(ctH) → int`, `CiphertextScale(ctH) → uint64`, etc.
-- [ ] `bridge/main.go`: CGO entry point, `DeleteHandle`, `FreeCArray`.
-- [ ] Build shared library, verify on Linux/macOS.
+- [x] `bridge/client.go`: `NewClient`, `ClientEncode`, `ClientEncrypt`, `ClientDecrypt`, `ClientDecode → float64[]`, `ClientGenerateRLK → bytes`, etc. `ClientEncrypt` returns a `cgo.Handle` to `*Ciphertext` (not bytes). All with `errOut **C.char`.
+- [x] `bridge/evaluator.go`: `NewEvaluator`, `EvalAdd`, `EvalRotate`, `EvalLoadLinearTransform`, etc. All ciphertext args and returns are `cgo.Handle`s to the same `*orionclient.Ciphertext` type.
+- [x] `bridge/types.go`: `CiphertextMarshal(ctH) → bytes`, `CiphertextUnmarshal(bytes) → uintptr_t`, `CiphertextLevel(ctH) → int`, `CiphertextScale(ctH) → uint64`, etc.
+- [x] `bridge/main.go`: CGO entry point, `DeleteHandle`, `FreeCArray`.
+- [x] Build shared library, verify on Linux/macOS.
 
 ## Phase 4: Python Wrapper Migration
 
