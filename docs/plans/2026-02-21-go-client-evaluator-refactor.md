@@ -173,10 +173,10 @@ demo/wasm-fhe-demo/wasm/
 
 ### Tasks
 
-- [ ] Update `wasm/go.mod`: add `require` + `replace` for `orionclient`.
-- [ ] Rewrite `wasm/bindings_js.go`: wrap `orionclient.Client` methods. Keep `plaintextStore` here (JS can't hold Go pointers).
-- [ ] Delete `wasm/crypto.go` (replaced by `orionclient` import).
-- [ ] Verify WASM builds, Go tests, browser test.
+- [x] Update `wasm/go.mod`: add `require` + `replace` for `orionclient`.
+- [x] Rewrite `wasm/bindings_js.go`: wrap `orionclient.Client` methods. Keep `plaintextStore` here (JS can't hold Go pointers).
+- [x] Delete `wasm/crypto.go` (replaced by `orionclient` import).
+- [x] Verify WASM builds, Go tests, browser test.
 
 ## Phase 6: Cleanup
 
