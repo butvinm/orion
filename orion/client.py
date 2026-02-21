@@ -1,104 +1,32 @@
 """Client: key generation, encode/decode, encrypt/decrypt.
 
 Has secret key. Produces EvalKeys for the Evaluator.
+Thin wrapper over orionclient FFI -- one FFI call per method.
 """
 
-import numpy as np
+import json
+
 import torch
 
 from orion.params import CKKSParams
 from orion.compiled_model import KeyManifest, EvalKeys
-from orion.backend.lattigo import bindings as lgo
-from orion.backend.python import parameters, key_generator, encoder, encryptor
+from orion.ciphertext import Ciphertext, PlainText
+from orion.backend.orionclient import ffi
 
 
-class PlainText:
-    """Wrapper around backend plaintext IDs.
-
-    Local-only -- no cross-process serialization.
-    """
-
-    def __init__(self, ptxt_ids, shape, backend, encoder_ref):
-        self.ids = [ptxt_ids] if isinstance(ptxt_ids, int) else ptxt_ids
-        self.shape = shape
-        self._backend = backend
-        self._encoder = encoder_ref
-
-    def decode(self, client):
-        """Decode this plaintext via the client's encoder."""
-        return client.decode(self)
-
-    def __len__(self):
-        return len(self.ids)
-
-
-class CipherText:
-    """Wrapper around backend ciphertext IDs with serialization support.
-
-    Supports to_bytes()/from_bytes() for cross-process transfer.
-    """
-
-    def __init__(self, ctxt_ids, shape, backend):
-        self.ids = [ctxt_ids] if isinstance(ctxt_ids, int) else ctxt_ids
-        self.shape = shape
-        self._backend = backend
-
-    def to_bytes(self) -> bytes:
-        """Serialize all ciphertext slots into a single bytes blob.
-
-        Format: [4 bytes num_cts] + for each ct: [4 bytes shape_len] + shape +
-                [8 bytes ct_len] + ct_data
-        """
-        import struct
-
-        parts = [struct.pack("<I", len(self.ids))]
-        # Store shape
-        shape_list = list(self.shape)
-        parts.append(struct.pack("<I", len(shape_list)))
-        for dim in shape_list:
-            parts.append(struct.pack("<i", dim))
-
-        for ctxt_id in self.ids:
-            ct_data, ptr = self._backend.SerializeCiphertext(ctxt_id)
-            ct_bytes = bytes(ct_data)
-            self._backend.FreeCArray(ptr)
-            parts.append(struct.pack("<Q", len(ct_bytes)))
-            parts.append(ct_bytes)
-
-        return b"".join(parts)
-
-    @classmethod
-    def from_bytes(cls, data: bytes, backend) -> "CipherText":
-        """Deserialize ciphertexts from bytes. Backend must have same params."""
-        import struct
-
-        offset = 0
-        (num_cts,) = struct.unpack_from("<I", data, offset)
-        offset += 4
-
-        (shape_len,) = struct.unpack_from("<I", data, offset)
-        offset += 4
-        shape_dims = []
-        for _ in range(shape_len):
-            (dim,) = struct.unpack_from("<i", data, offset)
-            offset += 4
-            shape_dims.append(dim)
-        shape = torch.Size(shape_dims)
-
-        ctxt_ids = []
-        for _ in range(num_cts):
-            (ct_len,) = struct.unpack_from("<Q", data, offset)
-            offset += 8
-            ct_bytes = data[offset : offset + ct_len]
-            offset += ct_len
-            ct_arr = np.frombuffer(ct_bytes, dtype=np.uint8)
-            ctxt_id = backend.LoadCiphertext(ct_arr)
-            ctxt_ids.append(ctxt_id)
-
-        return cls(ctxt_ids, shape, backend)
-
-    def __len__(self):
-        return len(self.ids)
+def _params_json(params: CKKSParams) -> str:
+    """Serialize CKKSParams to JSON for the Go bridge."""
+    d = {
+        "logn": params.logn,
+        "logq": list(params.logq),
+        "logp": list(params.logp),
+        "logscale": params.logscale,
+        "h": params.h,
+        "ring_type": params.ring_type,
+    }
+    if params.boot_logp is not None:
+        d["boot_logp"] = list(params.boot_logp)
+    return json.dumps(d)
 
 
 class Client:
@@ -112,9 +40,7 @@ class Client:
         ...
         result = client.decode(client.decrypt(ct_result))
 
-    To recreate a Client with the same secret key (required when the Go
-    backend singleton was destroyed between encrypt and decrypt):
-
+    To recreate a Client with the same secret key:
         sk_bytes = client.secret_key
         ...
         client2 = Client(params, secret_key=sk_bytes)
@@ -122,62 +48,78 @@ class Client:
 
     def __init__(self, params: CKKSParams, secret_key: bytes | None = None):
         self.ckks_params = params
-        self.params = parameters.NewParameters.from_ckks_params(params)
-
-        # Initialize Go backend
-        self.backend = lgo.LattigoLibrary()
-        self.backend.setup_bindings(self.params)
+        self._params_json_str = _params_json(params)
 
         if secret_key is not None:
-            # Restore from serialized secret key
-            self.backend.NewKeyGenerator()
-            sk_arr = np.frombuffer(secret_key, dtype=np.uint8)
-            self.backend.LoadSecretKey(sk_arr)
-            self.backend.GeneratePublicKey()
-            self.backend.GenerateRelinearizationKey()
-            self.backend.GenerateEvaluationKeys()
+            self._handle = ffi.new_client_from_secret_key(
+                self._params_json_str, secret_key,
+            )
         else:
-            # Full key generation (generates new SK)
-            self._keygen = key_generator.NewKeyGenerator(self)
-
-        self._encoder = encoder.NewEncoder(self)
-        self._encryptor = encryptor.NewEncryptor(self)
+            self._handle = ffi.new_client(self._params_json_str)
 
     @property
     def secret_key(self) -> bytes:
         """Serialize the secret key for later restoration."""
-        sk_data, ptr = self.backend.SerializeSecretKey()
-        sk_bytes = bytes(sk_data)
-        self.backend.FreeCArray(ptr)
-        return sk_bytes
+        return ffi.client_secret_key(self._handle)
 
     def generate_keys(self, manifest: KeyManifest) -> EvalKeys:
-        """Generate and serialize all evaluation keys specified by manifest."""
+        """Generate all evaluation keys specified by manifest.
+
+        Returns an EvalKeys and stores the Go EvalKeyBundle handle for
+        direct use by the Evaluator.
+        """
+        manifest_json = json.dumps(manifest.to_dict())
+        self._keys_handle = ffi.client_generate_keys(self._handle, manifest_json)
+
+        # Also build the Python EvalKeys for serialization compatibility
         keys = EvalKeys()
 
-        # RLK
         if manifest.needs_rlk:
-            rlk_data, ptr = self.backend.SerializeRelinKey()
-            keys.rlk_data = bytes(rlk_data)
-            self.backend.FreeCArray(ptr)
-
-        # Galois (rotation) keys
-        for gal_el in sorted(manifest.galois_elements):
-            key_data, ptr = self.backend.GenerateAndSerializeRotationKey(
-                gal_el
+            out_len = ffi.ctypes.c_ulong(0)
+            err = ffi._make_errout()
+            lib = ffi._get_lib()
+            ptr = lib.ClientGenerateRLK(
+                ffi._uintptr(self._handle),
+                ffi.ctypes.byref(out_len),
+                ffi.ctypes.byref(err),
             )
-            keys.galois_keys[gal_el] = bytes(key_data)
-            self.backend.FreeCArray(ptr)
+            ffi._check_err(err)
+            keys.rlk_data = ffi.ctypes.string_at(ptr, out_len.value)
+            lib.FreeCArray(ptr)
 
-        # Bootstrap keys
+        for gal_el in sorted(manifest.galois_elements):
+            out_len = ffi.ctypes.c_ulong(0)
+            err = ffi._make_errout()
+            lib = ffi._get_lib()
+            ptr = lib.ClientGenerateGaloisKey(
+                ffi._uintptr(self._handle),
+                ffi.ctypes.c_ulonglong(gal_el),
+                ffi.ctypes.byref(out_len),
+                ffi.ctypes.byref(err),
+            )
+            ffi._check_err(err)
+            keys.galois_keys[gal_el] = ffi.ctypes.string_at(ptr, out_len.value)
+            lib.FreeCArray(ptr)
+
         if manifest.bootstrap_slots:
             logp = list(manifest.boot_logp)
             for slot_count in manifest.bootstrap_slots:
-                key_data, ptr = self.backend.SerializeBootstrapKeys(
-                    slot_count, logp
+                out_len = ffi.ctypes.c_ulong(0)
+                err = ffi._make_errout()
+                lib = ffi._get_lib()
+                logp_arr = (ffi.ctypes.c_int * len(logp))(*logp)
+                ptr = lib.ClientGenerateBootstrapKeys(
+                    ffi._uintptr(self._handle),
+                    ffi.ctypes.c_int(slot_count),
+                    logp_arr, ffi.ctypes.c_int(len(logp)),
+                    ffi.ctypes.byref(out_len),
+                    ffi.ctypes.byref(err),
                 )
-                keys.bootstrap_keys[slot_count] = bytes(key_data)
-                self.backend.FreeCArray(ptr)
+                ffi._check_err(err)
+                keys.bootstrap_keys[slot_count] = ffi.ctypes.string_at(
+                    ptr, out_len.value
+                )
+                lib.FreeCArray(ptr)
 
         return keys
 
@@ -192,57 +134,98 @@ class Client:
             )
 
         if level is None:
-            level = self.params.get_max_level()
+            level = self.ckks_params.max_level
         if scale is None:
-            scale = self.params.get_default_scale()
+            scale = ffi.client_default_scale(self._handle)
 
-        num_slots = self.params.get_slots()
+        max_slots = ffi.client_max_slots(self._handle)
         num_elements = tensor.numel()
 
         tensor = tensor.cpu()
-        pad_length = (-num_elements) % num_slots
-        vector = torch.zeros(num_elements + pad_length)
-        vector[:num_elements] = tensor.flatten()
-        num_plaintexts = len(vector) // num_slots
+        pad_length = (-num_elements) % max_slots
+        vector = torch.zeros(num_elements + pad_length, dtype=torch.float64)
+        vector[:num_elements] = tensor.flatten().to(torch.float64)
+        num_plaintexts = len(vector) // max_slots
 
-        ptxt_ids = []
+        pt_handles = []
         for i in range(num_plaintexts):
-            to_encode = vector[i * num_slots : (i + 1) * num_slots].tolist()
-            ptxt_id = self.backend.Encode(to_encode, level, scale)
-            ptxt_ids.append(ptxt_id)
+            chunk = vector[i * max_slots : (i + 1) * max_slots].tolist()
+            pt_h = ffi.client_encode(self._handle, chunk, level, scale)
+            pt_handles.append(pt_h)
 
-        return PlainText(ptxt_ids, tensor.shape, self.backend, self._encoder)
+        if len(pt_handles) == 1:
+            return PlainText(pt_handles[0], shape=tensor.shape)
+
+        return _MultiPlainText(pt_handles, tensor.shape)
 
     def decode(self, plaintext):
         """Decode a PlainText back to a tensor."""
-        values = []
-        for ptxt_id in plaintext.ids:
-            values.extend(self.backend.Decode(ptxt_id))
+        if isinstance(plaintext, _MultiPlainText):
+            values = []
+            for pt_h in plaintext.handles:
+                vals = ffi.client_decode(self._handle, pt_h)
+                values.extend(vals)
+        else:
+            values = ffi.client_decode(self._handle, plaintext.handle)
 
         values = torch.tensor(values)[: plaintext.shape.numel()]
         return values.reshape(plaintext.shape)
 
     def encrypt(self, plaintext):
-        """Encrypt a PlainText into a CipherText."""
-        ctxt_ids = []
-        for ptxt_id in plaintext.ids:
-            ctxt_id = self.backend.Encrypt(ptxt_id)
-            ctxt_ids.append(ctxt_id)
-
-        return CipherText(ctxt_ids, plaintext.shape, self.backend)
+        """Encrypt a PlainText into a Ciphertext."""
+        if isinstance(plaintext, _MultiPlainText):
+            ct_handles = []
+            for pt_h in plaintext.handles:
+                ct_h = ffi.client_encrypt(self._handle, pt_h)
+                ct_handles.append(ct_h)
+            if len(ct_handles) == 1:
+                return Ciphertext(ct_handles[0], shape=plaintext.shape)
+            return Ciphertext(ct_handles[0], shape=plaintext.shape)
+        else:
+            ct_h = ffi.client_encrypt(self._handle, plaintext.handle)
+            return Ciphertext(ct_h, shape=plaintext.shape)
 
     def decrypt(self, ciphertext):
-        """Decrypt a CipherText into a PlainText."""
-        ptxt_ids = []
-        for ctxt_id in ciphertext.ids:
-            ptxt_id = self.backend.Decrypt(ctxt_id)
-            ptxt_ids.append(ptxt_id)
+        """Decrypt a Ciphertext into a PlainText."""
+        pt_handles = ffi.client_decrypt(self._handle, ciphertext.handle)
+        if len(pt_handles) == 1:
+            return PlainText(pt_handles[0], shape=ciphertext.shape)
+        return _MultiPlainText(pt_handles, ciphertext.shape)
 
-        return PlainText(ptxt_ids, ciphertext.shape, self.backend, self._encoder)
+    def close(self):
+        if hasattr(self, "_handle") and self._handle:
+            ffi.client_close(self._handle)
+            self._handle = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
-        if hasattr(self, "backend") and self.backend:
-            try:
-                self.backend.DeleteScheme()
-            except Exception:
-                pass
+        self.close()
+
+
+class _MultiPlainText:
+    """Internal helper for multi-slot plaintext (multiple Go handles)."""
+
+    def __init__(self, handles, shape):
+        self.handles = handles
+        self._shape = torch.Size(shape)
+
+    @property
+    def shape(self):
+        return self._shape
+
+    def __len__(self):
+        return len(self.handles)
+
+    def __del__(self):
+        import sys as _sys
+        if "_sys" in dir() and _sys.modules:
+            for h in self.handles:
+                try:
+                    ffi.delete_handle(h)
+                except Exception:
+                    pass

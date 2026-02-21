@@ -1,7 +1,5 @@
 import numpy as np
 
-from orion.backend.python.tensors import CipherTensor
-
 
 class TransformEncoder:
     """Compile-time only. Encodes diagonals into LinearTransform objects,
@@ -52,6 +50,8 @@ class TransformEvaluator:
         self.backend.NewLinearTransformEvaluator()
 
     def evaluate_transforms(self, linear_layer, in_ctensor):
+        from orion.backend.python.tensors import CipherTensor
+
         out_shape = linear_layer.output_shape
         fhe_out_shape = linear_layer.fhe_output_shape
 

@@ -1,6 +1,18 @@
+"""Tests for auxiliary moduli chain from the old Lattigo backend.
+
+Skipped: old Lattigo backend cannot coexist with orionclient library.
+Will be removed in Phase 6.
+"""
+
 import gc
 
-from orion import CKKSParams, Client
+import pytest
+
+from orion import CKKSParams
+from orion.backend.lattigo import bindings as lgo
+from orion.backend.python import parameters
+
+pytestmark = pytest.mark.skip(reason="old backend tests, removed in Phase 6")
 
 
 def test_aux_moduli_chain():
@@ -17,10 +29,12 @@ def test_aux_moduli_chain():
         ring_type="standard",
     )
 
-    client = Client(params)
+    new_params = parameters.NewParameters.from_ckks_params(params)
+    backend = lgo.LattigoLibrary()
+    backend.setup_bindings(new_params)
 
     try:
-        aux_moduli = client.backend.GetAuxModuliChain()
+        aux_moduli = backend.GetAuxModuliChain()
 
         expected_count = len(params.logp)
         assert len(aux_moduli) == expected_count, (
@@ -35,5 +49,4 @@ def test_aux_moduli_chain():
             )
 
     finally:
-        del client
         gc.collect()

@@ -1,5 +1,35 @@
+import sys
+
 import torch
-from .tensors import PlainTensor
+
+
+class PlainTensor:
+    """Compile-time plaintext wrapper for the old ID-based backend.
+
+    Moved from tensors.py. Only used by the compiler's encoder at compile time;
+    inference uses orion.ciphertext.PlainText instead.
+    """
+
+    def __init__(self, context, ptxt_ids, shape, on_shape=None):
+        self.context = context
+        self.backend = context.backend
+        self.encoder = context.encoder
+        self.evaluator = getattr(context, "evaluator", None)
+        self.ids = [ptxt_ids] if isinstance(ptxt_ids, int) else ptxt_ids
+        self.shape = shape
+        self.on_shape = on_shape or shape
+
+    def __del__(self):
+        if "sys" in globals() and sys.modules and self.context:
+            try:
+                for idx in self.ids:
+                    self.backend.DeletePlaintext(idx)
+            except Exception:
+                pass
+
+    def __len__(self):
+        return len(self.ids)
+
 
 class NewEncoder:
     def __init__(self, context):

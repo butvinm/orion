@@ -1,8 +1,6 @@
 import torch
 import numpy as np
 
-from .tensors import CipherTensor
-
 
 class PolynomialGenerator:
     """Compile-time polynomial generation. No Go PolyEvaluator needed.
@@ -64,6 +62,8 @@ class PolynomialEvaluator(PolynomialGenerator):
         self.backend.NewPolynomialEvaluator()
 
     def evaluate_polynomial(self, ciphertensor, poly, out_scale=None):
+        from orion.backend.python.tensors import CipherTensor
+
         if out_scale is None:
             if self.params is not None:
                 out_scale = self.params.get_default_scale()

@@ -6,6 +6,7 @@ import "C"
 
 import (
 	"runtime/cgo"
+	"unsafe"
 
 	orionclient "github.com/baahl-nyu/orion/orionclient"
 )
@@ -264,4 +265,29 @@ func EvalMaxSlots(evalH C.uintptr_t) C.int {
 func EvalGaloisElement(evalH C.uintptr_t, rotation C.int) C.ulonglong {
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	return C.ulonglong(eval.GaloisElement(int(rotation)))
+}
+
+//export EvalModuliChain
+func EvalModuliChain(evalH C.uintptr_t, outLen *C.int) *C.ulonglong {
+	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
+	chain := eval.ModuliChain()
+	n := len(chain)
+	if n == 0 {
+		*outLen = 0
+		return nil
+	}
+	size := C.size_t(n) * C.size_t(unsafe.Sizeof(C.ulonglong(0)))
+	ptr := (*C.ulonglong)(C.malloc(size))
+	slice := unsafe.Slice(ptr, n)
+	for i, v := range chain {
+		slice[i] = C.ulonglong(v)
+	}
+	*outLen = C.int(n)
+	return ptr
+}
+
+//export EvalDefaultScale
+func EvalDefaultScale(evalH C.uintptr_t) C.ulonglong {
+	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
+	return C.ulonglong(eval.DefaultScale())
 }

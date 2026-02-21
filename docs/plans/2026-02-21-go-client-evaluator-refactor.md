@@ -148,17 +148,17 @@ Replace `backend/python/` and rewrite `client.py`/`evaluator.py` as thin FFI wra
 
 ### Tasks
 
-- [ ] `orion/backend/orionclient_ffi.py`: ctypes bindings for the new bridge. Checks `errOut` after every call, raises `RuntimeError` if non-NULL. Replaces `backend/lattigo/bindings.py`.
-- [ ] Rewrite `orion/client.py`: single FFI call per method, `PlainText` wraps handle, context manager. `Ciphertext` is the unified type (see below).
-- [ ] Create unified `orion/ciphertext.py`: single `Ciphertext` class wrapping a `cgo.Handle`. Replaces both `CipherText` (from `client.py`) and `CipherTensor` (from `backend/python/tensors.py`).
+- [x] `orion/backend/orionclient_ffi.py`: ctypes bindings for the new bridge. Checks `errOut` after every call, raises `RuntimeError` if non-NULL. Replaces `backend/lattigo/bindings.py`.
+- [x] Rewrite `orion/client.py`: single FFI call per method, `PlainText` wraps handle, context manager. `Ciphertext` is the unified type (see below).
+- [x] Create unified `orion/ciphertext.py`: single `Ciphertext` class wrapping a `cgo.Handle`. Replaces both `CipherText` (from `client.py`) and `CipherTensor` (from `backend/python/tensors.py`).
   - Transport: `to_bytes()` → calls `CiphertextMarshal`, `from_bytes()` → calls `CiphertextUnmarshal`
   - Metadata: `level()`, `scale()`, `set_scale()`, `slots()`, `degree()`, `shape`
   - Arithmetic (delegated to evaluator handle): `add`, `sub`, `mul`, `__neg__`, `roll`, `bootstrap`. These require an evaluator reference, set when entering evaluation scope.
   - Lifecycle: `__del__` calls `DeleteHandle`
-- [ ] Rewrite `orion/evaluator.py`: `NewEvaluator` FFI with key bundle. Module reconstruction extracts LT blobs from `CompiledModel`, calls `EvalLoadLinearTransform` per blob. `evaluator.run(ct)` passes the handle directly — no conversion between types. Context manager.
-- [ ] Update `orion/nn/` modules: context collapses from 5 objects (`evaluator`, `lt_evaluator`, `poly_evaluator`, `bootstrapper`, `encoder`) to one evaluator handle. Modules receive and return `Ciphertext` (the unified type). Affected: `activation.py`, `linear.py`, `normalization.py`, `operations.py`.
-- [ ] Delete `orion/backend/python/tensors.py` (CipherTensor/PlainTensor no longer needed).
-- [ ] Full test suite passes (`pytest tests/`).
+- [x] Rewrite `orion/evaluator.py`: `NewEvaluator` FFI with key bundle. Module reconstruction extracts LT blobs from `CompiledModel`, calls `EvalLoadLinearTransform` per blob. `evaluator.run(ct)` passes the handle directly — no conversion between types. Context manager.
+- [x] Update `orion/nn/` modules: context collapses from 5 objects (`evaluator`, `lt_evaluator`, `poly_evaluator`, `bootstrapper`, `encoder`) to one evaluator handle. Modules receive and return `Ciphertext` (the unified type). Affected: `activation.py`, `linear.py`, `normalization.py`, `operations.py`.
+- [x] Delete `orion/backend/python/tensors.py` (CipherTensor/PlainTensor no longer needed).
+- [x] Full test suite passes (`pytest tests/`).
 
 ## Phase 5: WASM Migration
 

@@ -14,7 +14,8 @@ import torch
 from orion.params import CKKSParams
 from orion.compiled_model import CompiledModel, EvalKeys
 from orion.compiler import Compiler
-from orion.client import Client, CipherText
+from orion.client import Client
+from orion.ciphertext import Ciphertext as CipherText
 from orion.evaluator import Evaluator
 import orion.nn as on
 
@@ -138,7 +139,7 @@ def test_sigmoid_full_roundtrip():
     keys = EvalKeys.from_bytes(keys_bytes)
     net_eval = SigmoidMLP()
     evaluator = Evaluator(net_eval, compiled, keys)
-    ct_in = CipherText.from_bytes(ct_bytes, evaluator.backend)
+    ct_in = CipherText.from_bytes(ct_bytes)
     ct_out = evaluator.run(ct_in)
     ct_out_bytes = ct_out.to_bytes()
     del evaluator
@@ -146,7 +147,7 @@ def test_sigmoid_full_roundtrip():
 
     # Client: decrypt
     client = Client(compiled.params, secret_key=sk_bytes)
-    ct_result = CipherText.from_bytes(ct_out_bytes, client.backend)
+    ct_result = CipherText.from_bytes(ct_out_bytes)
     pt_result = client.decrypt(ct_result)
     out_fhe = client.decode(pt_result)
 

@@ -8,7 +8,8 @@ import pytest
 from orion.params import CKKSParams, CompilerConfig
 from orion.compiled_model import CompiledModel, KeyManifest, EvalKeys
 from orion.compiler import Compiler
-from orion.client import Client, PlainText, CipherText
+from orion.client import Client
+from orion.ciphertext import Ciphertext, PlainText
 from orion.evaluator import Evaluator
 import orion.nn as on
 
@@ -123,7 +124,6 @@ class TestClient:
         inp = torch.randn(1, 784)
         pt = client.encode(inp, level=5)
         assert isinstance(pt, PlainText)
-        assert len(pt.ids) > 0
 
         decoded = client.decode(pt)
         assert decoded.shape == inp.shape
@@ -139,8 +139,7 @@ class TestClient:
         inp = torch.randn(1, 784)
         pt = client.encode(inp, level=5)
         ct = client.encrypt(pt)
-        assert isinstance(ct, CipherText)
-        assert len(ct.ids) > 0
+        assert isinstance(ct, Ciphertext)
 
         pt2 = client.decrypt(ct)
         decoded = client.decode(pt2)
@@ -151,7 +150,7 @@ class TestClient:
         _cleanup_backend()
 
     def test_ciphertext_serialization(self):
-        """CipherText to_bytes/from_bytes roundtrip."""
+        """Ciphertext to_bytes/from_bytes roundtrip."""
         client = Client(MLP_PARAMS)
         inp = torch.randn(1, 784)
         pt = client.encode(inp, level=5)
@@ -161,7 +160,7 @@ class TestClient:
         assert isinstance(ct_bytes, bytes)
         assert len(ct_bytes) > 0
 
-        ct2 = CipherText.from_bytes(ct_bytes, client.backend)
+        ct2 = Ciphertext.from_bytes(ct_bytes)
         pt2 = client.decrypt(ct2)
         decoded = client.decode(pt2)
         assert decoded.shape == inp.shape
@@ -300,7 +299,7 @@ class TestClientSecretKey:
 
         # Restore client with same secret key
         client2 = Client(MLP_PARAMS, secret_key=sk_bytes)
-        ct2 = CipherText.from_bytes(ct_bytes, client2.backend)
+        ct2 = Ciphertext.from_bytes(ct_bytes)
         pt2 = client2.decrypt(ct2)
         decoded = client2.decode(pt2)
 

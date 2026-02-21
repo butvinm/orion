@@ -18,6 +18,7 @@ class LinearTransform(Module):
 
         self.diagonals = {}
         self.transform_ids = {}
+        self.transform_handles = {}
         self.output_rotations = 0
 
     def __del__(self):
@@ -25,6 +26,8 @@ class LinearTransform(Module):
             try:
                 if hasattr(self, '_lt_evaluator') and self._lt_evaluator:
                     self._lt_evaluator.delete_transforms(self.transform_ids)
+                if hasattr(self, '_eval_context') and self._eval_context:
+                    self._eval_context.delete_transforms(self.transform_handles)
             except Exception:
                 pass
 
@@ -54,9 +57,15 @@ class LinearTransform(Module):
 
     @timer
     def evaluate_transforms(self, x):
-        out = x.context.lt_evaluator.evaluate_transforms(self, x)
+        ctx = x.context
 
-        slots = x.context.params.get_slots()
+        # Use new handle-based path if available, otherwise legacy
+        if hasattr(self, 'transform_handles') and self.transform_handles:
+            out = ctx.evaluate_transforms(self, x)
+        else:
+            out = ctx.lt_evaluator.evaluate_transforms(self, x)
+
+        slots = ctx.get_slots()
         for i in range(1, self.output_rotations+1):
             out += out.roll(slots // (2**i))
 

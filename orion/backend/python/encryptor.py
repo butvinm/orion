@@ -1,5 +1,3 @@
-from .tensors import PlainTensor, CipherTensor
-
 class NewEncryptor:
     def __init__(self, context):
         self.context = context
@@ -14,6 +12,8 @@ class NewEncryptor:
         self.backend.NewDecryptor()
 
     def encrypt(self, plaintensor):
+        from .tensors import CipherTensor
+
         ciphertext_ids = []
         for ptxt in plaintensor.ids:
             ciphertext_id = self.backend.Encrypt(ptxt)
@@ -21,8 +21,10 @@ class NewEncryptor:
 
         return CipherTensor(
             self.context, ciphertext_ids, plaintensor.shape, plaintensor.on_shape)
-    
+
     def decrypt(self, ciphertensor):
+        from .encoder import PlainTensor
+
         plaintext_ids = []
         for ctxt in ciphertensor.ids:
             plaintext_id = self.backend.Decrypt(ctxt)

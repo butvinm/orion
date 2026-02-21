@@ -1,26 +1,199 @@
 """Evaluator: loads compiled model, keys, and runs FHE inference.
 
 No secret key. Reconstructs module state from CompiledModel metadata,
-loads evaluation keys, and runs the forward pass on CipherTexts.
+loads evaluation keys, and runs the forward pass on Ciphertexts.
+Uses the orionclient FFI bridge (handle-based, no global state).
 """
 
+import json
 import types
 
 import numpy as np
 import torch
 
 from orion.compiled_model import CompiledModel, EvalKeys
-from orion.client import CipherText
+from orion.ciphertext import Ciphertext, PlainText
 from orion.nn.module import Module
 from orion.nn.linear import LinearTransform
 from orion.nn.operations import Bootstrap
-from orion.backend.lattigo import bindings as lgo
-from orion.backend.python import parameters, encoder
-from orion.backend.python.evaluator import NewEvaluator as EvalWrapper
-from orion.backend.python.poly_evaluator import PolynomialEvaluator
-from orion.backend.python.lt_evaluator import TransformEvaluator
-from orion.backend.python.bootstrapper import NewEvaluator as BootstrapperEvaluator
-from orion.backend.python.tensors import CipherTensor
+from orion.backend.orionclient import ffi
+
+
+def _params_json(ckks_params) -> str:
+    """Serialize CKKSParams to JSON for the Go bridge."""
+    d = {
+        "logn": ckks_params.logn,
+        "logq": list(ckks_params.logq),
+        "logp": list(ckks_params.logp),
+        "logscale": ckks_params.logscale,
+        "h": ckks_params.h,
+        "ring_type": ckks_params.ring_type,
+    }
+    if ckks_params.boot_logp is not None:
+        d["boot_logp"] = list(ckks_params.boot_logp)
+    return json.dumps(d)
+
+
+class _EvalContext:
+    """Lightweight context object passed through CipherTensors/Ciphertexts.
+
+    Replaces the SimpleNamespace with 5 evaluator objects. Now just
+    carries the evaluator FFI handle plus param info needed by nn modules.
+    """
+
+    def __init__(self, eval_handle, ckks_params, compiled):
+        self.eval_handle = eval_handle
+        self.ckks_params = ckks_params
+        self.margin = compiled.config.margin
+        self.config = compiled.config
+        # Get actual moduli and scale from Go (NTT-friendly primes, not 2^logq)
+        self._moduli_chain = ffi.eval_moduli_chain(eval_handle)
+        self._default_scale = ffi.eval_default_scale(eval_handle)
+        self._max_slots = ckks_params.max_slots
+
+        # Compatibility aliases: nn modules access context.encoder,
+        # context.poly_evaluator, context.lt_evaluator, context.params.
+        # This object serves all those roles.
+        self.encoder = self
+        self.poly_evaluator = self
+        self.lt_evaluator = self
+        self.params = self
+        self.evaluator = self
+        self.bootstrapper = self
+        self.encryptor = None  # No secret key on server
+        self.backend = None  # Not used in new FFI path
+
+    def encode(self, values, level, scale=None):
+        """Encode values into a PlainText using the evaluator's encoder."""
+        if isinstance(values, torch.Tensor):
+            values = values.cpu()
+
+        if scale is None:
+            scale = self._default_scale
+
+        max_slots = self._max_slots
+        num_elements = values.numel() if isinstance(values, torch.Tensor) else len(values)
+
+        if isinstance(values, torch.Tensor):
+            pad_length = (-num_elements) % max_slots
+            vector = torch.zeros(num_elements + pad_length, dtype=torch.float64)
+            vector[:num_elements] = values.flatten().to(torch.float64)
+        else:
+            pad_length = (-num_elements) % max_slots
+            vector = [0.0] * (num_elements + pad_length)
+            for i, v in enumerate(values):
+                vector[i] = float(v)
+
+        to_encode = vector.tolist() if isinstance(vector, torch.Tensor) else vector
+        pt_h = ffi.eval_encode(self.eval_handle, to_encode, level, scale)
+        shape = values.shape if isinstance(values, torch.Tensor) else [len(values)]
+        return PlainText(pt_h, shape=shape)
+
+    def get_moduli_chain(self):
+        """Get the actual moduli chain (NTT-friendly primes from Go)."""
+        return self._moduli_chain
+
+    def get_default_scale(self):
+        return self._default_scale
+
+    def get_slots(self):
+        return self._max_slots
+
+    def get_debug_status(self):
+        return False
+
+    def generate_monomial(self, coeffs):
+        """Generate a monomial polynomial handle."""
+        if isinstance(coeffs, (torch.Tensor, np.ndarray)):
+            coeffs = coeffs.tolist()
+        return ffi.generate_polynomial_monomial(coeffs[::-1])
+
+    def generate_chebyshev(self, coeffs):
+        """Generate a Chebyshev polynomial handle."""
+        if isinstance(coeffs, (torch.Tensor, np.ndarray)):
+            coeffs = coeffs.tolist()
+        return ffi.generate_polynomial_chebyshev(coeffs)
+
+    def evaluate_polynomial(self, ct, poly_h, out_scale=None):
+        """Evaluate a polynomial on a ciphertext."""
+        if out_scale is None:
+            out_scale = self._default_scale
+        r = ffi.eval_poly(self.eval_handle, ct._handle, poly_h, int(out_scale))
+        result = Ciphertext(r, shape=ct.shape, context=self)
+        result.on_shape = ct.on_shape
+        return result
+
+    def evaluate_transforms(self, linear_layer, in_ct):
+        """Evaluate linear transforms on a ciphertext.
+
+        Replaces TransformEvaluator.evaluate_transforms.
+        """
+        out_shape = linear_layer.output_shape
+        fhe_out_shape = linear_layer.fhe_output_shape
+
+        transform_handles = linear_layer.transform_handles
+        keys = list(transform_handles.keys())
+        cols = max(k[1] for k in keys) + 1 if keys else 1
+        rows = max(k[0] for k in keys) + 1 if keys else 1
+
+        # For single-ct input, evaluate each row's transforms
+        cts_out_handles = []
+        for i in range(rows):
+            ct_out_h = None
+            for j in range(cols):
+                lt_h = transform_handles.get((i, j))
+                if lt_h is None:
+                    continue
+                res_h = ffi.eval_linear_transform(
+                    self.eval_handle, in_ct._handle, lt_h
+                )
+                if ct_out_h is None:
+                    ct_out_h = res_h
+                else:
+                    # Add results
+                    combined = ffi.eval_add(self.eval_handle, ct_out_h, res_h)
+                    ffi.delete_handle(ct_out_h)
+                    ffi.delete_handle(res_h)
+                    ct_out_h = combined
+
+            # Rescale
+            rescaled_h = ffi.eval_rescale(self.eval_handle, ct_out_h)
+            ffi.delete_handle(ct_out_h)
+            cts_out_handles.append(rescaled_h)
+
+        # For now, assuming single output CT
+        if len(cts_out_handles) == 1:
+            result = Ciphertext(
+                cts_out_handles[0], shape=out_shape, context=self,
+            )
+            result.on_shape = fhe_out_shape
+            return result
+
+        # Multiple rows: would need multi-ct support.
+        # For current use, return first (nn modules handle single-ct)
+        result = Ciphertext(
+            cts_out_handles[0], shape=out_shape, context=self,
+        )
+        result.on_shape = fhe_out_shape
+        return result
+
+    def delete_transforms(self, transform_handles):
+        """Delete linear transform handles."""
+        for lt_h in transform_handles.values():
+            ffi.delete_handle(lt_h)
+
+    def bootstrap(self, ct_handle, slots):
+        """Bootstrap a ciphertext (used by nn.Bootstrap via context.bootstrapper)."""
+        r = ffi.eval_bootstrap(self.eval_handle, ct_handle, slots)
+        return r
+
+    def generate_bootstrapper(self, slots):
+        """No-op -- bootstrap evaluators are loaded in Go constructor."""
+        pass
+
+    def rescale(self, ct_handle, in_place=False):
+        """Rescale a raw ciphertext handle."""
+        return ffi.eval_rescale(self.eval_handle, ct_handle)
 
 
 class Evaluator:
@@ -41,112 +214,33 @@ class Evaluator:
         self.compiled = compiled
         self.ckks_params = compiled.params
 
-        # 1. Init Go backend with params (no keys yet)
-        self.params = parameters.NewParameters.from_ckks_params(
-            compiled.params, compiled.config
-        )
-        self.backend = lgo.LattigoLibrary()
-        self.backend.setup_bindings(self.params)
+        pj = _params_json(compiled.params)
 
-        # 2. Create encoder
-        self._encoder = encoder.NewEncoder(self)
+        # Build the EvalKeyBundle handle from serialized keys
+        keys_handle = ffi.new_eval_key_bundle()
 
-        # 3. Load keys into Go backend
-        self._load_keys(keys)
-
-        # 4. Create evaluator from loaded keys
-        self.backend.NewEvaluatorFromKeys()
-
-        # 5. Create inference-time wrappers (MUST happen after step 4)
-        # Create Python evaluator wrapper WITHOUT calling Go NewEvaluator()
-        # (which would overwrite our loaded keys). The Go evaluator was
-        # already created by NewEvaluatorFromKeys() above.
-        self._evaluator = EvalWrapper.__new__(EvalWrapper)
-        self._evaluator.backend = self.backend
-        self._lt_evaluator = TransformEvaluator(
-            self.backend, self._evaluator
-        )
-        self._poly_evaluator = PolynomialEvaluator(self.backend, self.params)
-
-        # 6. Create bootstrapper evaluators
-        self._bootstrapper = BootstrapperEvaluator(self)
-        self._init_bootstrappers(compiled)
-
-        # 7. Build inference context
-        self._context = self._build_context()
-
-        # 8. Reconstruct module state from CompiledModel
-        self._reconstruct_modules(compiled)
-
-    # -- Properties expected by wrappers that take a "scheme" --
-
-    @property
-    def encoder(self):
-        return self._encoder
-
-    @property
-    def encryptor(self):
-        return None  # Server has no secret key
-
-    @property
-    def evaluator(self):
-        return self._evaluator
-
-    @property
-    def lt_evaluator(self):
-        return self._lt_evaluator
-
-    @property
-    def poly_evaluator(self):
-        return self._poly_evaluator
-
-    @property
-    def bootstrapper(self):
-        return self._bootstrapper
-
-    def _load_keys(self, keys: EvalKeys):
-        """Load all evaluation keys into the Go backend.
-
-        Order matters: LoadRelinKey -> GenerateEvaluationKeys (creates
-        the EvalKeys struct) -> LoadRotationKey (populates GaloisKeys map).
-        """
         if keys.has_rlk:
-            rlk_arr = np.frombuffer(keys.rlk_data, dtype=np.uint8)
-            self.backend.LoadRelinKey(rlk_arr)
-
-        # Create EvalKeys struct from loaded RelinKey. Must happen
-        # BEFORE loading rotation keys, which populate EvalKeys.GaloisKeys.
-        self.backend.GenerateEvaluationKeys()
+            ffi.eval_key_bundle_set_rlk(keys_handle, keys.rlk_data)
 
         for gal_el, key_data in keys.galois_keys.items():
-            key_arr = np.frombuffer(key_data, dtype=np.uint8)
-            self.backend.LoadRotationKey(key_arr, gal_el)
+            ffi.eval_key_bundle_add_galois_key(keys_handle, gal_el, key_data)
 
         for slot_count, key_data in keys.bootstrap_keys.items():
-            key_arr = np.frombuffer(key_data, dtype=np.uint8)
-            logp = list(self.compiled.manifest.boot_logp)
-            self.backend.LoadBootstrapKeys(key_arr, slot_count, logp)
+            ffi.eval_key_bundle_add_bootstrap_key(keys_handle, slot_count, key_data)
 
-    def _init_bootstrappers(self, compiled: CompiledModel):
-        """Initialize bootstrapper evaluators for required slot counts."""
-        if compiled.manifest.bootstrap_slots:
-            for slot_count in compiled.manifest.bootstrap_slots:
-                self._bootstrapper.generate_bootstrapper(slot_count)
+        if compiled.manifest.boot_logp:
+            ffi.eval_key_bundle_set_boot_logp(
+                keys_handle, list(compiled.manifest.boot_logp)
+            )
 
-    def _build_context(self):
-        """Build the inference context namespace for CipherTensors."""
-        ctx = types.SimpleNamespace()
-        ctx.backend = self.backend
-        ctx.params = self.params
-        ctx.encoder = self._encoder
-        ctx.encryptor = None  # No secret key on server
-        ctx.evaluator = self._evaluator
-        ctx.lt_evaluator = self._lt_evaluator
-        ctx.poly_evaluator = self._poly_evaluator
-        ctx.bootstrapper = self._bootstrapper
-        ctx.margin = self.compiled.config.margin
-        ctx.config = self.compiled.config
-        return ctx
+        # Create the Go Evaluator (loads all keys internally)
+        self._eval_handle = ffi.new_evaluator(pj, keys_handle)
+
+        # Build inference context
+        self._context = _EvalContext(self._eval_handle, compiled.params, compiled)
+
+        # Reconstruct module state from CompiledModel
+        self._reconstruct_modules(compiled)
 
     def _reconstruct_modules(self, compiled: CompiledModel):
         """Apply CompiledModel metadata to the network skeleton."""
@@ -154,11 +248,9 @@ class Evaluator:
         meta = compiled.module_metadata
         blobs = compiled.blobs
 
-        # Walk all named modules and apply metadata
         module_map = dict(net.named_modules())
 
         for mod_name, mod_meta in meta.items():
-            # Skip bootstrap hooks -- handled separately below
             if mod_meta["type"] == "Bootstrap" and "hook_target" in mod_meta:
                 continue
 
@@ -167,7 +259,6 @@ class Evaluator:
 
             module = module_map[mod_name]
 
-            # Set level/depth
             if "level" in mod_meta:
                 module.set_level(mod_meta["level"])
             if "depth" in mod_meta:
@@ -175,62 +266,49 @@ class Evaluator:
             if "fused" in mod_meta:
                 module.fused = mod_meta["fused"]
 
-            # Set FHE shapes
             if mod_meta.get("fhe_input_shape") is not None:
-                module.fhe_input_shape = torch.Size(
-                    mod_meta["fhe_input_shape"]
-                )
+                module.fhe_input_shape = torch.Size(mod_meta["fhe_input_shape"])
             if mod_meta.get("fhe_output_shape") is not None:
-                module.fhe_output_shape = torch.Size(
-                    mod_meta["fhe_output_shape"]
-                )
+                module.fhe_output_shape = torch.Size(mod_meta["fhe_output_shape"])
             if mod_meta.get("output_shape") is not None:
                 module.output_shape = torch.Size(mod_meta["output_shape"])
             if mod_meta.get("input_shape") is not None:
                 module.input_shape = torch.Size(mod_meta["input_shape"])
 
-            # Type-specific reconstruction
             if isinstance(module, LinearTransform):
                 self._reconstruct_linear(module, mod_meta, blobs)
-
             elif mod_meta["type"] == "Chebyshev":
                 self._reconstruct_chebyshev(module, mod_meta)
-
             elif mod_meta["type"] == "Activation":
                 self._reconstruct_activation(module, mod_meta)
-
             elif mod_meta["type"] in ("BatchNorm1d", "BatchNorm2d"):
                 self._reconstruct_batchnorm(module, mod_meta)
-
             elif mod_meta["type"] == "ReLU":
                 self._reconstruct_relu(module, mod_meta)
 
-        # Reconstruct bootstrap hooks
         self._reconstruct_bootstrap_hooks(net, meta, module_map)
 
     def _reconstruct_linear(self, module, meta, blobs):
         """Reconstruct a LinearTransform module from metadata + blobs."""
-        # Load serialized LinearTransform objects
-        transform_ids = {}
+        transform_handles = {}
         for key_str, blob_idx in meta["transform_blobs"].items():
             row, col = map(int, key_str.split(","))
             blob_data = blobs[blob_idx]
-            blob_arr = np.frombuffer(blob_data, dtype=np.uint8)
-            tid = self.backend.LoadLinearTransform(blob_arr)
-            transform_ids[(row, col)] = tid
+            lt_h = ffi.linear_transform_unmarshal(blob_data)
+            transform_handles[(row, col)] = lt_h
 
-        module.transform_ids = transform_ids
-        module._lt_evaluator = self._lt_evaluator
+        module.transform_handles = transform_handles
         module.bsgs_ratio = meta["bsgs_ratio"]
         module.output_rotations = meta["output_rotations"]
 
-        # Decode and re-encode bias
+        # Re-encode bias using the evaluator's encoder
         bias_blob = blobs[meta["bias_blob"]]
         bias_vec = np.frombuffer(bias_blob, dtype=np.float64)
         bias_tensor = torch.tensor(bias_vec, dtype=torch.float64)
-        module.on_bias_ptxt = self._encoder.encode(
+        module.on_bias_ptxt = self._context.encode(
             bias_tensor, level=module.level - module.depth
         )
+        module._eval_context = self._context
 
     def _reconstruct_chebyshev(self, module, meta):
         """Reconstruct a Chebyshev activation from metadata."""
@@ -243,8 +321,6 @@ class Evaluator:
             module.input_min = meta["input_min"]
         if meta.get("input_max") is not None:
             module.input_max = meta["input_max"]
-
-        # Regenerate polynomial object
         module.compile(self._context)
 
     def _reconstruct_activation(self, module, meta):
@@ -252,21 +328,15 @@ class Evaluator:
         if meta.get("coeffs") is not None:
             module.coeffs = meta["coeffs"]
         module.output_scale = meta.get("output_scale")
-
-        # Regenerate polynomial object
         module.compile(self._context)
 
     def _reconstruct_relu(self, module, meta):
-        """Reconstruct a ReLU module from metadata."""
         module.prescale = meta["prescale"]
         module.postscale = meta["postscale"]
 
     def _reconstruct_batchnorm(self, module, meta):
-        """Reconstruct a BatchNorm module."""
         if meta.get("fused", False):
-            # Fused BN is skipped during forward -- no need to encode plaintexts
             return
-        # Non-fused BatchNorm needs init_orion_params + compile
         if hasattr(module, "init_orion_params"):
             module.init_orion_params()
         module.compile(self._context)
@@ -274,10 +344,7 @@ class Evaluator:
     def _reconstruct_bootstrap_hooks(self, net, meta, module_map):
         """Recreate bootstrap forward hooks from metadata."""
         for mod_name, mod_meta in meta.items():
-            if (
-                mod_meta["type"] != "Bootstrap"
-                or "hook_target" not in mod_meta
-            ):
+            if mod_meta["type"] != "Bootstrap" or "hook_target" not in mod_meta:
                 continue
 
             target_name = mod_meta["hook_target"]
@@ -300,7 +367,6 @@ class Evaluator:
                     mod_meta["fhe_input_shape"]
                 )
 
-            # Compile the bootstrapper (creates prescale_ptxt)
             bootstrapper.compile(self._context)
 
             target_module.bootstrapper = bootstrapper
@@ -308,35 +374,30 @@ class Evaluator:
                 lambda mod, inp, out, btp=bootstrapper: btp(out)
             )
 
-    def run(self, ct: CipherText) -> CipherText:
+    def run(self, ct: Ciphertext) -> Ciphertext:
         """Run FHE inference on an encrypted input.
 
-        Converts CipherText to CipherTensor, runs the forward pass,
-        and converts the output back to CipherText.
+        Sets the evaluator context on the ciphertext and runs the forward pass.
         """
-        # Convert CipherText (client wrapper) to CipherTensor (backend tensor)
-        # Clear CipherText ids so its eventual GC doesn't delete Go ciphertexts
-        in_ids = ct.ids
-        ct.ids = []
-        in_ctensor = CipherTensor(
-            self._context, in_ids, ct.shape
-        )
+        ct.context = self._context
+        ct.on_shape = ct.shape
 
-        # Switch to HE mode and run
         self.net.he()
-        out_ctensor = self.net(in_ctensor)
+        out = self.net(ct)
 
-        # Take ownership of output IDs from CipherTensor to prevent
-        # CipherTensor.__del__ from deleting them on the Go heap
-        out_ids = list(out_ctensor.ids)
-        out_shape = out_ctensor.shape
-        out_ctensor.ids = []
+        # The output is already a Ciphertext with context set
+        return out
 
-        return CipherText(out_ids, out_shape, self.backend)
+    def close(self):
+        if hasattr(self, "_eval_handle") and self._eval_handle:
+            ffi.evaluator_close(self._eval_handle)
+            self._eval_handle = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
-        if hasattr(self, "backend") and self.backend:
-            try:
-                self.backend.DeleteScheme()
-            except Exception:
-                pass
+        self.close()

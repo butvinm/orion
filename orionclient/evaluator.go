@@ -250,6 +250,16 @@ func (e *Evaluator) GaloisElement(rotation int) uint64 {
 	return e.ckksParams.GaloisElement(rotation)
 }
 
+// ModuliChain returns the actual Q moduli (NTT-friendly primes) used by the scheme.
+func (e *Evaluator) ModuliChain() []uint64 {
+	return e.ckksParams.Q()
+}
+
+// DefaultScale returns the default plaintext scale (2^LogScale, may be exact or from params).
+func (e *Evaluator) DefaultScale() uint64 {
+	return uint64(e.ckksParams.DefaultScale().Float64())
+}
+
 // --- Internal helpers ---
 
 // binaryOp applies a binary operation to pairs of underlying ciphertexts.
