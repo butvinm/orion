@@ -82,13 +82,13 @@ orionclient/
 
 ### Tasks
 
-- [ ] `params.go`: `Params` struct, `NewCKKSParameters() (ckks.Parameters, error)`, `MaxSlots()`, `DefaultScale()`
-- [ ] `plaintext.go`: `Plaintext` wrapping `*rlwe.Plaintext` + shape
-- [ ] `ciphertext.go`: `Ciphertext` wrapping `[]*rlwe.Ciphertext` + shape. `Marshal()`/`UnmarshalCiphertext()` with magic `ORTXT\x00\x01\x00`, CRC32. Metadata queries: `Level()`, `Scale()`, `Slots()`, `Degree()`, `Shape()`
-- [ ] `keys.go`: `EvalKeyBundle` (RLK, Galois map, Bootstrap map, BootLogP), `Manifest`
-- [ ] `client.go`: `Client` struct with `New`, `FromSecretKey`, `Close`, `SecretKey`, `Encode`, `Encrypt`, `Decrypt`, `Decode`, `GenerateRLK`, `GenerateGaloisKey`, `GenerateBootstrapKeys`, `MaxSlots`, `DefaultScale`
-- [ ] `client_test.go`: round-trip, key generation, multiple instances coexisting
-- [ ] `ciphertext_test.go`: wire format round-trip, test vectors
+- [x] `params.go`: `Params` struct, `NewCKKSParameters() (ckks.Parameters, error)`, `MaxSlots()`, `DefaultScale()`
+- [x] `plaintext.go`: `Plaintext` wrapping `*rlwe.Plaintext` + shape
+- [x] `ciphertext.go`: `Ciphertext` wrapping `[]*rlwe.Ciphertext` + shape. `Marshal()`/`UnmarshalCiphertext()` with magic `ORTXT\x00\x01\x00`, CRC32. Metadata queries: `Level()`, `Scale()`, `Slots()`, `Degree()`, `Shape()`
+- [x] `keys.go`: `EvalKeyBundle` (RLK, Galois map, Bootstrap map, BootLogP), `Manifest`
+- [x] `client.go`: `Client` struct with `New`, `FromSecretKey`, `Close`, `SecretKey`, `Encode`, `Encrypt`, `Decrypt`, `Decode`, `GenerateRLK`, `GenerateGaloisKey`, `GenerateBootstrapKeys`, `MaxSlots`, `DefaultScale`
+- [x] `client_test.go`: round-trip, key generation, multiple instances coexisting
+- [x] `ciphertext_test.go`: wire format round-trip, test vectors
 
 ## Phase 2: Go Evaluator
 
