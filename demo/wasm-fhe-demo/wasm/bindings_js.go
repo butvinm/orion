@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/orion/orionclient"
 )
 
@@ -207,10 +206,10 @@ func orionEncrypt(_ js.Value, args []js.Value) interface{} {
 		// Free the plaintext after encryption.
 		plaintextStore[ptxtID] = nil
 
-		// Return raw Lattigo MarshalBinary bytes (single ciphertext).
-		data, err := ct.Raw()[0].MarshalBinary()
+		// Use ORTXT wire format (matches Python's Ciphertext serialization).
+		data, err := ct.Marshal()
 		if err != nil {
-			return js.Undefined(), fmt.Errorf("MarshalBinary ciphertext: %w", err)
+			return js.Undefined(), fmt.Errorf("Marshal ciphertext: %w", err)
 		}
 
 		return goBytesToJSUint8Array(data), nil
@@ -222,17 +221,11 @@ func orionDecrypt(_ js.Value, args []js.Value) interface{} {
 	ctBytes := jsUint8ArrayToGoBytes(args[0])
 
 	return promisify(func() (js.Value, error) {
-		// Unmarshal raw Lattigo ciphertext bytes.
-		rawCt := &rlwe.Ciphertext{}
-		if err := rawCt.UnmarshalBinary(ctBytes); err != nil {
-			return js.Undefined(), fmt.Errorf("UnmarshalBinary ciphertext: %w", err)
+		// Unmarshal ORTXT wire format (matches Python's Ciphertext serialization).
+		ct, err := orionclient.UnmarshalCiphertext(ctBytes)
+		if err != nil {
+			return js.Undefined(), fmt.Errorf("UnmarshalCiphertext: %w", err)
 		}
-
-		// Wrap in orionclient.Ciphertext for decryption.
-		ct := orionclient.NewCiphertext(
-			[]*rlwe.Ciphertext{rawCt},
-			[]int{client.MaxSlots()},
-		)
 
 		pts, err := client.Decrypt(ct)
 		if err != nil {

@@ -110,8 +110,8 @@ func TestEncodeEncryptDecryptRoundTrip(t *testing.T) {
 	}
 }
 
-func TestEncryptRawBytesRoundTrip(t *testing.T) {
-	// Simulates the WASM encrypt/decrypt path: raw Lattigo MarshalBinary bytes.
+func TestEncryptORTXTRoundTrip(t *testing.T) {
+	// Simulates the WASM encrypt/decrypt path using ORTXT wire format.
 	c := newTestClient(t)
 
 	original := []float64{3.14, 2.71, 1.41}
@@ -124,17 +124,16 @@ func TestEncryptRawBytesRoundTrip(t *testing.T) {
 	ct, err := c.Encrypt(pt)
 	require.NoError(t, err)
 
-	// Marshal single ciphertext to raw Lattigo bytes (what WASM orionEncrypt returns).
-	rawBytes, err := ct.Raw()[0].MarshalBinary()
+	// Marshal to ORTXT format (what WASM orionEncrypt returns).
+	ortxtBytes, err := ct.Marshal()
 	require.NoError(t, err)
-	assert.Greater(t, len(rawBytes), 0)
+	assert.Greater(t, len(ortxtBytes), 0)
 
-	// Unmarshal from raw bytes (what WASM orionDecrypt receives).
-	rawCt := &rlwe.Ciphertext{}
-	require.NoError(t, rawCt.UnmarshalBinary(rawBytes))
+	// Unmarshal from ORTXT format (what WASM orionDecrypt receives).
+	ct2, err := orionclient.UnmarshalCiphertext(ortxtBytes)
+	require.NoError(t, err)
 
-	// Wrap and decrypt.
-	ct2 := orionclient.NewCiphertext([]*rlwe.Ciphertext{rawCt}, []int{c.MaxSlots()})
+	// Decrypt and verify.
 	pts, err := c.Decrypt(ct2)
 	require.NoError(t, err)
 

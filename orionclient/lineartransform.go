@@ -42,7 +42,7 @@ func GenerateLinearTransform(p Params, diagIndices map[int][]float64, level int,
 		LevelP:                    ckksParams.MaxLevelP(),
 		Scale:                     rlwe.NewScale(ckksParams.Q()[level]),
 		LogDimensions:             ring.Dimensions{Rows: 0, Cols: ckksParams.LogMaxSlots()},
-		LogBabyStepGiantStepRatio: int(math.Log(bsgsRatio)),
+		LogBabyStepGiantStepRatio: int(math.Log2(bsgsRatio)),
 	}
 
 	enc := ckks.NewEncoder(ckksParams)

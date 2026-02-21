@@ -154,7 +154,10 @@ class _EvalContext:
             return result
 
         # Multiple rows: would need multi-ct support.
-        # For current use, return first (nn modules handle single-ct)
+        # For current use, return first (nn modules handle single-ct).
+        # Free unused handles to avoid leaking cgo handles.
+        for h in cts_out_handles[1:]:
+            ffi.delete_handle(h)
         result = Ciphertext(
             cts_out_handles[0], shape=out_shape, context=self,
         )
@@ -219,6 +222,8 @@ class Evaluator:
 
         # Create the Go Evaluator (loads all keys internally)
         self._eval_handle = ffi.new_evaluator(pj, keys_handle)
+        # Bundle data copied into Go Evaluator; free the bundle handle
+        ffi.delete_handle(keys_handle)
 
         # Build inference context
         self._context = _EvalContext(self._eval_handle, compiled.params, compiled)
@@ -384,4 +389,6 @@ class Evaluator:
         self.close()
 
     def __del__(self):
-        self.close()
+        import sys as _sys
+        if _sys and _sys.modules:
+            self.close()

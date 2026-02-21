@@ -5,6 +5,7 @@ package main
 import "C"
 
 import (
+	"fmt"
 	"runtime/cgo"
 	"unsafe"
 )
@@ -13,6 +14,7 @@ func main() {}
 
 //export DeleteHandle
 func DeleteHandle(h C.uintptr_t) {
+	defer func() { recover() }()
 	cgo.Handle(h).Delete()
 }
 
@@ -22,6 +24,13 @@ func FreeCArray(ptr unsafe.Pointer) {
 }
 
 // --- Internal helpers ---
+
+// catchPanic recovers from panics and reports them via errOut.
+func catchPanic(errOut **C.char) {
+	if r := recover(); r != nil {
+		setErr(errOut, fmt.Sprintf("panic: %v", r))
+	}
+}
 
 // setErr sets the error output string. Caller must free with FreeCArray.
 func setErr(errOut **C.char, msg string) {

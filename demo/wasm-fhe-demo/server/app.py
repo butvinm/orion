@@ -181,13 +181,18 @@ async def infer(request: Request):
 
     evaluator: orion.Evaluator = session["evaluator"]
     try:
-        ct_in = orion.Ciphertext.from_bytes(body)
+        # Accept raw ORTXT wire format from WASM client (no Python shape header).
+        from orion.backend.orionclient import ffi
+        ct_handle = ffi.ciphertext_unmarshal(body)
+        ct_in = orion.Ciphertext(ct_handle)
         async with _backend_lock:
             ct_out = await asyncio.to_thread(evaluator.run, ct_in)
     except Exception:
         logger.exception("Inference failed")
         raise HTTPException(status_code=500, detail="Inference failed")
-    result_bytes = ct_out.to_bytes()
+    # Return raw ORTXT wire format (no Python shape header).
+    from orion.backend.orionclient import ffi as _ffi
+    result_bytes = _ffi.ciphertext_marshal(ct_out.handle)
 
     return Response(content=result_bytes, media_type="application/octet-stream")
 

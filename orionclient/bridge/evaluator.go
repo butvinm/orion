@@ -15,6 +15,7 @@ import (
 //
 //export NewEvaluator
 func NewEvaluator(paramsJSON *C.char, keysH C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	params, err := parseParams(C.GoString(paramsJSON))
 	if err != nil {
 		setErr(errOut, "parsing params: "+err.Error())
@@ -31,6 +32,7 @@ func NewEvaluator(paramsJSON *C.char, keysH C.uintptr_t, errOut **C.char) C.uint
 
 //export EvaluatorClose
 func EvaluatorClose(evalH C.uintptr_t) {
+	defer func() { recover() }()
 	h := cgo.Handle(evalH)
 	eval := h.Value().(*orionclient.Evaluator)
 	eval.Close()
@@ -39,6 +41,7 @@ func EvaluatorClose(evalH C.uintptr_t) {
 
 //export EvalEncode
 func EvalEncode(evalH C.uintptr_t, values *C.double, numValues C.int, level C.int, scale C.ulonglong, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	goValues := cDoublesToGoFloat64s(values, numValues)
 	pt, err := eval.Encode(goValues, int(level), uint64(scale))
@@ -55,6 +58,7 @@ func EvalEncode(evalH C.uintptr_t, values *C.double, numValues C.int, level C.in
 
 //export EvalAdd
 func EvalAdd(evalH C.uintptr_t, ct0H C.uintptr_t, ct1H C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct0 := cgo.Handle(ct0H).Value().(*orionclient.Ciphertext)
 	ct1 := cgo.Handle(ct1H).Value().(*orionclient.Ciphertext)
@@ -68,6 +72,7 @@ func EvalAdd(evalH C.uintptr_t, ct0H C.uintptr_t, ct1H C.uintptr_t, errOut **C.c
 
 //export EvalSub
 func EvalSub(evalH C.uintptr_t, ct0H C.uintptr_t, ct1H C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct0 := cgo.Handle(ct0H).Value().(*orionclient.Ciphertext)
 	ct1 := cgo.Handle(ct1H).Value().(*orionclient.Ciphertext)
@@ -81,6 +86,7 @@ func EvalSub(evalH C.uintptr_t, ct0H C.uintptr_t, ct1H C.uintptr_t, errOut **C.c
 
 //export EvalMul
 func EvalMul(evalH C.uintptr_t, ct0H C.uintptr_t, ct1H C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct0 := cgo.Handle(ct0H).Value().(*orionclient.Ciphertext)
 	ct1 := cgo.Handle(ct1H).Value().(*orionclient.Ciphertext)
@@ -98,6 +104,7 @@ func EvalMul(evalH C.uintptr_t, ct0H C.uintptr_t, ct1H C.uintptr_t, errOut **C.c
 
 //export EvalAddPlaintext
 func EvalAddPlaintext(evalH C.uintptr_t, ctH C.uintptr_t, ptH C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
@@ -111,6 +118,7 @@ func EvalAddPlaintext(evalH C.uintptr_t, ctH C.uintptr_t, ptH C.uintptr_t, errOu
 
 //export EvalSubPlaintext
 func EvalSubPlaintext(evalH C.uintptr_t, ctH C.uintptr_t, ptH C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
@@ -124,6 +132,7 @@ func EvalSubPlaintext(evalH C.uintptr_t, ctH C.uintptr_t, ptH C.uintptr_t, errOu
 
 //export EvalMulPlaintext
 func EvalMulPlaintext(evalH C.uintptr_t, ctH C.uintptr_t, ptH C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
@@ -141,6 +150,7 @@ func EvalMulPlaintext(evalH C.uintptr_t, ctH C.uintptr_t, ptH C.uintptr_t, errOu
 
 //export EvalAddScalar
 func EvalAddScalar(evalH C.uintptr_t, ctH C.uintptr_t, scalar C.double, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	res, err := eval.AddScalar(ct, float64(scalar))
@@ -153,6 +163,7 @@ func EvalAddScalar(evalH C.uintptr_t, ctH C.uintptr_t, scalar C.double, errOut *
 
 //export EvalMulScalar
 func EvalMulScalar(evalH C.uintptr_t, ctH C.uintptr_t, scalar C.double, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	res, err := eval.MulScalar(ct, float64(scalar))
@@ -165,6 +176,7 @@ func EvalMulScalar(evalH C.uintptr_t, ctH C.uintptr_t, scalar C.double, errOut *
 
 //export EvalNegate
 func EvalNegate(evalH C.uintptr_t, ctH C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	res, err := eval.Negate(ct)
@@ -181,6 +193,7 @@ func EvalNegate(evalH C.uintptr_t, ctH C.uintptr_t, errOut **C.char) C.uintptr_t
 
 //export EvalRotate
 func EvalRotate(evalH C.uintptr_t, ctH C.uintptr_t, amount C.int, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	res, err := eval.Rotate(ct, int(amount))
@@ -193,6 +206,7 @@ func EvalRotate(evalH C.uintptr_t, ctH C.uintptr_t, amount C.int, errOut **C.cha
 
 //export EvalRescale
 func EvalRescale(evalH C.uintptr_t, ctH C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	res, err := eval.Rescale(ct)
@@ -209,6 +223,7 @@ func EvalRescale(evalH C.uintptr_t, ctH C.uintptr_t, errOut **C.char) C.uintptr_
 
 //export EvalPoly
 func EvalPoly(evalH C.uintptr_t, ctH C.uintptr_t, polyH C.uintptr_t, outScale C.ulonglong, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	poly := cgo.Handle(polyH).Value().(*orionclient.Polynomial)
@@ -226,6 +241,7 @@ func EvalPoly(evalH C.uintptr_t, ctH C.uintptr_t, polyH C.uintptr_t, outScale C.
 
 //export EvalLinearTransform
 func EvalLinearTransform(evalH C.uintptr_t, ctH C.uintptr_t, ltH C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	lt := cgo.Handle(ltH).Value().(*orionclient.LinearTransform)
@@ -243,6 +259,7 @@ func EvalLinearTransform(evalH C.uintptr_t, ctH C.uintptr_t, ltH C.uintptr_t, er
 
 //export EvalBootstrap
 func EvalBootstrap(evalH C.uintptr_t, ctH C.uintptr_t, numSlots C.int, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	res, err := eval.Bootstrap(ct, int(numSlots))
@@ -259,18 +276,21 @@ func EvalBootstrap(evalH C.uintptr_t, ctH C.uintptr_t, numSlots C.int, errOut **
 
 //export EvalMaxSlots
 func EvalMaxSlots(evalH C.uintptr_t) C.int {
+	defer func() { recover() }()
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	return C.int(eval.MaxSlots())
 }
 
 //export EvalGaloisElement
 func EvalGaloisElement(evalH C.uintptr_t, rotation C.int) C.ulonglong {
+	defer func() { recover() }()
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	return C.ulonglong(eval.GaloisElement(int(rotation)))
 }
 
 //export EvalModuliChain
 func EvalModuliChain(evalH C.uintptr_t, outLen *C.int) *C.ulonglong {
+	defer func() { recover() }()
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	chain := eval.ModuliChain()
 	n := len(chain)
@@ -290,6 +310,7 @@ func EvalModuliChain(evalH C.uintptr_t, outLen *C.int) *C.ulonglong {
 
 //export EvalDefaultScale
 func EvalDefaultScale(evalH C.uintptr_t) C.ulonglong {
+	defer func() { recover() }()
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	return C.ulonglong(eval.DefaultScale())
 }

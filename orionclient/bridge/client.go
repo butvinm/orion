@@ -32,6 +32,7 @@ func parseManifest(jsonStr string) (orionclient.Manifest, error) {
 
 //export NewClient
 func NewClient(paramsJSON *C.char, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	params, err := parseParams(C.GoString(paramsJSON))
 	if err != nil {
 		setErr(errOut, "parsing params: "+err.Error())
@@ -47,6 +48,7 @@ func NewClient(paramsJSON *C.char, errOut **C.char) C.uintptr_t {
 
 //export NewClientFromSecretKey
 func NewClientFromSecretKey(paramsJSON *C.char, skData *C.char, skLen C.ulong, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	params, err := parseParams(C.GoString(paramsJSON))
 	if err != nil {
 		setErr(errOut, "parsing params: "+err.Error())
@@ -63,6 +65,7 @@ func NewClientFromSecretKey(paramsJSON *C.char, skData *C.char, skLen C.ulong, e
 
 //export ClientClose
 func ClientClose(clientH C.uintptr_t) {
+	defer func() { recover() }()
 	h := cgo.Handle(clientH)
 	client := h.Value().(*orionclient.Client)
 	client.Close()
@@ -71,6 +74,7 @@ func ClientClose(clientH C.uintptr_t) {
 
 //export ClientSecretKey
 func ClientSecretKey(clientH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.char {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	data, err := client.SecretKey()
 	if err != nil {
@@ -84,6 +88,7 @@ func ClientSecretKey(clientH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.c
 
 //export ClientEncode
 func ClientEncode(clientH C.uintptr_t, values *C.double, numValues C.int, level C.int, scale C.ulonglong, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	goValues := cDoublesToGoFloat64s(values, numValues)
 	pt, err := client.Encode(goValues, int(level), uint64(scale))
@@ -96,6 +101,7 @@ func ClientEncode(clientH C.uintptr_t, values *C.double, numValues C.int, level 
 
 //export ClientDecode
 func ClientDecode(clientH C.uintptr_t, ptH C.uintptr_t, outLen *C.int, errOut **C.char) *C.double {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	vals, err := client.Decode(pt)
@@ -110,6 +116,7 @@ func ClientDecode(clientH C.uintptr_t, ptH C.uintptr_t, outLen *C.int, errOut **
 
 //export ClientEncrypt
 func ClientEncrypt(clientH C.uintptr_t, ptH C.uintptr_t, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	ct, err := client.Encrypt(pt)
@@ -125,6 +132,7 @@ func ClientEncrypt(clientH C.uintptr_t, ptH C.uintptr_t, errOut **C.char) C.uint
 //
 //export ClientDecrypt
 func ClientDecrypt(clientH C.uintptr_t, ctH C.uintptr_t, numOut *C.int, errOut **C.char) *C.uintptr_t {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	pts, err := client.Decrypt(ct)
@@ -148,6 +156,7 @@ func ClientDecrypt(clientH C.uintptr_t, ctH C.uintptr_t, numOut *C.int, errOut *
 
 //export ClientGenerateRLK
 func ClientGenerateRLK(clientH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.char {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	data, err := client.GenerateRLK()
 	if err != nil {
@@ -161,6 +170,7 @@ func ClientGenerateRLK(clientH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C
 
 //export ClientGenerateGaloisKey
 func ClientGenerateGaloisKey(clientH C.uintptr_t, galEl C.ulonglong, outLen *C.ulong, errOut **C.char) *C.char {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	data, err := client.GenerateGaloisKey(uint64(galEl))
 	if err != nil {
@@ -174,6 +184,7 @@ func ClientGenerateGaloisKey(clientH C.uintptr_t, galEl C.ulonglong, outLen *C.u
 
 //export ClientGenerateBootstrapKeys
 func ClientGenerateBootstrapKeys(clientH C.uintptr_t, slots C.int, logP *C.int, logPLen C.int, outLen *C.ulong, errOut **C.char) *C.char {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	goLogP := cIntsToGoInts(logP, logPLen)
 	data, err := client.GenerateBootstrapKeys(int(slots), goLogP)
@@ -191,6 +202,7 @@ func ClientGenerateBootstrapKeys(clientH C.uintptr_t, slots C.int, logP *C.int, 
 //
 //export ClientGenerateKeys
 func ClientGenerateKeys(clientH C.uintptr_t, manifestJSON *C.char, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	manifest, err := parseManifest(C.GoString(manifestJSON))
 	if err != nil {
@@ -207,18 +219,21 @@ func ClientGenerateKeys(clientH C.uintptr_t, manifestJSON *C.char, errOut **C.ch
 
 //export ClientMaxSlots
 func ClientMaxSlots(clientH C.uintptr_t) C.int {
+	defer func() { recover() }()
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	return C.int(client.MaxSlots())
 }
 
 //export ClientDefaultScale
 func ClientDefaultScale(clientH C.uintptr_t) C.ulonglong {
+	defer func() { recover() }()
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	return C.ulonglong(client.DefaultScale())
 }
 
 //export ClientGaloisElement
 func ClientGaloisElement(clientH C.uintptr_t, rotation C.int) C.ulonglong {
+	defer func() { recover() }()
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	return C.ulonglong(client.GaloisElement(int(rotation)))
 }

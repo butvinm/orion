@@ -17,6 +17,7 @@ import (
 
 //export CiphertextMarshal
 func CiphertextMarshal(ctH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.char {
+	defer catchPanic(errOut)
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	data, err := ct.Marshal()
 	if err != nil {
@@ -30,6 +31,7 @@ func CiphertextMarshal(ctH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.cha
 
 //export CiphertextUnmarshal
 func CiphertextUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	goData := cBytesToGoSlice(data, dataLen)
 	ct, err := orionclient.UnmarshalCiphertext(goData)
 	if err != nil {
@@ -41,36 +43,42 @@ func CiphertextUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintp
 
 //export CiphertextLevel
 func CiphertextLevel(ctH C.uintptr_t) C.int {
+	defer func() { recover() }()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.int(ct.Level())
 }
 
 //export CiphertextScale
 func CiphertextScale(ctH C.uintptr_t) C.ulonglong {
+	defer func() { recover() }()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.ulonglong(ct.Scale())
 }
 
 //export CiphertextSetScale
 func CiphertextSetScale(ctH C.uintptr_t, scale C.ulonglong) {
+	defer func() { recover() }()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	ct.SetScale(uint64(scale))
 }
 
 //export CiphertextSlots
 func CiphertextSlots(ctH C.uintptr_t) C.int {
+	defer func() { recover() }()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.int(ct.Slots())
 }
 
 //export CiphertextDegree
 func CiphertextDegree(ctH C.uintptr_t) C.int {
+	defer func() { recover() }()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.int(ct.Degree())
 }
 
 //export CiphertextShape
 func CiphertextShape(ctH C.uintptr_t, outLen *C.int) *C.int {
+	defer func() { recover() }()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	shape := ct.Shape()
 	ptr, length := goIntsToCInts(shape)
@@ -80,6 +88,7 @@ func CiphertextShape(ctH C.uintptr_t, outLen *C.int) *C.int {
 
 //export CiphertextNumCiphertexts
 func CiphertextNumCiphertexts(ctH C.uintptr_t) C.int {
+	defer func() { recover() }()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.int(ct.NumCiphertexts())
 }
@@ -89,6 +98,7 @@ func CiphertextNumCiphertexts(ctH C.uintptr_t) C.int {
 //
 //export CombineSingleCiphertexts
 func CombineSingleCiphertexts(handles *C.uintptr_t, numHandles C.int, shapeDims *C.int, numDims C.int, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	n := int(numHandles)
 	if n == 0 {
 		setErr(errOut, "no ciphertext handles provided")
@@ -111,30 +121,35 @@ func CombineSingleCiphertexts(handles *C.uintptr_t, numHandles C.int, shapeDims 
 
 //export PlaintextLevel
 func PlaintextLevel(ptH C.uintptr_t) C.int {
+	defer func() { recover() }()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	return C.int(pt.Level())
 }
 
 //export PlaintextScale
 func PlaintextScale(ptH C.uintptr_t) C.ulonglong {
+	defer func() { recover() }()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	return C.ulonglong(pt.Scale())
 }
 
 //export PlaintextSetScale
 func PlaintextSetScale(ptH C.uintptr_t, scale C.ulonglong) {
+	defer func() { recover() }()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	pt.SetScale(uint64(scale))
 }
 
 //export PlaintextSlots
 func PlaintextSlots(ptH C.uintptr_t) C.int {
+	defer func() { recover() }()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	return C.int(pt.Slots())
 }
 
 //export PlaintextShape
 func PlaintextShape(ptH C.uintptr_t, outLen *C.int) *C.int {
+	defer func() { recover() }()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	shape := pt.Shape()
 	ptr, length := goIntsToCInts(shape)
@@ -157,30 +172,35 @@ func NewEvalKeyBundle() C.uintptr_t {
 
 //export EvalKeyBundleSetRLK
 func EvalKeyBundleSetRLK(keysH C.uintptr_t, data *C.char, dataLen C.ulong) {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	bundle.RLK = cBytesToGoSlice(data, dataLen)
 }
 
 //export EvalKeyBundleAddGaloisKey
 func EvalKeyBundleAddGaloisKey(keysH C.uintptr_t, galEl C.ulonglong, data *C.char, dataLen C.ulong) {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	bundle.GaloisKeys[uint64(galEl)] = cBytesToGoSlice(data, dataLen)
 }
 
 //export EvalKeyBundleAddBootstrapKey
 func EvalKeyBundleAddBootstrapKey(keysH C.uintptr_t, slots C.int, data *C.char, dataLen C.ulong) {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	bundle.BootstrapKeys[int(slots)] = cBytesToGoSlice(data, dataLen)
 }
 
 //export EvalKeyBundleSetBootLogP
 func EvalKeyBundleSetBootLogP(keysH C.uintptr_t, logP *C.int, logPLen C.int) {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	bundle.BootLogP = cIntsToGoInts(logP, logPLen)
 }
 
 //export EvalKeyBundleGetRLK
 func EvalKeyBundleGetRLK(keysH C.uintptr_t, outLen *C.ulong) *C.char {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	if bundle.RLK == nil {
 		*outLen = 0
@@ -193,6 +213,7 @@ func EvalKeyBundleGetRLK(keysH C.uintptr_t, outLen *C.ulong) *C.char {
 
 //export EvalKeyBundleGetGaloisKeyElements
 func EvalKeyBundleGetGaloisKeyElements(keysH C.uintptr_t, outLen *C.int) *C.ulonglong {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	n := len(bundle.GaloisKeys)
 	if n == 0 {
@@ -213,6 +234,7 @@ func EvalKeyBundleGetGaloisKeyElements(keysH C.uintptr_t, outLen *C.int) *C.ulon
 
 //export EvalKeyBundleGetGaloisKey
 func EvalKeyBundleGetGaloisKey(keysH C.uintptr_t, galEl C.ulonglong, outLen *C.ulong) *C.char {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	data, ok := bundle.GaloisKeys[uint64(galEl)]
 	if !ok {
@@ -226,6 +248,7 @@ func EvalKeyBundleGetGaloisKey(keysH C.uintptr_t, galEl C.ulonglong, outLen *C.u
 
 //export EvalKeyBundleGetBootstrapSlots
 func EvalKeyBundleGetBootstrapSlots(keysH C.uintptr_t, outLen *C.int) *C.int {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	n := len(bundle.BootstrapKeys)
 	if n == 0 {
@@ -243,6 +266,7 @@ func EvalKeyBundleGetBootstrapSlots(keysH C.uintptr_t, outLen *C.int) *C.int {
 
 //export EvalKeyBundleGetBootstrapKey
 func EvalKeyBundleGetBootstrapKey(keysH C.uintptr_t, slots C.int, outLen *C.ulong) *C.char {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	data, ok := bundle.BootstrapKeys[int(slots)]
 	if !ok {
@@ -256,6 +280,7 @@ func EvalKeyBundleGetBootstrapKey(keysH C.uintptr_t, slots C.int, outLen *C.ulon
 
 //export EvalKeyBundleGetBootLogP
 func EvalKeyBundleGetBootLogP(keysH C.uintptr_t, outLen *C.int) *C.int {
+	defer func() { recover() }()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	ptr, length := goIntsToCInts(bundle.BootLogP)
 	*outLen = length
@@ -268,6 +293,7 @@ func EvalKeyBundleGetBootLogP(keysH C.uintptr_t, outLen *C.int) *C.int {
 
 //export LinearTransformMarshal
 func LinearTransformMarshal(ltH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.char {
+	defer catchPanic(errOut)
 	lt := cgo.Handle(ltH).Value().(*orionclient.LinearTransform)
 	data, err := lt.Marshal()
 	if err != nil {
@@ -281,6 +307,7 @@ func LinearTransformMarshal(ltH C.uintptr_t, outLen *C.ulong, errOut **C.char) *
 
 //export LinearTransformUnmarshal
 func LinearTransformUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	goData := cBytesToGoSlice(data, dataLen)
 	lt, err := orionclient.LoadLinearTransform(goData)
 	if err != nil {
@@ -292,6 +319,7 @@ func LinearTransformUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.
 
 //export LinearTransformRequiredGaloisElements
 func LinearTransformRequiredGaloisElements(ltH C.uintptr_t, paramsJSON *C.char, outLen *C.int, errOut **C.char) *C.ulonglong {
+	defer catchPanic(errOut)
 	lt := cgo.Handle(ltH).Value().(*orionclient.LinearTransform)
 	params, err := parseParams(C.GoString(paramsJSON))
 	if err != nil {
@@ -324,6 +352,7 @@ func LinearTransformRequiredGaloisElements(ltH C.uintptr_t, paramsJSON *C.char, 
 
 //export GeneratePolynomialMonomial
 func GeneratePolynomialMonomial(coeffs *C.double, numCoeffs C.int) C.uintptr_t {
+	defer func() { recover() }()
 	goCoeffs := cDoublesToGoFloat64s(coeffs, numCoeffs)
 	poly := orionclient.GenerateMonomial(goCoeffs)
 	return C.uintptr_t(cgo.NewHandle(poly))
@@ -331,6 +360,7 @@ func GeneratePolynomialMonomial(coeffs *C.double, numCoeffs C.int) C.uintptr_t {
 
 //export GeneratePolynomialChebyshev
 func GeneratePolynomialChebyshev(coeffs *C.double, numCoeffs C.int) C.uintptr_t {
+	defer func() { recover() }()
 	goCoeffs := cDoublesToGoFloat64s(coeffs, numCoeffs)
 	poly := orionclient.GenerateChebyshev(goCoeffs)
 	return C.uintptr_t(cgo.NewHandle(poly))
@@ -358,6 +388,7 @@ func GenerateLinearTransformFromParams(
 	bsgsRatio C.double,
 	errOut **C.char,
 ) C.uintptr_t {
+	defer catchPanic(errOut)
 	params, err := parseParams(C.GoString(paramsJSON))
 	if err != nil {
 		setErr(errOut, "parsing params: "+err.Error())
@@ -403,6 +434,7 @@ func GenerateMinimaxSignCoeffs(
 	outLen *C.int,
 	errOut **C.char,
 ) *C.double {
+	defer catchPanic(errOut)
 	degrees := cIntsToGoInts(degreesPtr, numDegrees)
 	flat, err := orionclient.GenerateMinimaxSignCoeffs(degrees, uint(prec), int(logAlpha), int(logErr), int(debug) != 0)
 	if err != nil {

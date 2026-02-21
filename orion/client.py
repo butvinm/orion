@@ -190,7 +190,9 @@ class Client:
         self.close()
 
     def __del__(self):
-        self.close()
+        import sys as _sys
+        if _sys and _sys.modules:
+            self.close()
 
 
 class _MultiPlainText:
