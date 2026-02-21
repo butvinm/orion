@@ -140,6 +140,9 @@ class _EvalContext:
                     ffi.delete_handle(res_h)
                     ct_out_h = combined
 
+            if ct_out_h is None:
+                continue
+
             # Rescale
             rescaled_h = ffi.eval_rescale(self.eval_handle, ct_out_h)
             ffi.delete_handle(ct_out_h)
