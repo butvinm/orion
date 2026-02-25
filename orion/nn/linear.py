@@ -47,12 +47,7 @@ class LinearTransform(Module):
     @timer
     def evaluate_transforms(self, x):
         ctx = x.context
-
-        # Use new handle-based path if available, otherwise legacy
-        if hasattr(self, 'transform_handles') and self.transform_handles:
-            out = ctx.evaluate_transforms(self, x)
-        else:
-            out = ctx.lt_evaluator.evaluate_transforms(self, x)
+        out = ctx.evaluate_transforms(self, x)
 
         slots = ctx.get_slots()
         for i in range(1, self.output_rotations+1):

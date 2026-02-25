@@ -65,10 +65,10 @@ Address the remaining five findings from the GoHandle refactor retrospective. F1
 - [x] Run tests — must pass before next task
 
 ### Task 5: F12 — Remove dead legacy fallback in `evaluate_transforms`
-- [ ] Remove the `hasattr(self, 'transform_handles')` guard in `LinearTransform.evaluate_transforms()` (`orion/nn/linear.py:52-55`)
-- [ ] Keep only the `ctx.evaluate_transforms(self, x)` path
-- [ ] Run existing model/evaluator tests to verify no regression
-- [ ] Run tests — must pass before next task
+- [x] Remove the `hasattr(self, 'transform_handles')` guard in `LinearTransform.evaluate_transforms()` (`orion/nn/linear.py:52-55`)
+- [x] Keep only the `ctx.evaluate_transforms(self, x)` path
+- [x] Run existing model/evaluator tests to verify no regression
+- [x] Run tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
 - [ ] Verify all 5 findings addressed (F4, F5, F8, F11, F12)
