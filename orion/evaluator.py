@@ -170,16 +170,14 @@ class _EvalContext:
             result.on_shape = fhe_out_shape
             return result
 
-        # Multiple rows: would need multi-ct support.
-        # For current use, return first (nn modules handle single-ct).
-        # Free unused handles to avoid leaking cgo handles.
-        for h in cts_out_handles[1:]:
+        # Multiple rows not yet supported — raise rather than silently
+        # discarding rows, which would produce incorrect FHE results.
+        for h in cts_out_handles:
             h.close()
-        result = Ciphertext(
-            cts_out_handles[0], shape=out_shape, context=self,
+        raise NotImplementedError(
+            f"Multi-row linear transform output ({len(cts_out_handles)} rows) "
+            f"not yet supported"
         )
-        result.on_shape = fhe_out_shape
-        return result
 
 
 
