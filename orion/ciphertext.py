@@ -6,7 +6,6 @@ A single type for transport and computation.
 
 import math
 import struct
-import sys
 
 import torch
 
@@ -46,12 +45,16 @@ class Ciphertext:
     def shape(self, value):
         self._shape = torch.Size(value) if value is not None else None
 
+    def close(self):
+        """Release the Go handle. Idempotent."""
+        if self._handle:
+            self._handle.close()
+
     def __del__(self):
-        if "sys" in globals() and sys.modules and self._handle:
-            try:
-                self._handle.close()
-            except Exception:
-                pass
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def __len__(self):
         return ffi.ciphertext_num_ciphertexts(self._handle)
@@ -260,12 +263,16 @@ class PlainText:
     def __mul__(self, other):
         return self.mul(other)
 
+    def close(self):
+        """Release the Go handle. Idempotent."""
+        if self._handle:
+            self._handle.close()
+
     def __del__(self):
-        if "sys" in globals() and sys.modules and self._handle:
-            try:
-                self._handle.close()
-            except Exception:
-                pass
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def __len__(self):
         return 1  # Single plaintext per handle

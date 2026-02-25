@@ -8,7 +8,6 @@ but backed by the orionclient bridge shared library.
 from __future__ import annotations
 
 import json
-import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Literal
 
@@ -311,13 +310,19 @@ class PlainTensor:
         self.shape = shape
         self.on_shape = on_shape or shape
 
+    def close(self):
+        """Release all Go handles. Idempotent."""
+        for h in self.ids:
+            try:
+                h.close()
+            except Exception:
+                pass
+
     def __del__(self):
-        if "sys" in globals() and sys.modules and self.context:
-            for h in self.ids:
-                try:
-                    h.close()
-                except Exception:
-                    pass
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def __len__(self):
         return len(self.ids)

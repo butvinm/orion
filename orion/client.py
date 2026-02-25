@@ -171,11 +171,10 @@ class Client:
         self.close()
 
     def __del__(self):
-        if hasattr(self, "_handle") and self._handle:
-            try:
-                self.close()
-            except:
-                pass
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 class _MultiPlainText:
@@ -192,11 +191,16 @@ class _MultiPlainText:
     def __len__(self):
         return len(self.handles)
 
+    def close(self):
+        """Release all Go handles. Idempotent."""
+        for h in self.handles:
+            try:
+                h.close()
+            except Exception:
+                pass
+
     def __del__(self):
-        import sys as _sys
-        if _sys and _sys.modules:
-            for h in self.handles:
-                try:
-                    h.close()
-                except Exception:
-                    pass
+        try:
+            self.close()
+        except Exception:
+            pass

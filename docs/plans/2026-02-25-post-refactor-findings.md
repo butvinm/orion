@@ -35,9 +35,9 @@ Address the remaining five findings from the GoHandle refactor retrospective. F1
 - [x] Run tests — must pass before next task
 
 ### Task 2: F5 — Standardize `__del__` to one pattern; add `close()` to Ciphertext/PlainText
-- [ ] Add `close()` method to `Ciphertext` in `orion/ciphertext.py` (delegates to `self._handle.close()`, idempotent)
-- [ ] Add `close()` method to `PlainText` in `orion/ciphertext.py` (same pattern)
-- [ ] Replace all 8 `__del__` methods with the canonical pattern: `try: self.close() except Exception: pass`
+- [x] Add `close()` method to `Ciphertext` in `orion/ciphertext.py` (delegates to `self._handle.close()`, idempotent)
+- [x] Add `close()` method to `PlainText` in `orion/ciphertext.py` (same pattern)
+- [x] Replace all 8 `__del__` methods with the canonical pattern: `try: self.close() except Exception: pass`
   - `GoHandle` (`ffi.py`) — already close to canonical, remove `sys.modules` guard
   - `Ciphertext` (`ciphertext.py`) — replace `"sys" in globals()` guard
   - `PlainText` (`ciphertext.py`) — replace `"sys" in globals()` guard
@@ -46,8 +46,8 @@ Address the remaining five findings from the GoHandle refactor retrospective. F1
   - `Evaluator` (`evaluator.py`) — replace `hasattr` guard
   - `Compiler` (`compiler.py`) — replace nested guard
   - `PlainTensor` (`compiler_backend.py`) — replace `"sys" in globals()` guard
-- [ ] Write tests for `Ciphertext.close()` and `PlainText.close()` (idempotent, double-close safe)
-- [ ] Run tests — must pass before next task
+- [x] Write tests for `Ciphertext.close()` and `PlainText.close()` (idempotent, double-close safe)
+- [x] Run tests — must pass before next task
 
 ### Task 3: F8 — Add `errOut` to `ClientModuliChain` and `ClientAuxModuliChain`
 - [ ] Add `errOut **C.char` parameter and `defer catchPanic(errOut)` to `ClientModuliChain` in `orionclient/bridge/client.go`

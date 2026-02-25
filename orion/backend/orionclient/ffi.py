@@ -8,7 +8,6 @@ this module checks it and raises RuntimeError on non-NULL.
 import ctypes
 import os
 import platform
-import sys
 import threading
 
 # C types
@@ -378,11 +377,10 @@ class GoHandle:
             self._raw = 0
 
     def __del__(self):
-        if self._raw and sys and sys.modules:
-            try:
-                self.close()
-            except Exception:
-                pass
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def __bool__(self):
         return bool(self._raw)

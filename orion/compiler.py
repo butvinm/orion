@@ -5,7 +5,6 @@ Produces a CompiledModel containing pre-encoded LinearTransform blobs,
 polynomial coefficients, module metadata, and a KeyManifest.
 """
 
-import sys
 import time
 import math
 import types
@@ -551,10 +550,13 @@ class Compiler:
                 return True
         return False
 
-    def __del__(self):
+    def close(self):
+        """Release the Go backend. Idempotent."""
         if hasattr(self, "backend") and self.backend:
-            if "sys" in globals() and sys.modules:
-                try:
-                    self.backend.DeleteScheme()
-                except Exception:
-                    pass
+            self.backend.DeleteScheme()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass

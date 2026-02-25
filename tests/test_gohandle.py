@@ -631,6 +631,78 @@ class TestErrorPathCleanup:
         _cleanup()
 
 
+# --- F5: Ciphertext.close() and PlainText.close() ---
+
+
+class TestCiphertextClose:
+    """F5: Ciphertext.close() and PlainText.close() are idempotent and safe."""
+
+    def test_ciphertext_close_releases_handle(self):
+        """ct.close() releases the Go handle."""
+        client = Client(MLP_PARAMS)
+        pt = client.encode(torch.randn(1, 784), level=5)
+        ct = client.encrypt(pt)
+        assert ct._handle._raw != 0
+        ct.close()
+        assert ct._handle._raw == 0
+        client.close()
+        _cleanup()
+
+    def test_ciphertext_double_close(self):
+        """ct.close(); ct.close() -- no error on second call."""
+        client = Client(MLP_PARAMS)
+        pt = client.encode(torch.randn(1, 784), level=5)
+        ct = client.encrypt(pt)
+        ct.close()
+        ct.close()  # should not raise
+        client.close()
+        _cleanup()
+
+    def test_plaintext_close_releases_handle(self):
+        """pt.close() releases the Go handle."""
+        client = Client(MLP_PARAMS)
+        pt = client.encode(torch.randn(1, 784), level=5)
+        assert pt._handle._raw != 0
+        pt.close()
+        assert pt._handle._raw == 0
+        client.close()
+        _cleanup()
+
+    def test_plaintext_double_close(self):
+        """pt.close(); pt.close() -- no error on second call."""
+        client = Client(MLP_PARAMS)
+        pt = client.encode(torch.randn(1, 784), level=5)
+        pt.close()
+        pt.close()  # should not raise
+        client.close()
+        _cleanup()
+
+    def test_ciphertext_del_via_gc(self):
+        """Ciphertext.__del__ triggers close() via garbage collection."""
+        client = Client(MLP_PARAMS)
+        pt = client.encode(torch.randn(1, 784), level=5)
+        ct = client.encrypt(pt)
+        h = ct._handle
+        assert h._raw != 0
+        del ct
+        gc.collect()
+        assert h._raw == 0, "GC should have closed the handle via __del__"
+        client.close()
+        _cleanup()
+
+    def test_plaintext_del_via_gc(self):
+        """PlainText.__del__ triggers close() via garbage collection."""
+        client = Client(MLP_PARAMS)
+        pt = client.encode(torch.randn(1, 784), level=5)
+        h = pt._handle
+        assert h._raw != 0
+        del pt
+        gc.collect()
+        assert h._raw == 0, "GC should have closed the handle via __del__"
+        client.close()
+        _cleanup()
+
+
 class TestGoErrorPropagation:
     def test_error_propagation(self):
         """Trigger a Go error, verify Python gets RuntimeError, not process crash."""

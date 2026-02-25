@@ -415,8 +415,7 @@ class Evaluator:
         self.close()
 
     def __del__(self):
-        if hasattr(self, '_eval_handle') and self._eval_handle:
-            try:
-                self.close()
-            except Exception:
-                pass
+        try:
+            self.close()
+        except Exception:
+            pass
