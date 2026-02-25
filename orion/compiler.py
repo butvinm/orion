@@ -273,6 +273,9 @@ class Compiler:
                     transform_blobs[f"{row},{col}"] = len(blobs)
                     blobs.append(blob_bytes)
 
+                # Free compile-time LT handles (serialized into blobs, no longer needed)
+                self._lt_evaluator.delete_transforms(module.transform_ids)
+
                 # Serialize bias as raw float64
                 bias_vec = module.on_bias_ptxt
                 bias_decoded = self._encoder.decode(bias_vec)

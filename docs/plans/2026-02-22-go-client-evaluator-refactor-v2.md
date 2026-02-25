@@ -672,10 +672,10 @@ Then delete the entire `__del__` method from `LinearTransform`.
 
 ### Steps
 
-- [ ] Delete `LinearTransform.__del__` method entirely (lines 24–32 in `orion/nn/linear.py`)
-- [ ] Add compile-time LT cleanup in `orion/compiler.py`: after serializing each LinearTransform module's blobs (after line 274), call `self._lt_evaluator.delete_transforms(module.transform_ids)` to free compile-time handles immediately
-- [ ] Verify `orion/nn/activation.py` has no `__del__` methods that touch handles
-- [ ] Verify `orion/nn/operations.py` has no `__del__` methods that touch handles
+- [x] Delete `LinearTransform.__del__` method entirely (lines 24–32 in `orion/nn/linear.py`)
+- [x] Add compile-time LT cleanup in `orion/compiler.py`: after serializing each LinearTransform module's blobs (after line 274), call `self._lt_evaluator.delete_transforms(module.transform_ids)` to free compile-time handles immediately
+- [x] Verify `orion/nn/activation.py` has no `__del__` methods that touch handles
+- [x] Verify `orion/nn/operations.py` has no `__del__` methods that touch handles
 
 ### Acceptance criteria
 

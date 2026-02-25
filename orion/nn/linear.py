@@ -1,4 +1,3 @@
-import sys
 import math
 from abc import abstractmethod
 
@@ -20,16 +19,6 @@ class LinearTransform(Module):
         self.transform_ids = {}
         self.transform_handles = {}
         self.output_rotations = 0
-
-    def __del__(self):
-        if 'sys' in globals() and sys.modules:
-            try:
-                if hasattr(self, '_lt_evaluator') and self._lt_evaluator:
-                    self._lt_evaluator.delete_transforms(self.transform_ids)
-                if hasattr(self, '_eval_context') and self._eval_context:
-                    self._eval_context.delete_transforms(self.transform_handles)
-            except Exception:
-                pass
 
     def extra_repr(self):
         return super().extra_repr() + f", bsgs_ratio={self.bsgs_ratio}"
