@@ -71,10 +71,10 @@ Address the remaining five findings from the GoHandle refactor retrospective. F1
 - [x] Run tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
-- [ ] Verify all 5 findings addressed (F4, F5, F8, F11, F12)
-- [ ] Run full test suite (`pytest tests/`)
-- [ ] Verify no private `ffi._*` access remains in `client.py` (F1 follow-up sanity check)
-- [ ] Verify test coverage of new code
+- [x] Verify all 5 findings addressed (F4, F5, F8, F11, F12)
+- [x] Run full test suite (`pytest tests/`)
+- [x] Verify no private `ffi._*` access remains in `client.py` (F1 follow-up sanity check)
+- [x] Verify test coverage of new code
 
 ### Task 7: [Final] Update documentation
 - [ ] Update FINDINGS.md — mark F4, F5, F8, F11, F12 as resolved with commit refs
