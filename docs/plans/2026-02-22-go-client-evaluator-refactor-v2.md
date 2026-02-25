@@ -772,26 +772,26 @@ Run existing suites first, then write new tests for GoHandle lifecycle. All BEFO
 
 ### Run existing test suites
 
-- [ ] Full Python test suite: `pytest tests/ -v`
-- [ ] Full Go test suite: `cd orionclient && go test ./... -v`
-- [ ] WASM demo builds
+- [x] Full Python test suite: `pytest tests/ -v`
+- [x] Full Go test suite: `cd orionclient && go test ./... -v`
+- [x] WASM demo builds
 
 ### Write new tests: `tests/test_gohandle.py`
 
 New test file covering GoHandle lifecycle — the behavior that caused all 6 handle bugs. Each item below is a test function:
 
-- [ ] `test_gohandle_raw_returns_value`: `GoHandle(42).raw == 42`
-- [ ] `test_gohandle_close_is_idempotent`: `h.close(); h.close()` — no error on second call
-- [ ] `test_gohandle_raw_after_close_raises`: `h.close(); h.raw` → `RuntimeError("Use of closed handle")`
-- [ ] `test_gohandle_bool_false_after_close`: `h.close(); assert not h`
-- [ ] `test_client_two_step_close`: `client.close()` zeros SK then deletes handle; `client.close()` again is no-op
-- [ ] `test_client_context_manager`: `with Client(params) as c: ...` calls `close()` on exit
-- [ ] `test_evaluator_close_clears_tracked_handles`: after `evaluator.close()`, all `_tracked_handles` have `_raw == 0`
-- [ ] `test_evaluator_double_close`: `evaluator.close(); evaluator.close()` — no error
-- [ ] `test_evaluator_partial_init_failure`: mock a corrupt LT blob, verify `__init__` raises and all already-allocated handles are freed
-- [ ] `test_multi_instance_independence`: two Clients with different params coexist, operate independently
-- [ ] `test_ciphertext_wire_format_roundtrip`: `Ciphertext.from_bytes(ct.to_bytes())` produces same decrypted values
-- [ ] `test_error_propagation`: trigger a Go panic (e.g. invalid params), verify Python gets `RuntimeError`, not process crash
+- [x] `test_gohandle_raw_returns_value`: `GoHandle(42).raw == 42`
+- [x] `test_gohandle_close_is_idempotent`: `h.close(); h.close()` — no error on second call
+- [x] `test_gohandle_raw_after_close_raises`: `h.close(); h.raw` → `RuntimeError("Use of closed handle")`
+- [x] `test_gohandle_bool_false_after_close`: `h.close(); assert not h`
+- [x] `test_client_two_step_close`: `client.close()` zeros SK then deletes handle; `client.close()` again is no-op
+- [x] `test_client_context_manager`: `with Client(params) as c: ...` calls `close()` on exit
+- [x] `test_evaluator_close_clears_tracked_handles`: after `evaluator.close()`, all `_tracked_handles` have `_raw == 0`
+- [x] `test_evaluator_double_close`: `evaluator.close(); evaluator.close()` — no error
+- [x] `test_evaluator_partial_init_failure`: mock a corrupt LT blob, verify `__init__` raises and all already-allocated handles are freed
+- [x] `test_multi_instance_independence`: two Clients with different params coexist, operate independently
+- [x] `test_ciphertext_wire_format_roundtrip`: `Ciphertext.from_bytes(ct.to_bytes())` produces same decrypted values
+- [x] `test_error_propagation`: trigger a Go panic (e.g. invalid params), verify Python gets `RuntimeError`, not process crash
 
 ### Acceptance criteria
 
