@@ -453,6 +453,12 @@ class Compiler:
                 "fhe_output_shape": list(module.fhe_output_shape)
                 if hasattr(module, "fhe_output_shape")
                 else None,
+                "input_shape": list(module.input_shape)
+                if hasattr(module, "input_shape")
+                else None,
+                "output_shape": list(module.output_shape)
+                if hasattr(module, "output_shape")
+                else None,
             }
 
         if isinstance(module, Bootstrap):

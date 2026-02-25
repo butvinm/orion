@@ -291,6 +291,126 @@ class TestWireFormat:
         _cleanup()
 
 
+# --- F3: BatchNorm and Bootstrap handle tracking ---
+
+
+BN_PARAMS = CKKSParams(
+    logn=13,
+    logq=[29, 26, 26, 26, 26, 26, 26],  # Extra level for BN depth
+    logp=[29, 29],
+    logscale=26,
+    h=8192,
+    ring_type="conjugate_invariant",
+)
+
+
+class MLPWithBN(on.Module):
+    """MLP with BatchNorm1d placed after activation (not fused with Linear)."""
+
+    def __init__(self):
+        super().__init__()
+        self.flatten = on.Flatten()
+        self.fc1 = on.Linear(784, 32)
+        self.act1 = on.Quad()
+        self.bn1 = on.BatchNorm1d(32)
+        self.fc2 = on.Linear(32, 10)
+
+    def forward(self, x):
+        x = self.flatten(x)
+        x = self.act1(self.fc1(x))
+        x = self.bn1(x)
+        return self.fc2(x)
+
+
+class TestHandleTracking:
+    """F3: Verify _tracked_handles includes BatchNorm PlainText handles
+    and Bootstrap prescale handles after Evaluator construction.
+    """
+
+    def test_batchnorm_handles_tracked(self):
+        """Non-fused BatchNorm1d creates 4 PlainText handles; all are tracked."""
+        torch.manual_seed(42)
+        net = MLPWithBN()
+        compiler = Compiler(net, BN_PARAMS)
+        compiler.fit(torch.randn(2, 1, 28, 28))  # batch>1 for BatchNorm
+        compiled = compiler.compile()
+
+        # Verify BN is NOT fused (Quad precedes BN, not Linear)
+        bn_meta = compiled.module_metadata["bn1"]
+        assert not bn_meta.get("fused", False), "BN after Quad should not be fused"
+
+        client = Client(compiled.params)
+        keys = client.generate_keys(compiled.manifest)
+
+        net2 = MLPWithBN()
+        evaluator = Evaluator(net2, compiled, keys)
+
+        # With affine=True, BN should have 4 PlainText handles
+        bn = net2.bn1
+        bn_attrs = (
+            "on_running_mean_ptxt",
+            "on_inv_running_std_ptxt",
+            "on_weight_ptxt",
+            "on_bias_ptxt",
+        )
+        for attr in bn_attrs:
+            pt = getattr(bn, attr, None)
+            assert pt is not None, f"BN should have {attr}"
+            assert pt._handle in evaluator._tracked_handles, (
+                f"{attr} handle should be in _tracked_handles"
+            )
+
+        # Save references before close
+        bn_handles = [getattr(bn, a)._handle for a in bn_attrs]
+
+        evaluator.close()
+
+        for h in bn_handles:
+            assert h._raw == 0, "BN handle should be dead after close"
+
+        client.close()
+        del compiler
+        _cleanup()
+
+    def test_bootstrap_handles_tracked(self):
+        """Bootstrap prescale_ptxt handle is tracked after Evaluator construction."""
+        compiled_bytes, keys_bytes, _ = _compile_model()
+        compiled = CompiledModel.from_bytes(compiled_bytes)
+        keys = EvalKeys.from_bytes(keys_bytes)
+
+        # Inject bootstrap metadata targeting act1.
+        # The Evaluator will create a Bootstrap module, encode prescale_ptxt,
+        # and track its handle — no actual bootstrap execution needed.
+        compiled.module_metadata["boot_after_act1"] = {
+            "type": "Bootstrap",
+            "hook_target": "act1",
+            "input_min": -1.0,
+            "input_max": 1.0,
+            "input_level": 3,
+            "prescale": 0.5,
+            "postscale": 2,
+            "constant": 0.0,
+            "fhe_input_shape": [1, 32],
+        }
+
+        net = SimpleMLP()
+        evaluator = Evaluator(net, compiled, keys)
+
+        # Verify bootstrap hook was attached
+        assert hasattr(net.act1, "bootstrapper"), "act1 should have a bootstrapper"
+        boot = net.act1.bootstrapper
+        assert hasattr(boot, "prescale_ptxt"), "Bootstrapper should have prescale_ptxt"
+        assert boot.prescale_ptxt._handle in evaluator._tracked_handles, (
+            "Bootstrap prescale handle should be in _tracked_handles"
+        )
+
+        prescale_h = boot.prescale_ptxt._handle
+        evaluator.close()
+        assert prescale_h._raw == 0, "Bootstrap handle should be dead after close"
+
+        _cleanup()
+
+
 # --- Error propagation ---
 
 
