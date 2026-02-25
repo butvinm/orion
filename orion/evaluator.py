@@ -137,7 +137,11 @@ class _EvalContext:
                         ct_out_h = res_h
                     else:
                         # Add results
-                        combined = ffi.eval_add(self.eval_handle, ct_out_h, res_h)
+                        try:
+                            combined = ffi.eval_add(self.eval_handle, ct_out_h, res_h)
+                        except:
+                            res_h.close()
+                            raise
                         ct_out_h.close()
                         res_h.close()
                         ct_out_h = combined

@@ -301,12 +301,12 @@ def _setup_prototypes(lib):
 
     # --- Polynomial ops ---
     lib.GeneratePolynomialMonomial.argtypes = [
-        ctypes.POINTER(ctypes.c_double), ctypes.c_int,
+        ctypes.POINTER(ctypes.c_double), ctypes.c_int, _errout,
     ]
     lib.GeneratePolynomialMonomial.restype = _uintptr
 
     lib.GeneratePolynomialChebyshev.argtypes = [
-        ctypes.POINTER(ctypes.c_double), ctypes.c_int,
+        ctypes.POINTER(ctypes.c_double), ctypes.c_int, _errout,
     ]
     lib.GeneratePolynomialChebyshev.restype = _uintptr
 
@@ -833,12 +833,18 @@ def linear_transform_unmarshal(data):
 
 def generate_polynomial_monomial(coeffs):
     arr, n = _doubles_ptr(coeffs)
-    return GoHandle(_get_lib().GeneratePolynomialMonomial(arr, n))
+    err = _make_errout()
+    r = _get_lib().GeneratePolynomialMonomial(arr, n, ctypes.byref(err))
+    _check_err(err)
+    return GoHandle(r)
 
 
 def generate_polynomial_chebyshev(coeffs):
     arr, n = _doubles_ptr(coeffs)
-    return GoHandle(_get_lib().GeneratePolynomialChebyshev(arr, n))
+    err = _make_errout()
+    r = _get_lib().GeneratePolynomialChebyshev(arr, n, ctypes.byref(err))
+    _check_err(err)
+    return GoHandle(r)
 
 
 # --- Client moduli chain ---

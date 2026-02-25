@@ -351,16 +351,16 @@ func LinearTransformRequiredGaloisElements(ltH C.uintptr_t, paramsJSON *C.char, 
 // =========================================================================
 
 //export GeneratePolynomialMonomial
-func GeneratePolynomialMonomial(coeffs *C.double, numCoeffs C.int) C.uintptr_t {
-	defer func() { recover() }()
+func GeneratePolynomialMonomial(coeffs *C.double, numCoeffs C.int, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	goCoeffs := cDoublesToGoFloat64s(coeffs, numCoeffs)
 	poly := orionclient.GenerateMonomial(goCoeffs)
 	return C.uintptr_t(cgo.NewHandle(poly))
 }
 
 //export GeneratePolynomialChebyshev
-func GeneratePolynomialChebyshev(coeffs *C.double, numCoeffs C.int) C.uintptr_t {
-	defer func() { recover() }()
+func GeneratePolynomialChebyshev(coeffs *C.double, numCoeffs C.int, errOut **C.char) C.uintptr_t {
+	defer catchPanic(errOut)
 	goCoeffs := cDoublesToGoFloat64s(coeffs, numCoeffs)
 	poly := orionclient.GenerateChebyshev(goCoeffs)
 	return C.uintptr_t(cgo.NewHandle(poly))

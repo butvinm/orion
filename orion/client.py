@@ -154,9 +154,14 @@ class Client:
         """Encrypt a PlainText into a Ciphertext."""
         if isinstance(plaintext, _MultiPlainText):
             ct_handles = []
-            for pt_h in plaintext.handles:
-                ct_h = ffi.client_encrypt(self._handle, pt_h)
-                ct_handles.append(ct_h)
+            try:
+                for pt_h in plaintext.handles:
+                    ct_h = ffi.client_encrypt(self._handle, pt_h)
+                    ct_handles.append(ct_h)
+            except:
+                for h in ct_handles:
+                    h.close()
+                raise
             if len(ct_handles) == 1:
                 return Ciphertext(ct_handles[0], shape=plaintext.shape)
             # Combine single-ct handles into one multi-ct Ciphertext
