@@ -77,7 +77,7 @@ Address the remaining five findings from the GoHandle refactor retrospective. F1
 - [x] Verify test coverage of new code
 
 ### Task 7: [Final] Update documentation
-- [ ] Update FINDINGS.md — mark F4, F5, F8, F11, F12 as resolved with commit refs
+- [x] Update FINDINGS.md — mark F4, F5, F8, F11, F12 as resolved with commit refs
 
 ## Technical Details
 
