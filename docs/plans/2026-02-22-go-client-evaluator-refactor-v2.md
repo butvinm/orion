@@ -429,12 +429,12 @@ def __del__(self):
 
 ### Steps
 
-- [ ] `self._handle` is GoHandle (automatic after Task 1, no explicit change)
-- [ ] `close()`: add `self._handle.close()` after `ffi.client_close()`, set `self._handle = None`
-- [ ] `encrypt()`: restructure multi-ciphertext path as shown above — close individuals after combine, close-on-error if combine fails
-- [ ] `_MultiPlainText.__del__`: replace `ffi.delete_handle(h)` → `h.close()`
-- [ ] `__del__`: simplify to `self.close()` with try/except
-- [ ] `generate_keys()`: change 6 occurrences of `ffi._uintptr(self._handle)` → `ffi._uintptr(self._handle.raw)`. No logic changes.
+- [x] `self._handle` is GoHandle (automatic after Task 1, no explicit change)
+- [x] `close()`: add `self._handle.close()` after `ffi.client_close()`, set `self._handle = None`
+- [x] `encrypt()`: restructure multi-ciphertext path as shown above — close individuals after combine, close-on-error if combine fails
+- [x] `_MultiPlainText.__del__`: replace `ffi.delete_handle(h)` → `h.close()`
+- [x] `__del__`: simplify to `self.close()` with try/except
+- [x] `generate_keys()`: change 6 occurrences of `ffi._uintptr(self._handle)` → `ffi._uintptr(self._handle.raw)`. No logic changes.
 
 ### Acceptance criteria
 

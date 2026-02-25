@@ -160,12 +160,17 @@ class Client:
             if len(ct_handles) == 1:
                 return Ciphertext(ct_handles[0], shape=plaintext.shape)
             # Combine single-ct handles into one multi-ct Ciphertext
-            combined_h = ffi.combine_single_ciphertexts(
-                ct_handles, list(plaintext.shape),
-            )
-            # Delete the individual handles (now owned by the combined ct)
+            try:
+                combined_h = ffi.combine_single_ciphertexts(
+                    ct_handles, list(plaintext.shape),
+                )
+            except:
+                for h in ct_handles:
+                    h.close()
+                raise
+            # Combine succeeded — close individuals, they're now inside combined
             for h in ct_handles:
-                ffi.delete_handle(h)
+                h.close()
             return Ciphertext(combined_h, shape=plaintext.shape)
         else:
             ct_h = ffi.client_encrypt(self._handle, plaintext.handle)
@@ -180,7 +185,8 @@ class Client:
 
     def close(self):
         if hasattr(self, "_handle") and self._handle:
-            ffi.client_close(self._handle)
+            ffi.client_close(self._handle)   # step 1: zeros SK in Go
+            self._handle.close()             # step 2: DeleteHandle (frees cgo slot)
             self._handle = None
 
     def __enter__(self):
@@ -190,9 +196,11 @@ class Client:
         self.close()
 
     def __del__(self):
-        import sys as _sys
-        if _sys and _sys.modules:
-            self.close()
+        if hasattr(self, "_handle") and self._handle:
+            try:
+                self.close()
+            except:
+                pass
 
 
 class _MultiPlainText:
@@ -211,9 +219,9 @@ class _MultiPlainText:
 
     def __del__(self):
         import sys as _sys
-        if "_sys" in dir() and _sys.modules:
+        if _sys and _sys.modules:
             for h in self.handles:
                 try:
-                    ffi.delete_handle(h)
+                    h.close()
                 except Exception:
                     pass
