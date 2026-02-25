@@ -1,6 +1,7 @@
 """Tests for GoHandle lifecycle — the behavior that caused all 6 handle bugs in v1."""
 
 import gc
+from unittest.mock import patch
 
 import torch
 import pytest
@@ -11,6 +12,7 @@ from orion.compiler import Compiler
 from orion.client import Client
 from orion.ciphertext import Ciphertext, PlainText
 from orion.evaluator import Evaluator
+from orion.backend.orionclient import ffi
 from orion.backend.orionclient.ffi import GoHandle
 import orion.nn as on
 
@@ -290,6 +292,186 @@ class TestWireFormat:
 
 
 # --- Error propagation ---
+
+
+# --- F2: Error-path handle cleanup ---
+
+
+class TestErrorPathCleanup:
+    """F2: Error-path handle cleanup regression tests.
+
+    The GoHandle refactor added try/except cleanup blocks in encrypt(),
+    evaluate_transforms(), and Evaluator.__init__(). Each block is correct
+    but was never exercised by a test. These tests inject failures at each
+    stage and verify handle cleanup.
+    """
+
+    def test_encrypt_partial_failure_closes_handles(self):
+        """client_encrypt fails on 2nd PT; 1st CT handle is closed."""
+        client = Client(MLP_PARAMS)
+        max_slots = ffi.client_max_slots(client._handle)
+        big_tensor = torch.randn(max_slots * 2)
+        multi_pt = client.encode(big_tensor)
+
+        allocated = []
+        real_fn = ffi.client_encrypt
+        call_count = [0]
+
+        def fail_on_second(client_h, pt_h):
+            call_count[0] += 1
+            if call_count[0] == 2:
+                raise RuntimeError("injected encrypt failure")
+            h = real_fn(client_h, pt_h)
+            allocated.append(h)
+            return h
+
+        with patch.object(ffi, 'client_encrypt', side_effect=fail_on_second):
+            with pytest.raises(RuntimeError, match="injected encrypt failure"):
+                client.encrypt(multi_pt)
+
+        assert len(allocated) == 1
+        assert allocated[0]._raw == 0, "CT handle should be closed on partial encrypt failure"
+
+        client.close()
+        _cleanup()
+
+    def test_encrypt_combine_failure_closes_handles(self):
+        """combine_single_ciphertexts fails; all individual CT handles closed."""
+        client = Client(MLP_PARAMS)
+        max_slots = ffi.client_max_slots(client._handle)
+        big_tensor = torch.randn(max_slots * 2)
+        multi_pt = client.encode(big_tensor)
+
+        allocated = []
+        real_fn = ffi.client_encrypt
+
+        def tracking_encrypt(client_h, pt_h):
+            h = real_fn(client_h, pt_h)
+            allocated.append(h)
+            return h
+
+        with patch.object(ffi, 'client_encrypt', side_effect=tracking_encrypt), \
+             patch.object(ffi, 'combine_single_ciphertexts',
+                          side_effect=RuntimeError("injected combine failure")):
+            with pytest.raises(RuntimeError, match="injected combine failure"):
+                client.encrypt(multi_pt)
+
+        assert len(allocated) == 2
+        for h in allocated:
+            assert h._raw == 0, "CT handle should be closed after combine failure"
+
+        client.close()
+        _cleanup()
+
+    def test_evaluate_transforms_eval_add_failure(self):
+        """eval_add fails mid-transform; intermediate handles cleaned up."""
+        compiled_bytes, keys_bytes, sk_bytes = _compile_model()
+        compiled = CompiledModel.from_bytes(compiled_bytes)
+        keys = EvalKeys.from_bytes(keys_bytes)
+        net = SimpleMLP()
+        evaluator = Evaluator(net, compiled, keys)
+
+        client = Client(MLP_PARAMS, secret_key=sk_bytes)
+        pt = client.encode(torch.randn(1, 784), level=compiled.input_level)
+        ct = client.encrypt(pt)
+        ct.context = evaluator._context
+        ct.on_shape = ct.shape
+
+        fc1 = net.fc1
+        handles = fc1.transform_handles
+        keys_list = list(handles.keys())
+        has_multi_col = any(k[1] > 0 for k in keys_list)
+
+        # Ensure multi-column transforms so eval_add is called.
+        # If only single-column, duplicate first entry as second column.
+        added_synthetic = False
+        if not has_multi_col and keys_list:
+            first_key = keys_list[0]
+            handles[(first_key[0], first_key[1] + 1)] = handles[first_key]
+            added_synthetic = True
+
+        lt_results = []
+        real_lt = ffi.eval_linear_transform
+
+        def tracking_lt(eval_h, ct_h, lt_h):
+            h = real_lt(eval_h, ct_h, lt_h)
+            lt_results.append(h)
+            return h
+
+        with patch.object(ffi, 'eval_linear_transform', side_effect=tracking_lt), \
+             patch.object(ffi, 'eval_add',
+                          side_effect=RuntimeError("injected eval_add failure")):
+            with pytest.raises(RuntimeError, match="injected eval_add failure"):
+                evaluator._context.evaluate_transforms(fc1, ct)
+
+        # 1st result (ct_out_h) closed by outer except,
+        # 2nd result (res_h) closed by inner except
+        assert len(lt_results) >= 2
+        for h in lt_results:
+            assert h._raw == 0, "LT result handle should be closed after eval_add failure"
+
+        if added_synthetic:
+            first_key = keys_list[0]
+            del handles[(first_key[0], first_key[1] + 1)]
+
+        evaluator.close()
+        client.close()
+        _cleanup()
+
+    def test_evaluator_init_evaluator_creation_failure(self):
+        """new_evaluator() fails after key bundle built; cleanup runs cleanly."""
+        compiled_bytes, keys_bytes, _ = _compile_model()
+        compiled = CompiledModel.from_bytes(compiled_bytes)
+        keys = EvalKeys.from_bytes(keys_bytes)
+        net = SimpleMLP()
+
+        with patch.object(ffi, 'new_evaluator',
+                          side_effect=RuntimeError("injected evaluator creation failure")):
+            with pytest.raises(RuntimeError, match="injected evaluator creation failure"):
+                Evaluator(net, compiled, keys)
+
+        # __init__ except calls self.close() on partial state
+        # (no _eval_handle, empty _tracked_handles). Must not crash.
+        _cleanup()
+
+    def test_evaluator_init_reconstruct_bias_failure(self):
+        """eval_encode fails during bias reconstruction; all prior handles freed."""
+        compiled_bytes, keys_bytes, _ = _compile_model()
+        compiled = CompiledModel.from_bytes(compiled_bytes)
+        keys = EvalKeys.from_bytes(keys_bytes)
+        net = SimpleMLP()
+
+        # Track LT handles created before the failure
+        unmarshalled = []
+        real_unmarshal = ffi.linear_transform_unmarshal
+
+        def tracking_unmarshal(data):
+            h = real_unmarshal(data)
+            unmarshalled.append(h)
+            return h
+
+        # Fail on the 2nd eval_encode call (fc2 bias encode),
+        # after fc1 is fully reconstructed
+        call_count = [0]
+        real_encode = ffi.eval_encode
+
+        def fail_on_second_encode(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] > 1:
+                raise RuntimeError("injected bias encode failure")
+            return real_encode(*args, **kwargs)
+
+        with patch.object(ffi, 'linear_transform_unmarshal', side_effect=tracking_unmarshal), \
+             patch.object(ffi, 'eval_encode', side_effect=fail_on_second_encode):
+            with pytest.raises(RuntimeError, match="injected bias encode failure"):
+                Evaluator(net, compiled, keys)
+
+        # All LT handles (from both fc1 and fc2) should be closed by self.close()
+        assert len(unmarshalled) > 0
+        for h in unmarshalled:
+            assert h._raw == 0, "LT handle should be closed after reconstruction failure"
+
+        _cleanup()
 
 
 class TestGoErrorPropagation:
