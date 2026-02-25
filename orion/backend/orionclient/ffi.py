@@ -354,10 +354,16 @@ def _setup_prototypes(lib):
 
 class GoHandle:
     """RAII wrapper for a cgo.Handle (opaque uintptr_t). Idempotent close."""
-    __slots__ = ('_raw',)
+    __slots__ = ('_raw', '_tag')
 
-    def __init__(self, raw: int):
+    def __init__(self, raw: int, tag: str = ""):
         self._raw = raw
+        self._tag = tag
+
+    def __repr__(self):
+        if self._raw:
+            return f"GoHandle({self._raw} {self._tag})" if self._tag else f"GoHandle({self._raw})"
+        return f"GoHandle(closed {self._tag})" if self._tag else "GoHandle(closed)"
 
     @property
     def raw(self) -> int:
@@ -417,7 +423,7 @@ def new_client(params_json):
     err = _make_errout()
     h = lib.NewClient(params_json.encode("utf-8"), ctypes.byref(err))
     _check_err(err)
-    return GoHandle(h)
+    return GoHandle(h, tag="Client")
 
 
 def new_client_from_secret_key(params_json, sk_bytes):
@@ -428,7 +434,7 @@ def new_client_from_secret_key(params_json, sk_bytes):
         params_json.encode("utf-8"), sk_ptr, sk_len, ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(h)
+    return GoHandle(h, tag="Client")
 
 
 def client_close(h):
@@ -455,7 +461,7 @@ def client_encode(h, values, level, scale):
         ctypes.c_ulonglong(scale), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(pt_h)
+    return GoHandle(pt_h, tag="PlainText")
 
 
 def client_decode(h, pt_h):
@@ -477,7 +483,7 @@ def client_encrypt(h, pt_h):
     err = _make_errout()
     ct_h = lib.ClientEncrypt(_uintptr(h.raw), _uintptr(pt_h.raw), ctypes.byref(err))
     _check_err(err)
-    return GoHandle(ct_h)
+    return GoHandle(ct_h, tag="Ciphertext")
 
 
 def client_decrypt(h, ct_h):
@@ -489,7 +495,7 @@ def client_decrypt(h, ct_h):
     )
     _check_err(err)
     n = num_out.value
-    handles = [GoHandle(ptr[i]) for i in range(n)]
+    handles = [GoHandle(ptr[i], tag="PlainText") for i in range(n)]
     if ptr:
         lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
     return handles
@@ -502,7 +508,7 @@ def client_generate_keys(h, manifest_json):
         _uintptr(h.raw), manifest_json.encode("utf-8"), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(bundle_h)
+    return GoHandle(bundle_h, tag="EvalKeyBundle")
 
 
 def client_generate_rlk(h):
@@ -567,7 +573,7 @@ def new_evaluator(params_json, keys_h):
         params_json.encode("utf-8"), _uintptr(keys_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(h)
+    return GoHandle(h, tag="Evaluator")
 
 
 def evaluator_close(h):
@@ -583,7 +589,7 @@ def eval_encode(h, values, level, scale):
         ctypes.c_ulonglong(scale), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(pt_h)
+    return GoHandle(pt_h, tag="PlainText")
 
 
 def eval_add(h, ct0_h, ct1_h):
@@ -591,7 +597,7 @@ def eval_add(h, ct0_h, ct1_h):
     err = _make_errout()
     r = lib.EvalAdd(_uintptr(h.raw), _uintptr(ct0_h.raw), _uintptr(ct1_h.raw), ctypes.byref(err))
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_sub(h, ct0_h, ct1_h):
@@ -599,7 +605,7 @@ def eval_sub(h, ct0_h, ct1_h):
     err = _make_errout()
     r = lib.EvalSub(_uintptr(h.raw), _uintptr(ct0_h.raw), _uintptr(ct1_h.raw), ctypes.byref(err))
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_mul(h, ct0_h, ct1_h):
@@ -607,7 +613,7 @@ def eval_mul(h, ct0_h, ct1_h):
     err = _make_errout()
     r = lib.EvalMul(_uintptr(h.raw), _uintptr(ct0_h.raw), _uintptr(ct1_h.raw), ctypes.byref(err))
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_add_plaintext(h, ct_h, pt_h):
@@ -617,7 +623,7 @@ def eval_add_plaintext(h, ct_h, pt_h):
         _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(pt_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_sub_plaintext(h, ct_h, pt_h):
@@ -627,7 +633,7 @@ def eval_sub_plaintext(h, ct_h, pt_h):
         _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(pt_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_mul_plaintext(h, ct_h, pt_h):
@@ -637,7 +643,7 @@ def eval_mul_plaintext(h, ct_h, pt_h):
         _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(pt_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_add_scalar(h, ct_h, scalar):
@@ -647,7 +653,7 @@ def eval_add_scalar(h, ct_h, scalar):
         _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.c_double(scalar), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_mul_scalar(h, ct_h, scalar):
@@ -657,7 +663,7 @@ def eval_mul_scalar(h, ct_h, scalar):
         _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.c_double(scalar), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_negate(h, ct_h):
@@ -665,7 +671,7 @@ def eval_negate(h, ct_h):
     err = _make_errout()
     r = lib.EvalNegate(_uintptr(h.raw), _uintptr(ct_h.raw), ctypes.byref(err))
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_rotate(h, ct_h, amount):
@@ -675,7 +681,7 @@ def eval_rotate(h, ct_h, amount):
         _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.c_int(amount), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_rescale(h, ct_h):
@@ -683,7 +689,7 @@ def eval_rescale(h, ct_h):
     err = _make_errout()
     r = lib.EvalRescale(_uintptr(h.raw), _uintptr(ct_h.raw), ctypes.byref(err))
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_poly(h, ct_h, poly_h, out_scale):
@@ -694,7 +700,7 @@ def eval_poly(h, ct_h, poly_h, out_scale):
         ctypes.c_ulonglong(out_scale), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_linear_transform(h, ct_h, lt_h):
@@ -704,7 +710,7 @@ def eval_linear_transform(h, ct_h, lt_h):
         _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(lt_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_bootstrap(h, ct_h, num_slots):
@@ -714,7 +720,7 @@ def eval_bootstrap(h, ct_h, num_slots):
         _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.c_int(num_slots), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 def eval_max_slots(h):
@@ -758,7 +764,7 @@ def ciphertext_unmarshal(data):
     ptr, length = _bytes_ptr(data)
     h = lib.CiphertextUnmarshal(ptr, length, ctypes.byref(err))
     _check_err(err)
-    return GoHandle(h)
+    return GoHandle(h, tag="Ciphertext")
 
 
 def ciphertext_level(h):
@@ -807,7 +813,7 @@ def combine_single_ciphertexts(handles, shape):
         h_arr, ctypes.c_int(n), s_arr, ctypes.c_int(nd), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Ciphertext")
 
 
 # --- Plaintext type ops ---
@@ -831,7 +837,7 @@ def plaintext_slots(h):
 # --- EvalKeyBundle ops ---
 
 def new_eval_key_bundle():
-    return GoHandle(_get_lib().NewEvalKeyBundle())
+    return GoHandle(_get_lib().NewEvalKeyBundle(), tag="EvalKeyBundle")
 
 
 def eval_key_bundle_set_rlk(h, data):
@@ -867,7 +873,7 @@ def linear_transform_unmarshal(data):
     ptr, length = _bytes_ptr(data)
     h = lib.LinearTransformUnmarshal(ptr, length, ctypes.byref(err))
     _check_err(err)
-    return GoHandle(h)
+    return GoHandle(h, tag="LinearTransform")
 
 
 # --- Polynomial ops ---
@@ -877,7 +883,7 @@ def generate_polynomial_monomial(coeffs):
     err = _make_errout()
     r = _get_lib().GeneratePolynomialMonomial(arr, n, ctypes.byref(err))
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Polynomial")
 
 
 def generate_polynomial_chebyshev(coeffs):
@@ -885,7 +891,7 @@ def generate_polynomial_chebyshev(coeffs):
     err = _make_errout()
     r = _get_lib().GeneratePolynomialChebyshev(arr, n, ctypes.byref(err))
     _check_err(err)
-    return GoHandle(r)
+    return GoHandle(r, tag="Polynomial")
 
 
 # --- Client moduli chain ---
@@ -931,7 +937,7 @@ def generate_linear_transform(params_json, diag_indices, diag_data, slots_per_di
         ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(h)
+    return GoHandle(h, tag="LinearTransform")
 
 
 def linear_transform_marshal(h):

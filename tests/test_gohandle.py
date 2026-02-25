@@ -77,6 +77,43 @@ class TestGoHandle:
         # Prevent __del__ from calling DeleteHandle on a fake value
         h._raw = 0
 
+    def test_repr_open_with_tag(self):
+        """GoHandle(42, tag="Client") -> 'GoHandle(42 Client)'"""
+        h = GoHandle(42, tag="Client")
+        assert repr(h) == "GoHandle(42 Client)"
+        h._raw = 0
+
+    def test_repr_open_without_tag(self):
+        """GoHandle(42) -> 'GoHandle(42)'"""
+        h = GoHandle(42)
+        assert repr(h) == "GoHandle(42)"
+        h._raw = 0
+
+    def test_repr_closed_with_tag(self):
+        """After close, repr shows 'GoHandle(closed Client)'"""
+        h = GoHandle(42, tag="Evaluator")
+        h._raw = 0  # simulate close without calling DeleteHandle on fake value
+        assert repr(h) == "GoHandle(closed Evaluator)"
+
+    def test_repr_closed_without_tag(self):
+        """After close, repr shows 'GoHandle(closed)'"""
+        h = GoHandle(42)
+        h._raw = 0
+        assert repr(h) == "GoHandle(closed)"
+
+    def test_repr_with_real_handle(self):
+        """FFI-created handle has correct tag in repr."""
+        client_h = ffi.new_client(MLP_PARAMS.to_bridge_json())
+        r = repr(client_h)
+        assert r.startswith("GoHandle(")
+        assert "Client" in r
+        assert "closed" not in r
+        ffi.client_close(client_h)
+        client_h.close()
+        assert "closed" in repr(client_h)
+        assert "Client" in repr(client_h)
+        _cleanup()
+
     def test_gohandle_close_is_idempotent(self):
         """h.close(); h.close() -- no error on second call.
 
