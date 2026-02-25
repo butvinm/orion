@@ -136,8 +136,8 @@ class _EvalContext:
                 else:
                     # Add results
                     combined = ffi.eval_add(self.eval_handle, ct_out_h, res_h)
-                    ffi.delete_handle(ct_out_h)
-                    ffi.delete_handle(res_h)
+                    ct_out_h.close()
+                    res_h.close()
                     ct_out_h = combined
 
             if ct_out_h is None:
@@ -145,7 +145,7 @@ class _EvalContext:
 
             # Rescale
             rescaled_h = ffi.eval_rescale(self.eval_handle, ct_out_h)
-            ffi.delete_handle(ct_out_h)
+            ct_out_h.close()
             cts_out_handles.append(rescaled_h)
 
         # For now, assuming single output CT
@@ -160,7 +160,7 @@ class _EvalContext:
         # For current use, return first (nn modules handle single-ct).
         # Free unused handles to avoid leaking cgo handles.
         for h in cts_out_handles[1:]:
-            ffi.delete_handle(h)
+            h.close()
         result = Ciphertext(
             cts_out_handles[0], shape=out_shape, context=self,
         )
@@ -203,36 +203,42 @@ class Evaluator:
         self.net = net
         self.compiled = compiled
         self.ckks_params = compiled.params
+        self._eval_handle = None
+        self._tracked_handles = []
 
-        pj = compiled.params.to_bridge_json()
+        try:
+            pj = compiled.params.to_bridge_json()
 
-        # Build the EvalKeyBundle handle from serialized keys
-        keys_handle = ffi.new_eval_key_bundle()
+            # Build the EvalKeyBundle handle from serialized keys
+            keys_handle = ffi.new_eval_key_bundle()
 
-        if keys.has_rlk:
-            ffi.eval_key_bundle_set_rlk(keys_handle, keys.rlk_data)
+            if keys.has_rlk:
+                ffi.eval_key_bundle_set_rlk(keys_handle, keys.rlk_data)
 
-        for gal_el, key_data in keys.galois_keys.items():
-            ffi.eval_key_bundle_add_galois_key(keys_handle, gal_el, key_data)
+            for gal_el, key_data in keys.galois_keys.items():
+                ffi.eval_key_bundle_add_galois_key(keys_handle, gal_el, key_data)
 
-        for slot_count, key_data in keys.bootstrap_keys.items():
-            ffi.eval_key_bundle_add_bootstrap_key(keys_handle, slot_count, key_data)
+            for slot_count, key_data in keys.bootstrap_keys.items():
+                ffi.eval_key_bundle_add_bootstrap_key(keys_handle, slot_count, key_data)
 
-        if compiled.manifest.boot_logp:
-            ffi.eval_key_bundle_set_boot_logp(
-                keys_handle, list(compiled.manifest.boot_logp)
-            )
+            if compiled.manifest.boot_logp:
+                ffi.eval_key_bundle_set_boot_logp(
+                    keys_handle, list(compiled.manifest.boot_logp)
+                )
 
-        # Create the Go Evaluator (loads all keys internally)
-        self._eval_handle = ffi.new_evaluator(pj, keys_handle)
-        # Bundle data copied into Go Evaluator; free the bundle handle
-        ffi.delete_handle(keys_handle)
+            # Create the Go Evaluator (loads all keys internally)
+            self._eval_handle = ffi.new_evaluator(pj, keys_handle)
+            # Bundle data copied into Go Evaluator; free the bundle handle
+            keys_handle.close()
 
-        # Build inference context
-        self._context = _EvalContext(self._eval_handle, compiled.params, compiled)
+            # Build inference context
+            self._context = _EvalContext(self._eval_handle, compiled.params, compiled)
 
-        # Reconstruct module state from CompiledModel
-        self._reconstruct_modules(compiled)
+            # Reconstruct module state from CompiledModel
+            self._reconstruct_modules(compiled)
+        except:
+            self.close()
+            raise
 
     def _reconstruct_modules(self, compiled: CompiledModel):
         """Apply CompiledModel metadata to the network skeleton."""
@@ -288,6 +294,7 @@ class Evaluator:
             blob_data = blobs[blob_idx]
             lt_h = ffi.linear_transform_unmarshal(blob_data)
             transform_handles[(row, col)] = lt_h
+            self._tracked_handles.append(lt_h)
 
         module.transform_handles = transform_handles
         module.bsgs_ratio = meta["bsgs_ratio"]
@@ -300,6 +307,7 @@ class Evaluator:
         module.on_bias_ptxt = self._context.encode(
             bias_tensor, level=module.level - module.depth
         )
+        self._tracked_handles.append(module.on_bias_ptxt._handle)
         module._eval_context = self._context
 
     def _reconstruct_chebyshev(self, module, meta):
@@ -314,6 +322,7 @@ class Evaluator:
         if meta.get("input_max") is not None:
             module.input_max = meta["input_max"]
         module.compile(self._context)
+        self._tracked_handles.append(module.poly)
 
     def _reconstruct_activation(self, module, meta):
         """Reconstruct a monomial Activation from metadata."""
@@ -321,6 +330,7 @@ class Evaluator:
             module.coeffs = meta["coeffs"]
         module.output_scale = meta.get("output_scale")
         module.compile(self._context)
+        self._tracked_handles.append(module.poly)
 
     def _reconstruct_relu(self, module, meta):
         module.prescale = meta["prescale"]
@@ -360,6 +370,7 @@ class Evaluator:
                 )
 
             bootstrapper.compile(self._context)
+            self._tracked_handles.append(bootstrapper.prescale_ptxt._handle)
 
             target_module.bootstrapper = bootstrapper
             target_module.register_forward_hook(
@@ -381,8 +392,18 @@ class Evaluator:
         return out
 
     def close(self):
-        if hasattr(self, "_eval_handle") and self._eval_handle:
+        # Close all tracked reconstruction handles (LT, poly, bias)
+        for h in getattr(self, '_tracked_handles', []):
+            try:
+                h.close()
+            except Exception:
+                pass
+        self._tracked_handles = []
+
+        # Close the Go Evaluator (two-step: resource cleanup + handle delete)
+        if hasattr(self, '_eval_handle') and self._eval_handle:
             ffi.evaluator_close(self._eval_handle)
+            self._eval_handle.close()
             self._eval_handle = None
 
     def __enter__(self):
@@ -392,6 +413,8 @@ class Evaluator:
         self.close()
 
     def __del__(self):
-        import sys as _sys
-        if _sys and _sys.modules:
-            self.close()
+        if hasattr(self, '_eval_handle') and self._eval_handle:
+            try:
+                self.close()
+            except Exception:
+                pass

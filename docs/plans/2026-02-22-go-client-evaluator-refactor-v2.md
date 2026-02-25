@@ -610,16 +610,16 @@ Using `getattr` with default protects against `close()` being called before `_tr
 
 ### Steps
 
-- [ ] Add `self._eval_handle = None` and `self._tracked_handles = []` at top of `__init__`, before try block
-- [ ] Wrap `__init__` body in try/except — on failure, call `self.close()`, then re-raise
-- [ ] `keys_handle.close()` instead of `ffi.delete_handle(keys_handle)` after `new_evaluator`
-- [ ] `_reconstruct_linear`: append each LT GoHandle and bias PlainText GoHandle to `_tracked_handles`
-- [ ] `_reconstruct_chebyshev`: append `module.poly` (GoHandle) to `_tracked_handles`
-- [ ] `_reconstruct_activation`: append `module.poly` (GoHandle) to `_tracked_handles`
-- [ ] `_reconstruct_bootstrap_hooks`: append `bootstrapper.prescale_ptxt._handle` to `_tracked_handles`
-- [ ] `evaluate_transforms`: replace `ffi.delete_handle(...)` with `.close()` on intermediates
-- [ ] `close()`: iterate `_tracked_handles` → close each → `ffi.evaluator_close` → `_eval_handle.close()`; use `getattr` for safety
-- [ ] `__del__`: call `self.close()` with shutdown guard
+- [x] Add `self._eval_handle = None` and `self._tracked_handles = []` at top of `__init__`, before try block
+- [x] Wrap `__init__` body in try/except — on failure, call `self.close()`, then re-raise
+- [x] `keys_handle.close()` instead of `ffi.delete_handle(keys_handle)` after `new_evaluator`
+- [x] `_reconstruct_linear`: append each LT GoHandle and bias PlainText GoHandle to `_tracked_handles`
+- [x] `_reconstruct_chebyshev`: append `module.poly` (GoHandle) to `_tracked_handles`
+- [x] `_reconstruct_activation`: append `module.poly` (GoHandle) to `_tracked_handles`
+- [x] `_reconstruct_bootstrap_hooks`: append `bootstrapper.prescale_ptxt._handle` to `_tracked_handles`
+- [x] `evaluate_transforms`: replace `ffi.delete_handle(...)` with `.close()` on intermediates
+- [x] `close()`: iterate `_tracked_handles` → close each → `ffi.evaluator_close` → `_eval_handle.close()`; use `getattr` for safety
+- [x] `__del__`: call `self.close()` with shutdown guard
 
 ### Acceptance criteria
 
