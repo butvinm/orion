@@ -59,10 +59,10 @@ Address the remaining five findings from the GoHandle refactor retrospective. F1
 - [x] Run tests — must pass before next task
 
 ### Task 4: F11 — Replace duplicated `compile()` with `super().compile(context)`
-- [ ] In `Linear.compile()` (`orion/nn/linear.py:103-107`), replace duplicated lines with `super().compile(context)`
-- [ ] In `Conv2d.compile()` (`orion/nn/linear.py:192-196`), replace duplicated lines with `super().compile(context)`
-- [ ] Run existing compile/model tests to verify behavior unchanged
-- [ ] Run tests — must pass before next task
+- [x] In `Linear.compile()` (`orion/nn/linear.py:103-107`), replace duplicated lines with `super().compile(context)`
+- [x] In `Conv2d.compile()` (`orion/nn/linear.py:192-196`), replace duplicated lines with `super().compile(context)`
+- [x] Run existing compile/model tests to verify behavior unchanged
+- [x] Run tests — must pass before next task
 
 ### Task 5: F12 — Remove dead legacy fallback in `evaluate_transforms`
 - [ ] Remove the `hasattr(self, 'transform_handles')` guard in `LinearTransform.evaluate_transforms()` (`orion/nn/linear.py:52-55`)

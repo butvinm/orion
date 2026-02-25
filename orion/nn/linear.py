@@ -103,8 +103,7 @@ class Linear(LinearTransform):
     def compile(self, context):
         bias = packing.construct_linear_bias(self)
         self.on_bias_ptxt = context.encoder.encode(bias, self.level-self.depth)
-        self._lt_evaluator = context.lt_evaluator
-        self.transform_ids = context.lt_evaluator.generate_transforms(self)
+        super().compile(context)
 
     def forward(self, x):
         if not self.he_mode:
@@ -192,8 +191,7 @@ class Conv2d(LinearTransform):
     def compile(self, context):
         bias = packing.construct_conv2d_bias(self)
         self.on_bias_ptxt = context.encoder.encode(bias, self.level-self.depth)
-        self._lt_evaluator = context.lt_evaluator
-        self.transform_ids = context.lt_evaluator.generate_transforms(self)
+        super().compile(context)
 
     def forward(self, x):
         if not self.he_mode:
