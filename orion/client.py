@@ -54,51 +54,21 @@ class Client:
         keys = EvalKeys()
 
         if manifest.needs_rlk:
-            out_len = ffi.ctypes.c_ulong(0)
-            err = ffi._make_errout()
-            lib = ffi._get_lib()
-            ptr = lib.ClientGenerateRLK(
-                ffi._uintptr(self._handle.raw),
-                ffi.ctypes.byref(out_len),
-                ffi.ctypes.byref(err),
-            )
-            ffi._check_err(err)
-            keys.rlk_data = ffi.ctypes.string_at(ptr, out_len.value)
-            lib.FreeCArray(ptr)
+            keys.rlk_data = ffi.client_generate_rlk(self._handle)
 
         for gal_el in sorted(manifest.galois_elements):
-            out_len = ffi.ctypes.c_ulong(0)
-            err = ffi._make_errout()
-            lib = ffi._get_lib()
-            ptr = lib.ClientGenerateGaloisKey(
-                ffi._uintptr(self._handle.raw),
-                ffi.ctypes.c_ulonglong(gal_el),
-                ffi.ctypes.byref(out_len),
-                ffi.ctypes.byref(err),
+            keys.galois_keys[gal_el] = ffi.client_generate_galois_key(
+                self._handle, gal_el,
             )
-            ffi._check_err(err)
-            keys.galois_keys[gal_el] = ffi.ctypes.string_at(ptr, out_len.value)
-            lib.FreeCArray(ptr)
 
         if manifest.bootstrap_slots:
             logp = list(manifest.boot_logp)
             for slot_count in manifest.bootstrap_slots:
-                out_len = ffi.ctypes.c_ulong(0)
-                err = ffi._make_errout()
-                lib = ffi._get_lib()
-                logp_arr = (ffi.ctypes.c_int * len(logp))(*logp)
-                ptr = lib.ClientGenerateBootstrapKeys(
-                    ffi._uintptr(self._handle.raw),
-                    ffi.ctypes.c_int(slot_count),
-                    logp_arr, ffi.ctypes.c_int(len(logp)),
-                    ffi.ctypes.byref(out_len),
-                    ffi.ctypes.byref(err),
+                keys.bootstrap_keys[slot_count] = (
+                    ffi.client_generate_bootstrap_keys(
+                        self._handle, slot_count, logp,
+                    )
                 )
-                ffi._check_err(err)
-                keys.bootstrap_keys[slot_count] = ffi.ctypes.string_at(
-                    ptr, out_len.value
-                )
-                lib.FreeCArray(ptr)
 
         return keys
 

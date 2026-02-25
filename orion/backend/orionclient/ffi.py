@@ -505,6 +505,47 @@ def client_generate_keys(h, manifest_json):
     return GoHandle(bundle_h)
 
 
+def client_generate_rlk(h):
+    lib = _get_lib()
+    err = _make_errout()
+    out_len = ctypes.c_ulong(0)
+    ptr = lib.ClientGenerateRLK(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
+    _check_err(err)
+    data = ctypes.string_at(ptr, out_len.value)
+    lib.FreeCArray(ptr)
+    return data
+
+
+def client_generate_galois_key(h, gal_el):
+    lib = _get_lib()
+    err = _make_errout()
+    out_len = ctypes.c_ulong(0)
+    ptr = lib.ClientGenerateGaloisKey(
+        _uintptr(h.raw), ctypes.c_ulonglong(gal_el),
+        ctypes.byref(out_len), ctypes.byref(err),
+    )
+    _check_err(err)
+    data = ctypes.string_at(ptr, out_len.value)
+    lib.FreeCArray(ptr)
+    return data
+
+
+def client_generate_bootstrap_keys(h, slot_count, logp):
+    lib = _get_lib()
+    err = _make_errout()
+    out_len = ctypes.c_ulong(0)
+    logp_arr = (ctypes.c_int * len(logp))(*logp)
+    ptr = lib.ClientGenerateBootstrapKeys(
+        _uintptr(h.raw), ctypes.c_int(slot_count),
+        logp_arr, ctypes.c_int(len(logp)),
+        ctypes.byref(out_len), ctypes.byref(err),
+    )
+    _check_err(err)
+    data = ctypes.string_at(ptr, out_len.value)
+    lib.FreeCArray(ptr)
+    return data
+
+
 def client_max_slots(h):
     return int(_get_lib().ClientMaxSlots(_uintptr(h.raw)))
 
