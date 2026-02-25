@@ -230,7 +230,7 @@ class CompilerBackend:
 
     def DeletePlaintext(self, pt_h):
         """Delete a plaintext handle."""
-        ffi.delete_handle(pt_h)
+        pt_h.close()
 
     # -- Parameter queries --
 
@@ -270,7 +270,7 @@ class CompilerBackend:
 
     def DeleteLinearTransform(self, lt_h):
         """Delete a linear transform handle."""
-        ffi.delete_handle(lt_h)
+        lt_h.close()
 
     # -- Polynomial operations --
 
@@ -299,7 +299,8 @@ class CompilerBackend:
     def DeleteScheme(self):
         """Release the Go client."""
         if self._client_h:
-            ffi.client_close(self._client_h)
+            ffi.client_close(self._client_h)   # step 1: zeros SK in Go
+            self._client_h.close()              # step 2: DeleteHandle (frees cgo slot)
             self._client_h = None
 
 
@@ -315,17 +316,17 @@ class PlainTensor:
         self.backend = context.backend
         self.encoder = context.encoder
         self.evaluator = getattr(context, "evaluator", None)
-        self.ids = [ptxt_ids] if isinstance(ptxt_ids, int) else ptxt_ids
+        self.ids = [ptxt_ids] if isinstance(ptxt_ids, ffi.GoHandle) else ptxt_ids
         self.shape = shape
         self.on_shape = on_shape or shape
 
     def __del__(self):
         if "sys" in globals() and sys.modules and self.context:
-            try:
-                for idx in self.ids:
-                    self.backend.DeletePlaintext(idx)
-            except Exception:
-                pass
+            for h in self.ids:
+                try:
+                    h.close()
+                except Exception:
+                    pass
 
     def __len__(self):
         return len(self.ids)

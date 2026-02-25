@@ -752,12 +752,12 @@ After Task 5 adds the explicit `self._lt_evaluator.delete_transforms(module.tran
 
 ### Steps
 
-- [ ] `DeleteScheme()`: add `self._client_h.close()` after `ffi.client_close()`
-- [ ] `DeletePlaintext(pt_h)`: replace `ffi.delete_handle(pt_h)` → `pt_h.close()`
-- [ ] `DeleteLinearTransform(lt_h)`: replace `ffi.delete_handle(lt_h)` → `lt_h.close()`
-- [ ] `PlainTensor.__init__`: update type guard `isinstance(ptxt_ids, int)` → `isinstance(ptxt_ids, GoHandle)`
-- [ ] `PlainTensor.__del__`: replace `self.backend.DeletePlaintext(idx)` → `h.close()` directly
-- [ ] No changes needed to `Encode`, `Decode`, `GenerateLinearTransform`, `SerializeLinearTransform`, `GenerateMonomial`, `GenerateChebyshev` — GoHandle flows through from Task 1
+- [x] `DeleteScheme()`: add `self._client_h.close()` after `ffi.client_close()`
+- [x] `DeletePlaintext(pt_h)`: replace `ffi.delete_handle(pt_h)` → `pt_h.close()`
+- [x] `DeleteLinearTransform(lt_h)`: replace `ffi.delete_handle(lt_h)` → `lt_h.close()`
+- [x] `PlainTensor.__init__`: update type guard `isinstance(ptxt_ids, int)` → `isinstance(ptxt_ids, GoHandle)`
+- [x] `PlainTensor.__del__`: replace `self.backend.DeletePlaintext(idx)` → `h.close()` directly
+- [x] No changes needed to `Encode`, `Decode`, `GenerateLinearTransform`, `SerializeLinearTransform`, `GenerateMonomial`, `GenerateChebyshev` — GoHandle flows through from Task 1
 
 ### Acceptance criteria
 
