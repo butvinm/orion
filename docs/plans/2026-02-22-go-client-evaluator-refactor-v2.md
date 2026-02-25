@@ -284,13 +284,13 @@ Same as Ciphertext: `_handle` becomes GoHandle, `__del__` calls `self._handle.cl
 
 ### Steps
 
-- [ ] `Ciphertext.__init__`: `self._handle` stores GoHandle (no type conversion needed — FFI already returns GoHandle after Task 1)
-- [ ] `Ciphertext.__del__`: replace `ffi.delete_handle(self._handle)` → `self._handle.close()`
-- [ ] `Ciphertext.add/sub/mul/roll` (4 methods): replace `ffi.delete_handle(self._handle)` → `self._handle.close()` in the `in_place` branch
-- [ ] `Ciphertext.mul`: additionally replace `ffi.delete_handle(r)` → `r.close()` for the pre-rescale intermediate
-- [ ] `PlainText.__del__`: replace `ffi.delete_handle(self._handle)` → `self._handle.close()`
-- [ ] `PlainText.mul`: replace `ffi.delete_handle(r)` → `r.close()` and `ffi.delete_handle(other._handle)` → `other._handle.close()`
-- [ ] Remove `from orion.backend.orionclient import ffi` usage of `ffi.delete_handle` from this file (all replaced by `.close()`)
+- [x] `Ciphertext.__init__`: `self._handle` stores GoHandle (no type conversion needed — FFI already returns GoHandle after Task 1)
+- [x] `Ciphertext.__del__`: replace `ffi.delete_handle(self._handle)` → `self._handle.close()`
+- [x] `Ciphertext.add/sub/mul/roll` (4 methods): replace `ffi.delete_handle(self._handle)` → `self._handle.close()` in the `in_place` branch
+- [x] `Ciphertext.mul`: additionally replace `ffi.delete_handle(r)` → `r.close()` for the pre-rescale intermediate
+- [x] `PlainText.__del__`: replace `ffi.delete_handle(self._handle)` → `self._handle.close()`
+- [x] `PlainText.mul`: replace `ffi.delete_handle(r)` → `r.close()` and `ffi.delete_handle(other._handle)` → `other._handle.close()`
+- [x] Remove `from orion.backend.orionclient import ffi` usage of `ffi.delete_handle` from this file (all replaced by `.close()`)
 
 ### Acceptance criteria
 

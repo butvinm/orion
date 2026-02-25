@@ -49,7 +49,7 @@ class Ciphertext:
     def __del__(self):
         if "sys" in globals() and sys.modules and self._handle:
             try:
-                ffi.delete_handle(self._handle)
+                self._handle.close()
             except Exception:
                 pass
 
@@ -122,7 +122,7 @@ class Ciphertext:
         else:
             raise TypeError(f"Cannot add Ciphertext and {type(other)}")
         if in_place:
-            ffi.delete_handle(self._handle)
+            self._handle.close()
             self._handle = r
             return self
         return self._wrap(r)
@@ -144,7 +144,7 @@ class Ciphertext:
         else:
             raise TypeError(f"Cannot sub Ciphertext and {type(other)}")
         if in_place:
-            ffi.delete_handle(self._handle)
+            self._handle.close()
             self._handle = r
             return self
         return self._wrap(r)
@@ -174,10 +174,10 @@ class Ciphertext:
             raise TypeError(f"Cannot mul Ciphertext and {type(other)}")
         if need_rescale:
             r2 = ffi.eval_rescale(self._eval_h(), r)
-            ffi.delete_handle(r)
+            r.close()
             r = r2
         if in_place:
-            ffi.delete_handle(self._handle)
+            self._handle.close()
             self._handle = r
             return self
         return self._wrap(r)
@@ -195,7 +195,7 @@ class Ciphertext:
     def roll(self, amount, in_place=False):
         r = ffi.eval_rotate(self._eval_h(), self._handle, amount)
         if in_place:
-            ffi.delete_handle(self._handle)
+            self._handle.close()
             self._handle = r
             return self
         return self._wrap(r)
@@ -249,10 +249,10 @@ class PlainText:
         r = ffi.eval_mul_plaintext(eval_h, other._handle, self._handle)
         # Rescale after plaintext multiplication (matches old backend behavior)
         r2 = ffi.eval_rescale(eval_h, r)
-        ffi.delete_handle(r)
+        r.close()
         r = r2
         if in_place:
-            ffi.delete_handle(other._handle)
+            other._handle.close()
             other._handle = r
             return other
         return other._wrap(r)
@@ -263,7 +263,7 @@ class PlainText:
     def __del__(self):
         if "sys" in globals() and sys.modules and self._handle:
             try:
-                ffi.delete_handle(self._handle)
+                self._handle.close()
             except Exception:
                 pass
 
