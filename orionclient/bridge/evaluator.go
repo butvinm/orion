@@ -32,7 +32,7 @@ func NewEvaluator(paramsJSON *C.char, keysH C.uintptr_t, errOut **C.char) C.uint
 
 //export EvaluatorClose
 func EvaluatorClose(evalH C.uintptr_t) {
-	defer func() { recover() }()
+	defer logPanic()
 	h := cgo.Handle(evalH)
 	eval := h.Value().(*orionclient.Evaluator)
 	eval.Close()
@@ -278,21 +278,21 @@ func EvalBootstrap(evalH C.uintptr_t, ctH C.uintptr_t, numSlots C.int, errOut **
 
 //export EvalMaxSlots
 func EvalMaxSlots(evalH C.uintptr_t) C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	return C.int(eval.MaxSlots())
 }
 
 //export EvalGaloisElement
 func EvalGaloisElement(evalH C.uintptr_t, rotation C.int) C.ulonglong {
-	defer func() { recover() }()
+	defer logPanic()
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	return C.ulonglong(eval.GaloisElement(int(rotation)))
 }
 
 //export EvalModuliChain
 func EvalModuliChain(evalH C.uintptr_t, outLen *C.int) *C.ulonglong {
-	defer func() { recover() }()
+	defer logPanic()
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	chain := eval.ModuliChain()
 	n := len(chain)
@@ -312,7 +312,7 @@ func EvalModuliChain(evalH C.uintptr_t, outLen *C.int) *C.ulonglong {
 
 //export EvalDefaultScale
 func EvalDefaultScale(evalH C.uintptr_t) C.ulonglong {
-	defer func() { recover() }()
+	defer logPanic()
 	eval := cgo.Handle(evalH).Value().(*orionclient.Evaluator)
 	return C.ulonglong(eval.DefaultScale())
 }

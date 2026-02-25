@@ -43,42 +43,42 @@ func CiphertextUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintp
 
 //export CiphertextLevel
 func CiphertextLevel(ctH C.uintptr_t) C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.int(ct.Level())
 }
 
 //export CiphertextScale
 func CiphertextScale(ctH C.uintptr_t) C.ulonglong {
-	defer func() { recover() }()
+	defer logPanic()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.ulonglong(ct.Scale())
 }
 
 //export CiphertextSetScale
 func CiphertextSetScale(ctH C.uintptr_t, scale C.ulonglong) {
-	defer func() { recover() }()
+	defer logPanic()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	ct.SetScale(uint64(scale))
 }
 
 //export CiphertextSlots
 func CiphertextSlots(ctH C.uintptr_t) C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.int(ct.Slots())
 }
 
 //export CiphertextDegree
 func CiphertextDegree(ctH C.uintptr_t) C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.int(ct.Degree())
 }
 
 //export CiphertextShape
 func CiphertextShape(ctH C.uintptr_t, outLen *C.int) *C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	shape := ct.Shape()
 	ptr, length := goIntsToCInts(shape)
@@ -88,7 +88,7 @@ func CiphertextShape(ctH C.uintptr_t, outLen *C.int) *C.int {
 
 //export CiphertextNumCiphertexts
 func CiphertextNumCiphertexts(ctH C.uintptr_t) C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
 	return C.int(ct.NumCiphertexts())
 }
@@ -121,35 +121,35 @@ func CombineSingleCiphertexts(handles *C.uintptr_t, numHandles C.int, shapeDims 
 
 //export PlaintextLevel
 func PlaintextLevel(ptH C.uintptr_t) C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	return C.int(pt.Level())
 }
 
 //export PlaintextScale
 func PlaintextScale(ptH C.uintptr_t) C.ulonglong {
-	defer func() { recover() }()
+	defer logPanic()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	return C.ulonglong(pt.Scale())
 }
 
 //export PlaintextSetScale
 func PlaintextSetScale(ptH C.uintptr_t, scale C.ulonglong) {
-	defer func() { recover() }()
+	defer logPanic()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	pt.SetScale(uint64(scale))
 }
 
 //export PlaintextSlots
 func PlaintextSlots(ptH C.uintptr_t) C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	return C.int(pt.Slots())
 }
 
 //export PlaintextShape
 func PlaintextShape(ptH C.uintptr_t, outLen *C.int) *C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
 	shape := pt.Shape()
 	ptr, length := goIntsToCInts(shape)
@@ -172,35 +172,35 @@ func NewEvalKeyBundle() C.uintptr_t {
 
 //export EvalKeyBundleSetRLK
 func EvalKeyBundleSetRLK(keysH C.uintptr_t, data *C.char, dataLen C.ulong) {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	bundle.RLK = cBytesToGoSlice(data, dataLen)
 }
 
 //export EvalKeyBundleAddGaloisKey
 func EvalKeyBundleAddGaloisKey(keysH C.uintptr_t, galEl C.ulonglong, data *C.char, dataLen C.ulong) {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	bundle.GaloisKeys[uint64(galEl)] = cBytesToGoSlice(data, dataLen)
 }
 
 //export EvalKeyBundleAddBootstrapKey
 func EvalKeyBundleAddBootstrapKey(keysH C.uintptr_t, slots C.int, data *C.char, dataLen C.ulong) {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	bundle.BootstrapKeys[int(slots)] = cBytesToGoSlice(data, dataLen)
 }
 
 //export EvalKeyBundleSetBootLogP
 func EvalKeyBundleSetBootLogP(keysH C.uintptr_t, logP *C.int, logPLen C.int) {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	bundle.BootLogP = cIntsToGoInts(logP, logPLen)
 }
 
 //export EvalKeyBundleGetRLK
 func EvalKeyBundleGetRLK(keysH C.uintptr_t, outLen *C.ulong) *C.char {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	if bundle.RLK == nil {
 		*outLen = 0
@@ -213,7 +213,7 @@ func EvalKeyBundleGetRLK(keysH C.uintptr_t, outLen *C.ulong) *C.char {
 
 //export EvalKeyBundleGetGaloisKeyElements
 func EvalKeyBundleGetGaloisKeyElements(keysH C.uintptr_t, outLen *C.int) *C.ulonglong {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	n := len(bundle.GaloisKeys)
 	if n == 0 {
@@ -234,7 +234,7 @@ func EvalKeyBundleGetGaloisKeyElements(keysH C.uintptr_t, outLen *C.int) *C.ulon
 
 //export EvalKeyBundleGetGaloisKey
 func EvalKeyBundleGetGaloisKey(keysH C.uintptr_t, galEl C.ulonglong, outLen *C.ulong) *C.char {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	data, ok := bundle.GaloisKeys[uint64(galEl)]
 	if !ok {
@@ -248,7 +248,7 @@ func EvalKeyBundleGetGaloisKey(keysH C.uintptr_t, galEl C.ulonglong, outLen *C.u
 
 //export EvalKeyBundleGetBootstrapSlots
 func EvalKeyBundleGetBootstrapSlots(keysH C.uintptr_t, outLen *C.int) *C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	n := len(bundle.BootstrapKeys)
 	if n == 0 {
@@ -266,7 +266,7 @@ func EvalKeyBundleGetBootstrapSlots(keysH C.uintptr_t, outLen *C.int) *C.int {
 
 //export EvalKeyBundleGetBootstrapKey
 func EvalKeyBundleGetBootstrapKey(keysH C.uintptr_t, slots C.int, outLen *C.ulong) *C.char {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	data, ok := bundle.BootstrapKeys[int(slots)]
 	if !ok {
@@ -280,7 +280,7 @@ func EvalKeyBundleGetBootstrapKey(keysH C.uintptr_t, slots C.int, outLen *C.ulon
 
 //export EvalKeyBundleGetBootLogP
 func EvalKeyBundleGetBootLogP(keysH C.uintptr_t, outLen *C.int) *C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	bundle := cgo.Handle(keysH).Value().(*orionclient.EvalKeyBundle)
 	ptr, length := goIntsToCInts(bundle.BootLogP)
 	*outLen = length

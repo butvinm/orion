@@ -65,7 +65,7 @@ func NewClientFromSecretKey(paramsJSON *C.char, skData *C.char, skLen C.ulong, e
 
 //export ClientClose
 func ClientClose(clientH C.uintptr_t) {
-	defer func() { recover() }()
+	defer logPanic()
 	h := cgo.Handle(clientH)
 	client := h.Value().(*orionclient.Client)
 	client.Close()
@@ -221,21 +221,21 @@ func ClientGenerateKeys(clientH C.uintptr_t, manifestJSON *C.char, errOut **C.ch
 
 //export ClientMaxSlots
 func ClientMaxSlots(clientH C.uintptr_t) C.int {
-	defer func() { recover() }()
+	defer logPanic()
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	return C.int(client.MaxSlots())
 }
 
 //export ClientDefaultScale
 func ClientDefaultScale(clientH C.uintptr_t) C.ulonglong {
-	defer func() { recover() }()
+	defer logPanic()
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	return C.ulonglong(client.DefaultScale())
 }
 
 //export ClientGaloisElement
 func ClientGaloisElement(clientH C.uintptr_t, rotation C.int) C.ulonglong {
-	defer func() { recover() }()
+	defer logPanic()
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	return C.ulonglong(client.GaloisElement(int(rotation)))
 }

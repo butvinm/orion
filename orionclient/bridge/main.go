@@ -6,6 +6,7 @@ import "C"
 
 import (
 	"fmt"
+	"os"
 	"runtime/cgo"
 	"unsafe"
 )
@@ -14,7 +15,7 @@ func main() {}
 
 //export DeleteHandle
 func DeleteHandle(h C.uintptr_t) {
-	defer func() { recover() }()
+	defer logPanic()
 	cgo.Handle(h).Delete()
 }
 
@@ -29,6 +30,14 @@ func FreeCArray(ptr unsafe.Pointer) {
 func catchPanic(errOut **C.char) {
 	if r := recover(); r != nil {
 		setErr(errOut, fmt.Sprintf("panic: %v", r))
+	}
+}
+
+// logPanic recovers from panics and logs them to stderr.
+// Use for bridge functions without errOut where panics must not cross the CGo boundary.
+func logPanic() {
+	if r := recover(); r != nil {
+		fmt.Fprintf(os.Stderr, "orionclient bridge panic: %v\n", r)
 	}
 }
 
