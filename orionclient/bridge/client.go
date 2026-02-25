@@ -241,7 +241,8 @@ func ClientGaloisElement(clientH C.uintptr_t, rotation C.int) C.ulonglong {
 }
 
 //export ClientModuliChain
-func ClientModuliChain(clientH C.uintptr_t, outLen *C.int) *C.ulonglong {
+func ClientModuliChain(clientH C.uintptr_t, outLen *C.int, errOut **C.char) *C.ulonglong {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	chain := client.ModuliChain()
 	n := len(chain)
@@ -260,7 +261,8 @@ func ClientModuliChain(clientH C.uintptr_t, outLen *C.int) *C.ulonglong {
 }
 
 //export ClientAuxModuliChain
-func ClientAuxModuliChain(clientH C.uintptr_t, outLen *C.int) *C.ulonglong {
+func ClientAuxModuliChain(clientH C.uintptr_t, outLen *C.int, errOut **C.char) *C.ulonglong {
+	defer catchPanic(errOut)
 	client := cgo.Handle(clientH).Value().(*orionclient.Client)
 	chain := client.AuxModuliChain()
 	n := len(chain)

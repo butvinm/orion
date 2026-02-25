@@ -50,13 +50,13 @@ Address the remaining five findings from the GoHandle refactor retrospective. F1
 - [x] Run tests — must pass before next task
 
 ### Task 3: F8 — Add `errOut` to `ClientModuliChain` and `ClientAuxModuliChain`
-- [ ] Add `errOut **C.char` parameter and `defer catchPanic(errOut)` to `ClientModuliChain` in `orionclient/bridge/client.go`
-- [ ] Add `errOut **C.char` parameter and `defer catchPanic(errOut)` to `ClientAuxModuliChain` in `orionclient/bridge/client.go`
-- [ ] Update Python FFI prototypes in `ffi.py` — add `ctypes.POINTER(ctypes.c_char_p)` to argtypes
-- [ ] Update Python wrapper functions `client_moduli_chain()` and `client_aux_moduli_chain()` in `ffi.py` to pass errOut and call `_check_err()`
-- [ ] Rebuild shared library (`pip install -e .`)
-- [ ] Write tests verifying the functions still work correctly after signature change
-- [ ] Run tests — must pass before next task
+- [x] Add `errOut **C.char` parameter and `defer catchPanic(errOut)` to `ClientModuliChain` in `orionclient/bridge/client.go`
+- [x] Add `errOut **C.char` parameter and `defer catchPanic(errOut)` to `ClientAuxModuliChain` in `orionclient/bridge/client.go`
+- [x] Update Python FFI prototypes in `ffi.py` — add `ctypes.POINTER(ctypes.c_char_p)` to argtypes
+- [x] Update Python wrapper functions `client_moduli_chain()` and `client_aux_moduli_chain()` in `ffi.py` to pass errOut and call `_check_err()`
+- [x] Rebuild shared library (`pip install -e .`)
+- [x] Write tests verifying the functions still work correctly after signature change
+- [x] Run tests — must pass before next task
 
 ### Task 4: F11 — Replace duplicated `compile()` with `super().compile(context)`
 - [ ] In `Linear.compile()` (`orion/nn/linear.py:103-107`), replace duplicated lines with `super().compile(context)`

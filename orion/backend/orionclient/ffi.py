@@ -310,10 +310,10 @@ def _setup_prototypes(lib):
     lib.GeneratePolynomialChebyshev.restype = _uintptr
 
     # --- Client moduli chain ---
-    lib.ClientModuliChain.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_int)]
+    lib.ClientModuliChain.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_int), _errout]
     lib.ClientModuliChain.restype = ctypes.POINTER(ctypes.c_ulonglong)
 
-    lib.ClientAuxModuliChain.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_int)]
+    lib.ClientAuxModuliChain.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_int), _errout]
     lib.ClientAuxModuliChain.restype = ctypes.POINTER(ctypes.c_ulonglong)
 
     # --- Compile-time linear transform generation ---
@@ -896,8 +896,10 @@ def generate_polynomial_chebyshev(coeffs):
 
 def client_moduli_chain(h):
     lib = _get_lib()
+    err = _make_errout()
     out_len = ctypes.c_int(0)
-    ptr = lib.ClientModuliChain(_uintptr(h.raw), ctypes.byref(out_len))
+    ptr = lib.ClientModuliChain(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
+    _check_err(err)
     n = out_len.value
     result = [int(ptr[i]) for i in range(n)]
     lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
@@ -906,8 +908,10 @@ def client_moduli_chain(h):
 
 def client_aux_moduli_chain(h):
     lib = _get_lib()
+    err = _make_errout()
     out_len = ctypes.c_int(0)
-    ptr = lib.ClientAuxModuliChain(_uintptr(h.raw), ctypes.byref(out_len))
+    ptr = lib.ClientAuxModuliChain(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
+    _check_err(err)
     n = out_len.value
     if n == 0:
         return []
