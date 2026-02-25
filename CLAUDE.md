@@ -82,12 +82,12 @@ Modules receive context via explicit parameters, not class variables:
 
 ### Evaluator type split
 
-Compile-time and inference-time evaluators are separate types:
+Compile-time and inference-time evaluators use separate implementations:
 
-- `PolynomialGenerator` (compile-time) / `PolynomialEvaluator` (inference-time, inherits Generator)
-- `TransformEncoder` (compile-time) / `TransformEvaluator` (inference-time)
+- `PolynomialGenerator` (compile-time, in `compiler_backend.py`) / `_EvalContext` methods (inference-time, in `evaluator.py`)
+- `TransformEncoder` (compile-time, in `compiler_backend.py`) / `_EvalContext.evaluate_transforms` (inference-time, in `evaluator.py`)
 
-No `keyless` boolean — the type system enforces which operations are available.
+At inference time, `_EvalContext` self-aliases as `encoder`, `poly_evaluator`, `lt_evaluator`, `params`, `evaluator`, and `bootstrapper` so nn modules can call e.g. `context.poly_evaluator.evaluate_polynomial(...)` uniformly.
 
 ### Custom NN modules (`orion/nn/`)
 
@@ -137,7 +137,7 @@ All artifacts use binary containers with magic headers, JSON metadata, length-pr
 
 - `CompiledModel`: magic `ORMDL\x00\x01\x00` — stores params, manifest, module metadata, LinearTransform blobs
 - `EvalKeys`: magic `ORKEY\x00\x01\x00` — stores RLK, Galois keys, bootstrap keys
-- `Ciphertext`: magic `ORTXT\x00\x01\x00` — stores per-ciphertext length-prefixed Lattigo binary, shape metadata, CRC32
+- `Ciphertext`: simple shape header (`[ndim, d0, d1, ...]` as little-endian int32s) followed by Go Lattigo marshal bytes. No magic header or CRC32.
 
 ### Go backend — instance-based
 

@@ -36,7 +36,9 @@ func EvaluatorClose(evalH C.uintptr_t) {
 	h := cgo.Handle(evalH)
 	eval := h.Value().(*orionclient.Evaluator)
 	eval.Close()
-	h.Delete()
+	// NOTE: Do NOT call h.Delete() here. EvaluatorClose only does resource cleanup.
+	// The Python GoHandle.close() calls DeleteHandle separately to free the cgo
+	// handle slot (two-step close pattern).
 }
 
 //export EvalEncode

@@ -69,7 +69,9 @@ func ClientClose(clientH C.uintptr_t) {
 	h := cgo.Handle(clientH)
 	client := h.Value().(*orionclient.Client)
 	client.Close()
-	h.Delete()
+	// NOTE: Do NOT call h.Delete() here. ClientClose only does resource cleanup
+	// (zeros the secret key). The Python GoHandle.close() calls DeleteHandle
+	// separately to free the cgo handle slot (two-step close pattern).
 }
 
 //export ClientSecretKey

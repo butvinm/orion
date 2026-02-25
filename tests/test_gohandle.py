@@ -72,6 +72,8 @@ class TestGoHandle:
         """GoHandle(42).raw == 42"""
         h = GoHandle(42)
         assert h.raw == 42
+        # Prevent __del__ from calling DeleteHandle on a fake value
+        h._raw = 0
 
     def test_gohandle_close_is_idempotent(self):
         """h.close(); h.close() -- no error on second call.

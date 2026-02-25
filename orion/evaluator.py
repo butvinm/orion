@@ -122,31 +122,41 @@ class _EvalContext:
 
         # For single-ct input, evaluate each row's transforms
         cts_out_handles = []
-        for i in range(rows):
-            ct_out_h = None
-            for j in range(cols):
-                lt_h = transform_handles.get((i, j))
-                if lt_h is None:
-                    continue
-                res_h = ffi.eval_linear_transform(
-                    self.eval_handle, in_ct._handle, lt_h
-                )
+        ct_out_h = None
+        try:
+            for i in range(rows):
+                ct_out_h = None
+                for j in range(cols):
+                    lt_h = transform_handles.get((i, j))
+                    if lt_h is None:
+                        continue
+                    res_h = ffi.eval_linear_transform(
+                        self.eval_handle, in_ct._handle, lt_h
+                    )
+                    if ct_out_h is None:
+                        ct_out_h = res_h
+                    else:
+                        # Add results
+                        combined = ffi.eval_add(self.eval_handle, ct_out_h, res_h)
+                        ct_out_h.close()
+                        res_h.close()
+                        ct_out_h = combined
+
                 if ct_out_h is None:
-                    ct_out_h = res_h
-                else:
-                    # Add results
-                    combined = ffi.eval_add(self.eval_handle, ct_out_h, res_h)
-                    ct_out_h.close()
-                    res_h.close()
-                    ct_out_h = combined
+                    continue
 
-            if ct_out_h is None:
-                continue
-
-            # Rescale
-            rescaled_h = ffi.eval_rescale(self.eval_handle, ct_out_h)
-            ct_out_h.close()
-            cts_out_handles.append(rescaled_h)
+                # Rescale
+                rescaled_h = ffi.eval_rescale(self.eval_handle, ct_out_h)
+                ct_out_h.close()
+                ct_out_h = None
+                cts_out_handles.append(rescaled_h)
+        except:
+            # Clean up intermediate and accumulated handles on error
+            if ct_out_h is not None:
+                ct_out_h.close()
+            for h in cts_out_handles:
+                h.close()
+            raise
 
         # For now, assuming single output CT
         if len(cts_out_handles) == 1:
@@ -167,18 +177,6 @@ class _EvalContext:
         result.on_shape = fhe_out_shape
         return result
 
-    def bootstrap(self, ct_handle, slots):
-        """Bootstrap a ciphertext (used by nn.Bootstrap via context.bootstrapper)."""
-        r = ffi.eval_bootstrap(self.eval_handle, ct_handle, slots)
-        return r
-
-    def generate_bootstrapper(self, slots):
-        """No-op -- bootstrap evaluators are loaded in Go constructor."""
-        pass
-
-    def rescale(self, ct_handle, in_place=False):
-        """Rescale a raw ciphertext handle."""
-        return ffi.eval_rescale(self.eval_handle, ct_handle)
 
 
 class Evaluator:
@@ -206,25 +204,26 @@ class Evaluator:
 
             # Build the EvalKeyBundle handle from serialized keys
             keys_handle = ffi.new_eval_key_bundle()
+            try:
+                if keys.has_rlk:
+                    ffi.eval_key_bundle_set_rlk(keys_handle, keys.rlk_data)
 
-            if keys.has_rlk:
-                ffi.eval_key_bundle_set_rlk(keys_handle, keys.rlk_data)
+                for gal_el, key_data in keys.galois_keys.items():
+                    ffi.eval_key_bundle_add_galois_key(keys_handle, gal_el, key_data)
 
-            for gal_el, key_data in keys.galois_keys.items():
-                ffi.eval_key_bundle_add_galois_key(keys_handle, gal_el, key_data)
+                for slot_count, key_data in keys.bootstrap_keys.items():
+                    ffi.eval_key_bundle_add_bootstrap_key(keys_handle, slot_count, key_data)
 
-            for slot_count, key_data in keys.bootstrap_keys.items():
-                ffi.eval_key_bundle_add_bootstrap_key(keys_handle, slot_count, key_data)
+                if compiled.manifest.boot_logp:
+                    ffi.eval_key_bundle_set_boot_logp(
+                        keys_handle, list(compiled.manifest.boot_logp)
+                    )
 
-            if compiled.manifest.boot_logp:
-                ffi.eval_key_bundle_set_boot_logp(
-                    keys_handle, list(compiled.manifest.boot_logp)
-                )
-
-            # Create the Go Evaluator (loads all keys internally)
-            self._eval_handle = ffi.new_evaluator(pj, keys_handle)
-            # Bundle data copied into Go Evaluator; free the bundle handle
-            keys_handle.close()
+                # Create the Go Evaluator (loads all keys internally)
+                self._eval_handle = ffi.new_evaluator(pj, keys_handle)
+            finally:
+                # Bundle data copied into Go Evaluator (or error); always free
+                keys_handle.close()
 
             # Build inference context
             self._context = _EvalContext(self._eval_handle, compiled.params, compiled)
@@ -337,6 +336,12 @@ class Evaluator:
         if hasattr(module, "init_orion_params"):
             module.init_orion_params()
         module.compile(self._context)
+        # Track all PlainText handles created during BatchNorm compile
+        for attr in ('on_running_mean_ptxt', 'on_inv_running_std_ptxt',
+                     'on_weight_ptxt', 'on_bias_ptxt'):
+            pt = getattr(module, attr, None)
+            if pt is not None and hasattr(pt, '_handle'):
+                self._tracked_handles.append(pt._handle)
 
     def _reconstruct_bootstrap_hooks(self, net, meta, module_map):
         """Recreate bootstrap forward hooks from metadata."""

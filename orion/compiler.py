@@ -267,11 +267,9 @@ class Compiler:
                 # Serialize each transform blob
                 transform_blobs = {}
                 for (row, col), tid in module.transform_ids.items():
-                    blob_data, ptr = self.backend.SerializeLinearTransform(tid)
-                    blob_bytes = bytes(blob_data)
-                    self.backend.FreeCArray(ptr)
+                    blob_data = self.backend.SerializeLinearTransform(tid)
                     transform_blobs[f"{row},{col}"] = len(blobs)
-                    blobs.append(blob_bytes)
+                    blobs.append(bytes(blob_data))
 
                 # Free compile-time LT handles (serialized into blobs, no longer needed)
                 self._lt_evaluator.delete_transforms(module.transform_ids)

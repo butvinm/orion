@@ -256,13 +256,8 @@ class CompilerBackend:
         )
 
     def SerializeLinearTransform(self, lt_h):
-        """Serialize a linear transform to bytes. Returns (bytes, None).
-
-        The second element (ptr) is None because the new FFI handles
-        memory management internally. Callers should NOT call FreeCArray.
-        """
-        data = ffi.linear_transform_marshal(lt_h)
-        return data, None
+        """Serialize a linear transform to bytes."""
+        return ffi.linear_transform_marshal(lt_h)
 
     def GetLinearTransformRotationKeys(self, lt_h):
         """Get required Galois elements for a linear transform."""
@@ -291,10 +286,6 @@ class CompilerBackend:
         return ffi.generate_minimax_sign_coeffs(degrees, prec, logalpha, logerr, debug)
 
     # -- Lifecycle --
-
-    def FreeCArray(self, ptr):
-        """No-op. The new FFI handles memory management internally."""
-        pass
 
     def DeleteScheme(self):
         """Release the Go client."""
