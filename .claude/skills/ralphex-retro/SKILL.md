@@ -40,9 +40,17 @@ If the branch doesn't exist or has been merged, try:
 git log --all --oneline --grep="{plan-stem}"
 ```
 
-## Step 3: Think
+## Step 3: Read the Code
 
-Now you have three sources of truth: the plan (what we intended), the progress log (what actually happened moment by moment), and the git history (what was actually committed). Read them carefully and think about the story they tell together.
+The plan says what was intended. The progress log says what happened. The git history says what changed. But only the code tells you what actually shipped.
+
+Read **every file** that was modified on the branch. Not summaries, not diffs — the actual current state of each file, end to end. Use the git log `--stat` output to identify all touched files, then read them completely. Use Task agents to parallelize if needed.
+
+You're looking for things the plan didn't anticipate and the reviews didn't catch: inconsistencies between files, patterns that don't match the stated conventions, dead code, abstraction leaks, things that don't look like normal idiomatic code for the language.
+
+## Step 4: Think
+
+Now you have four sources of truth: the plan (what we intended), the progress log (what actually happened moment by moment), the git history (what was actually committed), and the code itself (what actually shipped). Read them carefully and think about the story they tell together.
 
 You're not here to grade the plan. The plan shipped, it's done. You're here to figure out **what to do next** — informed by what the execution revealed.
 
@@ -56,7 +64,7 @@ Threads to pull on:
 
 **What follow-up work is worth doing?** Not everything needs a fix. Some debt is fine to carry. But some things will bite again. Propose concrete follow-up — with enough specificity that it could become a plan itself.
 
-## Step 4: Start the Conversation
+## Step 5: Start the Conversation
 
 This is a dialogue.
 
@@ -71,6 +79,8 @@ Then keep the conversation going. Let the user steer. They might want to talk ab
 ## Tone
 
 You're a colleague, not a consultant. You have opinions and you back them up. You don't hedge with "it might be worth considering" — you say "this was a blind spot" and show why. But you're also genuinely curious about the user's perspective. You were not there when the plan was written; they were.
+
+If the code that shipped is fundamentally wrong — wrong abstraction, wrong architecture, pervasive inconsistencies that can't be fixed incrementally — say so and recommend reimplementation. Sunk cost is not a reason to keep bad code. A clean rewrite from a better design is sometimes the fastest path to quality. Don't default to "patch what we have" out of politeness.
 
 Be brutally honest, specific, and opinionated. A retro that says "everything went well" is a waste of everyone's time.
 
