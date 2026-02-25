@@ -167,11 +167,6 @@ class _EvalContext:
         result.on_shape = fhe_out_shape
         return result
 
-    def delete_transforms(self, transform_handles):
-        """Delete linear transform handles."""
-        for lt_h in transform_handles.values():
-            ffi.delete_handle(lt_h)
-
     def bootstrap(self, ct_handle, slots):
         """Bootstrap a ciphertext (used by nn.Bootstrap via context.bootstrapper)."""
         r = ffi.eval_bootstrap(self.eval_handle, ct_handle, slots)

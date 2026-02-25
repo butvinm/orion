@@ -112,8 +112,20 @@ Each module carries a `level` (multiplicative depth) and `depth` (consumed depth
 ### Backend layer
 
 - **orionclient (Go):** `orionclient/` — Instance-based Go library with `Client` (keygen, encrypt, decrypt) and `Evaluator` (FHE ops). No global state; multiple instances coexist. Bridge layer at `orionclient/bridge/` exports C functions via `cgo.Handle`.
-- **Python FFI:** `orion/backend/orionclient/ffi.py` — ctypes bindings for the bridge shared library. All Go objects are opaque handles (`uintptr_t`). Error propagation via `errOut` pattern.
+- **Python FFI:** `orion/backend/orionclient/ffi.py` — ctypes bindings for the bridge shared library. All Go objects wrapped in `GoHandle` (RAII wrapper). Error propagation via `errOut` pattern.
 - **Compile-time helpers:** `orion/core/compiler_backend.py` — `CompilerBackend` (adapter wrapping FFI for the compiler), `NewEncoder`, `PolynomialGenerator`, `TransformEncoder`, `NewParameters`.
+
+### GoHandle — Go object lifecycle management
+
+`GoHandle` (`orion/backend/orionclient/ffi.py`) is an RAII wrapper for `cgo.Handle` values (`uintptr_t`). Every FFI function returning a Go object returns `GoHandle`; no raw ints escape `ffi.py`.
+
+**Five rules:**
+
+1. **GoHandle wraps every Go object.** `GoHandle.raw` returns the underlying int (raises `RuntimeError` if closed). `GoHandle.close()` calls `DeleteHandle` — idempotent, safe to call multiple times.
+2. **Bridge functions borrow, never consume.** `ClientClose(h)` zeros the secret key but does NOT delete the cgo handle. `EvaluatorClose(h)` same. Only `DeleteHandle` (called by `GoHandle.close()`) frees the handle slot.
+3. **Two-step close pattern.** `Client.close()` and `Evaluator.close()` call the Go Close method (resource cleanup) then `handle.close()` (handle table cleanup). Both idempotent.
+4. **Evaluator owns reconstruction handles.** `Evaluator._tracked_handles: list[GoHandle]` collects all handles created during module reconstruction (LinearTransform, Polynomial, bias PlainText, bootstrap prescale). `Evaluator.close()` closes them all. Modules do NOT clean up Go handles.
+5. **Intermediates freed immediately.** Multi-step FFI sequences (encrypt multiple CTs then combine, linear transform accumulation) close intermediate handles as soon as they're consumed. Error paths use try/except to clean up partial handles.
 
 ### Models (`orion/models/`)
 
@@ -134,6 +146,6 @@ The `orionclient` library is fully instance-based. Multiple `Client` and `Evalua
 ## Conventions
 
 - Top-level API: `orion.Compiler`, `orion.Client`, `orion.Evaluator`, `orion.CompiledModel`, `orion.CKKSParams`, etc. (re-exported from `orion/__init__.py`).
-- Go FFI uses `cgo.Handle` for opaque pointer passing. Bridge functions return `(result, errOut)` pairs. Python wrapper checks `errOut` and raises `RuntimeError`.
+- Go FFI uses `cgo.Handle` for opaque pointer passing, wrapped in `GoHandle` on the Python side. Bridge functions return `(result, errOut)` pairs. Python wrapper checks `errOut` and raises `RuntimeError`. No raw `uintptr_t` values outside `ffi.py`.
 - Parameters are defined as frozen dataclasses (`CKKSParams`, `CompilerConfig`) — no YAML configs.
 - Binary serialization (`to_bytes()`/`from_bytes()`) for all cross-process artifacts — no HDF5.

@@ -406,11 +406,6 @@ def _bytes_ptr(data):
 
 # --- Handle lifecycle ---
 
-def delete_handle(h):
-    raw = h.raw if isinstance(h, GoHandle) else h
-    _get_lib().DeleteHandle(_uintptr(raw))
-
-
 def free_c_array(ptr):
     _get_lib().FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
 

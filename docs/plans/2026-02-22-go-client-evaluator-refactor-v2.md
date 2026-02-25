@@ -803,10 +803,10 @@ New test file covering GoHandle lifecycle — the behavior that caused all 6 han
 
 ### Steps
 
-- [ ] Remove `_EvalContext.delete_transforms()` (evaluator.py lines 170–173) — dead code after Task 5 removed its only caller (`LinearTransform.__del__`)
-- [ ] Update `CLAUDE.md` architecture section to document GoHandle convention
-- [ ] Search for stale imports (`from orion.backend.python`, `from orion.backend.lattigo`) and remove if found
-- [ ] Search for raw `ffi.delete_handle` calls outside `GoHandle.close()` and remove if found
+- [x] Remove `_EvalContext.delete_transforms()` (evaluator.py lines 170–173) — dead code after Task 5 removed its only caller (`LinearTransform.__del__`)
+- [x] Update `CLAUDE.md` architecture section to document GoHandle convention
+- [x] Search for stale imports (`from orion.backend.python`, `from orion.backend.lattigo`) and remove if found
+- [x] Search for raw `ffi.delete_handle` calls outside `GoHandle.close()` and remove if found
 
 ### Acceptance criteria
 
