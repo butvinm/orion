@@ -58,7 +58,7 @@ class Client:
             err = ffi._make_errout()
             lib = ffi._get_lib()
             ptr = lib.ClientGenerateRLK(
-                ffi._uintptr(self._handle),
+                ffi._uintptr(self._handle.raw),
                 ffi.ctypes.byref(out_len),
                 ffi.ctypes.byref(err),
             )
@@ -71,7 +71,7 @@ class Client:
             err = ffi._make_errout()
             lib = ffi._get_lib()
             ptr = lib.ClientGenerateGaloisKey(
-                ffi._uintptr(self._handle),
+                ffi._uintptr(self._handle.raw),
                 ffi.ctypes.c_ulonglong(gal_el),
                 ffi.ctypes.byref(out_len),
                 ffi.ctypes.byref(err),
@@ -88,7 +88,7 @@ class Client:
                 lib = ffi._get_lib()
                 logp_arr = (ffi.ctypes.c_int * len(logp))(*logp)
                 ptr = lib.ClientGenerateBootstrapKeys(
-                    ffi._uintptr(self._handle),
+                    ffi._uintptr(self._handle.raw),
                     ffi.ctypes.c_int(slot_count),
                     logp_arr, ffi.ctypes.c_int(len(logp)),
                     ffi.ctypes.byref(out_len),

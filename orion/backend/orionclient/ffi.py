@@ -348,6 +348,41 @@ def _setup_prototypes(lib):
 
 
 # =========================================================================
+# GoHandle — RAII wrapper for cgo.Handle
+# =========================================================================
+
+
+class GoHandle:
+    """RAII wrapper for a cgo.Handle (opaque uintptr_t). Idempotent close."""
+    __slots__ = ('_raw',)
+
+    def __init__(self, raw: int):
+        self._raw = raw
+
+    @property
+    def raw(self) -> int:
+        if not self._raw:
+            raise RuntimeError("Use of closed handle")
+        return self._raw
+
+    def close(self):
+        """Release the Go object. Idempotent — second call is a no-op."""
+        if self._raw:
+            _get_lib().DeleteHandle(_uintptr(self._raw))
+            self._raw = 0
+
+    def __del__(self):
+        if self._raw and sys and sys.modules:
+            try:
+                self.close()
+            except Exception:
+                pass
+
+    def __bool__(self):
+        return bool(self._raw)
+
+
+# =========================================================================
 # High-level wrapper functions
 # =========================================================================
 
@@ -372,7 +407,8 @@ def _bytes_ptr(data):
 # --- Handle lifecycle ---
 
 def delete_handle(h):
-    _get_lib().DeleteHandle(_uintptr(h))
+    raw = h.raw if isinstance(h, GoHandle) else h
+    _get_lib().DeleteHandle(_uintptr(raw))
 
 
 def free_c_array(ptr):
@@ -386,7 +422,7 @@ def new_client(params_json):
     err = _make_errout()
     h = lib.NewClient(params_json.encode("utf-8"), ctypes.byref(err))
     _check_err(err)
-    return h
+    return GoHandle(h)
 
 
 def new_client_from_secret_key(params_json, sk_bytes):
@@ -397,18 +433,18 @@ def new_client_from_secret_key(params_json, sk_bytes):
         params_json.encode("utf-8"), sk_ptr, sk_len, ctypes.byref(err),
     )
     _check_err(err)
-    return h
+    return GoHandle(h)
 
 
 def client_close(h):
-    _get_lib().ClientClose(_uintptr(h))
+    _get_lib().ClientClose(_uintptr(h.raw))
 
 
 def client_secret_key(h):
     lib = _get_lib()
     err = _make_errout()
     out_len = ctypes.c_ulong(0)
-    ptr = lib.ClientSecretKey(_uintptr(h), ctypes.byref(out_len), ctypes.byref(err))
+    ptr = lib.ClientSecretKey(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
     _check_err(err)
     data = ctypes.string_at(ptr, out_len.value)  # ptr is c_void_p (int)
     lib.FreeCArray(ptr)
@@ -420,11 +456,11 @@ def client_encode(h, values, level, scale):
     err = _make_errout()
     arr, n = _doubles_ptr(values)
     pt_h = lib.ClientEncode(
-        _uintptr(h), arr, n, ctypes.c_int(level),
+        _uintptr(h.raw), arr, n, ctypes.c_int(level),
         ctypes.c_ulonglong(scale), ctypes.byref(err),
     )
     _check_err(err)
-    return pt_h
+    return GoHandle(pt_h)
 
 
 def client_decode(h, pt_h):
@@ -432,7 +468,7 @@ def client_decode(h, pt_h):
     err = _make_errout()
     out_len = ctypes.c_int(0)
     ptr = lib.ClientDecode(
-        _uintptr(h), _uintptr(pt_h), ctypes.byref(out_len), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(pt_h.raw), ctypes.byref(out_len), ctypes.byref(err),
     )
     _check_err(err)
     n = out_len.value
@@ -444,9 +480,9 @@ def client_decode(h, pt_h):
 def client_encrypt(h, pt_h):
     lib = _get_lib()
     err = _make_errout()
-    ct_h = lib.ClientEncrypt(_uintptr(h), _uintptr(pt_h), ctypes.byref(err))
+    ct_h = lib.ClientEncrypt(_uintptr(h.raw), _uintptr(pt_h.raw), ctypes.byref(err))
     _check_err(err)
-    return ct_h
+    return GoHandle(ct_h)
 
 
 def client_decrypt(h, ct_h):
@@ -454,11 +490,11 @@ def client_decrypt(h, ct_h):
     err = _make_errout()
     num_out = ctypes.c_int(0)
     ptr = lib.ClientDecrypt(
-        _uintptr(h), _uintptr(ct_h), ctypes.byref(num_out), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.byref(num_out), ctypes.byref(err),
     )
     _check_err(err)
     n = num_out.value
-    handles = [ptr[i] for i in range(n)]
+    handles = [GoHandle(ptr[i]) for i in range(n)]
     if ptr:
         lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
     return handles
@@ -468,22 +504,22 @@ def client_generate_keys(h, manifest_json):
     lib = _get_lib()
     err = _make_errout()
     bundle_h = lib.ClientGenerateKeys(
-        _uintptr(h), manifest_json.encode("utf-8"), ctypes.byref(err),
+        _uintptr(h.raw), manifest_json.encode("utf-8"), ctypes.byref(err),
     )
     _check_err(err)
-    return bundle_h
+    return GoHandle(bundle_h)
 
 
 def client_max_slots(h):
-    return int(_get_lib().ClientMaxSlots(_uintptr(h)))
+    return int(_get_lib().ClientMaxSlots(_uintptr(h.raw)))
 
 
 def client_default_scale(h):
-    return int(_get_lib().ClientDefaultScale(_uintptr(h)))
+    return int(_get_lib().ClientDefaultScale(_uintptr(h.raw)))
 
 
 def client_galois_element(h, rotation):
-    return int(_get_lib().ClientGaloisElement(_uintptr(h), ctypes.c_int(rotation)))
+    return int(_get_lib().ClientGaloisElement(_uintptr(h.raw), ctypes.c_int(rotation)))
 
 
 # --- Evaluator ---
@@ -492,14 +528,14 @@ def new_evaluator(params_json, keys_h):
     lib = _get_lib()
     err = _make_errout()
     h = lib.NewEvaluator(
-        params_json.encode("utf-8"), _uintptr(keys_h), ctypes.byref(err),
+        params_json.encode("utf-8"), _uintptr(keys_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return h
+    return GoHandle(h)
 
 
 def evaluator_close(h):
-    _get_lib().EvaluatorClose(_uintptr(h))
+    _get_lib().EvaluatorClose(_uintptr(h.raw))
 
 
 def eval_encode(h, values, level, scale):
@@ -507,156 +543,156 @@ def eval_encode(h, values, level, scale):
     err = _make_errout()
     arr, n = _doubles_ptr(values)
     pt_h = lib.EvalEncode(
-        _uintptr(h), arr, n, ctypes.c_int(level),
+        _uintptr(h.raw), arr, n, ctypes.c_int(level),
         ctypes.c_ulonglong(scale), ctypes.byref(err),
     )
     _check_err(err)
-    return pt_h
+    return GoHandle(pt_h)
 
 
 def eval_add(h, ct0_h, ct1_h):
     lib = _get_lib()
     err = _make_errout()
-    r = lib.EvalAdd(_uintptr(h), _uintptr(ct0_h), _uintptr(ct1_h), ctypes.byref(err))
+    r = lib.EvalAdd(_uintptr(h.raw), _uintptr(ct0_h.raw), _uintptr(ct1_h.raw), ctypes.byref(err))
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_sub(h, ct0_h, ct1_h):
     lib = _get_lib()
     err = _make_errout()
-    r = lib.EvalSub(_uintptr(h), _uintptr(ct0_h), _uintptr(ct1_h), ctypes.byref(err))
+    r = lib.EvalSub(_uintptr(h.raw), _uintptr(ct0_h.raw), _uintptr(ct1_h.raw), ctypes.byref(err))
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_mul(h, ct0_h, ct1_h):
     lib = _get_lib()
     err = _make_errout()
-    r = lib.EvalMul(_uintptr(h), _uintptr(ct0_h), _uintptr(ct1_h), ctypes.byref(err))
+    r = lib.EvalMul(_uintptr(h.raw), _uintptr(ct0_h.raw), _uintptr(ct1_h.raw), ctypes.byref(err))
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_add_plaintext(h, ct_h, pt_h):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalAddPlaintext(
-        _uintptr(h), _uintptr(ct_h), _uintptr(pt_h), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(pt_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_sub_plaintext(h, ct_h, pt_h):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalSubPlaintext(
-        _uintptr(h), _uintptr(ct_h), _uintptr(pt_h), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(pt_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_mul_plaintext(h, ct_h, pt_h):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalMulPlaintext(
-        _uintptr(h), _uintptr(ct_h), _uintptr(pt_h), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(pt_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_add_scalar(h, ct_h, scalar):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalAddScalar(
-        _uintptr(h), _uintptr(ct_h), ctypes.c_double(scalar), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.c_double(scalar), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_mul_scalar(h, ct_h, scalar):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalMulScalar(
-        _uintptr(h), _uintptr(ct_h), ctypes.c_double(scalar), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.c_double(scalar), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_negate(h, ct_h):
     lib = _get_lib()
     err = _make_errout()
-    r = lib.EvalNegate(_uintptr(h), _uintptr(ct_h), ctypes.byref(err))
+    r = lib.EvalNegate(_uintptr(h.raw), _uintptr(ct_h.raw), ctypes.byref(err))
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_rotate(h, ct_h, amount):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalRotate(
-        _uintptr(h), _uintptr(ct_h), ctypes.c_int(amount), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.c_int(amount), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_rescale(h, ct_h):
     lib = _get_lib()
     err = _make_errout()
-    r = lib.EvalRescale(_uintptr(h), _uintptr(ct_h), ctypes.byref(err))
+    r = lib.EvalRescale(_uintptr(h.raw), _uintptr(ct_h.raw), ctypes.byref(err))
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_poly(h, ct_h, poly_h, out_scale):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalPoly(
-        _uintptr(h), _uintptr(ct_h), _uintptr(poly_h),
+        _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(poly_h.raw),
         ctypes.c_ulonglong(out_scale), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_linear_transform(h, ct_h, lt_h):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalLinearTransform(
-        _uintptr(h), _uintptr(ct_h), _uintptr(lt_h), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), _uintptr(lt_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_bootstrap(h, ct_h, num_slots):
     lib = _get_lib()
     err = _make_errout()
     r = lib.EvalBootstrap(
-        _uintptr(h), _uintptr(ct_h), ctypes.c_int(num_slots), ctypes.byref(err),
+        _uintptr(h.raw), _uintptr(ct_h.raw), ctypes.c_int(num_slots), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 def eval_max_slots(h):
-    return int(_get_lib().EvalMaxSlots(_uintptr(h)))
+    return int(_get_lib().EvalMaxSlots(_uintptr(h.raw)))
 
 
 def eval_galois_element(h, rotation):
-    return int(_get_lib().EvalGaloisElement(_uintptr(h), ctypes.c_int(rotation)))
+    return int(_get_lib().EvalGaloisElement(_uintptr(h.raw), ctypes.c_int(rotation)))
 
 
 def eval_moduli_chain(h):
     lib = _get_lib()
     out_len = ctypes.c_int(0)
-    ptr = lib.EvalModuliChain(_uintptr(h), ctypes.byref(out_len))
+    ptr = lib.EvalModuliChain(_uintptr(h.raw), ctypes.byref(out_len))
     n = out_len.value
     result = [int(ptr[i]) for i in range(n)]
     lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
@@ -664,7 +700,7 @@ def eval_moduli_chain(h):
 
 
 def eval_default_scale(h):
-    return int(_get_lib().EvalDefaultScale(_uintptr(h)))
+    return int(_get_lib().EvalDefaultScale(_uintptr(h.raw)))
 
 
 # --- Ciphertext type ops ---
@@ -673,7 +709,7 @@ def ciphertext_marshal(h):
     lib = _get_lib()
     err = _make_errout()
     out_len = ctypes.c_ulong(0)
-    ptr = lib.CiphertextMarshal(_uintptr(h), ctypes.byref(out_len), ctypes.byref(err))
+    ptr = lib.CiphertextMarshal(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
     _check_err(err)
     data = ctypes.string_at(ptr, out_len.value)  # ptr is c_void_p (int)
     lib.FreeCArray(ptr)
@@ -686,33 +722,33 @@ def ciphertext_unmarshal(data):
     ptr, length = _bytes_ptr(data)
     h = lib.CiphertextUnmarshal(ptr, length, ctypes.byref(err))
     _check_err(err)
-    return h
+    return GoHandle(h)
 
 
 def ciphertext_level(h):
-    return int(_get_lib().CiphertextLevel(_uintptr(h)))
+    return int(_get_lib().CiphertextLevel(_uintptr(h.raw)))
 
 
 def ciphertext_scale(h):
-    return int(_get_lib().CiphertextScale(_uintptr(h)))
+    return int(_get_lib().CiphertextScale(_uintptr(h.raw)))
 
 
 def ciphertext_set_scale(h, scale):
-    _get_lib().CiphertextSetScale(_uintptr(h), ctypes.c_ulonglong(scale))
+    _get_lib().CiphertextSetScale(_uintptr(h.raw), ctypes.c_ulonglong(scale))
 
 
 def ciphertext_slots(h):
-    return int(_get_lib().CiphertextSlots(_uintptr(h)))
+    return int(_get_lib().CiphertextSlots(_uintptr(h.raw)))
 
 
 def ciphertext_degree(h):
-    return int(_get_lib().CiphertextDegree(_uintptr(h)))
+    return int(_get_lib().CiphertextDegree(_uintptr(h.raw)))
 
 
 def ciphertext_shape(h):
     lib = _get_lib()
     out_len = ctypes.c_int(0)
-    ptr = lib.CiphertextShape(_uintptr(h), ctypes.byref(out_len))
+    ptr = lib.CiphertextShape(_uintptr(h.raw), ctypes.byref(out_len))
     n = out_len.value
     result = [int(ptr[i]) for i in range(n)]
     lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
@@ -720,7 +756,7 @@ def ciphertext_shape(h):
 
 
 def ciphertext_num_ciphertexts(h):
-    return int(_get_lib().CiphertextNumCiphertexts(_uintptr(h)))
+    return int(_get_lib().CiphertextNumCiphertexts(_uintptr(h.raw)))
 
 
 def combine_single_ciphertexts(handles, shape):
@@ -728,63 +764,63 @@ def combine_single_ciphertexts(handles, shape):
     lib = _get_lib()
     err = _make_errout()
     n = len(handles)
-    h_arr = (_uintptr * n)(*[_uintptr(h) for h in handles])
+    h_arr = (_uintptr * n)(*[_uintptr(h.raw) for h in handles])
     nd = len(shape)
     s_arr = (ctypes.c_int * nd)(*shape)
     r = lib.CombineSingleCiphertexts(
         h_arr, ctypes.c_int(n), s_arr, ctypes.c_int(nd), ctypes.byref(err),
     )
     _check_err(err)
-    return r
+    return GoHandle(r)
 
 
 # --- Plaintext type ops ---
 
 def plaintext_level(h):
-    return int(_get_lib().PlaintextLevel(_uintptr(h)))
+    return int(_get_lib().PlaintextLevel(_uintptr(h.raw)))
 
 
 def plaintext_scale(h):
-    return int(_get_lib().PlaintextScale(_uintptr(h)))
+    return int(_get_lib().PlaintextScale(_uintptr(h.raw)))
 
 
 def plaintext_set_scale(h, scale):
-    _get_lib().PlaintextSetScale(_uintptr(h), ctypes.c_ulonglong(scale))
+    _get_lib().PlaintextSetScale(_uintptr(h.raw), ctypes.c_ulonglong(scale))
 
 
 def plaintext_slots(h):
-    return int(_get_lib().PlaintextSlots(_uintptr(h)))
+    return int(_get_lib().PlaintextSlots(_uintptr(h.raw)))
 
 
 # --- EvalKeyBundle ops ---
 
 def new_eval_key_bundle():
-    return _get_lib().NewEvalKeyBundle()
+    return GoHandle(_get_lib().NewEvalKeyBundle())
 
 
 def eval_key_bundle_set_rlk(h, data):
     ptr, length = _bytes_ptr(data)
-    _get_lib().EvalKeyBundleSetRLK(_uintptr(h), ptr, length)
+    _get_lib().EvalKeyBundleSetRLK(_uintptr(h.raw), ptr, length)
 
 
 def eval_key_bundle_add_galois_key(h, gal_el, data):
     ptr, length = _bytes_ptr(data)
     _get_lib().EvalKeyBundleAddGaloisKey(
-        _uintptr(h), ctypes.c_ulonglong(gal_el), ptr, length,
+        _uintptr(h.raw), ctypes.c_ulonglong(gal_el), ptr, length,
     )
 
 
 def eval_key_bundle_add_bootstrap_key(h, slots, data):
     ptr, length = _bytes_ptr(data)
     _get_lib().EvalKeyBundleAddBootstrapKey(
-        _uintptr(h), ctypes.c_int(slots), ptr, length,
+        _uintptr(h.raw), ctypes.c_int(slots), ptr, length,
     )
 
 
 def eval_key_bundle_set_boot_logp(h, logp):
     n = len(logp)
     arr = (ctypes.c_int * n)(*logp)
-    _get_lib().EvalKeyBundleSetBootLogP(_uintptr(h), arr, ctypes.c_int(n))
+    _get_lib().EvalKeyBundleSetBootLogP(_uintptr(h.raw), arr, ctypes.c_int(n))
 
 
 # --- LinearTransform ops ---
@@ -795,19 +831,19 @@ def linear_transform_unmarshal(data):
     ptr, length = _bytes_ptr(data)
     h = lib.LinearTransformUnmarshal(ptr, length, ctypes.byref(err))
     _check_err(err)
-    return h
+    return GoHandle(h)
 
 
 # --- Polynomial ops ---
 
 def generate_polynomial_monomial(coeffs):
     arr, n = _doubles_ptr(coeffs)
-    return _get_lib().GeneratePolynomialMonomial(arr, n)
+    return GoHandle(_get_lib().GeneratePolynomialMonomial(arr, n))
 
 
 def generate_polynomial_chebyshev(coeffs):
     arr, n = _doubles_ptr(coeffs)
-    return _get_lib().GeneratePolynomialChebyshev(arr, n)
+    return GoHandle(_get_lib().GeneratePolynomialChebyshev(arr, n))
 
 
 # --- Client moduli chain ---
@@ -815,7 +851,7 @@ def generate_polynomial_chebyshev(coeffs):
 def client_moduli_chain(h):
     lib = _get_lib()
     out_len = ctypes.c_int(0)
-    ptr = lib.ClientModuliChain(_uintptr(h), ctypes.byref(out_len))
+    ptr = lib.ClientModuliChain(_uintptr(h.raw), ctypes.byref(out_len))
     n = out_len.value
     result = [int(ptr[i]) for i in range(n)]
     lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
@@ -825,7 +861,7 @@ def client_moduli_chain(h):
 def client_aux_moduli_chain(h):
     lib = _get_lib()
     out_len = ctypes.c_int(0)
-    ptr = lib.ClientAuxModuliChain(_uintptr(h), ctypes.byref(out_len))
+    ptr = lib.ClientAuxModuliChain(_uintptr(h.raw), ctypes.byref(out_len))
     n = out_len.value
     if n == 0:
         return []
@@ -853,14 +889,14 @@ def generate_linear_transform(params_json, diag_indices, diag_data, slots_per_di
         ctypes.byref(err),
     )
     _check_err(err)
-    return h
+    return GoHandle(h)
 
 
 def linear_transform_marshal(h):
     lib = _get_lib()
     err = _make_errout()
     out_len = ctypes.c_ulong(0)
-    ptr = lib.LinearTransformMarshal(_uintptr(h), ctypes.byref(out_len), ctypes.byref(err))
+    ptr = lib.LinearTransformMarshal(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
     _check_err(err)
     data = ctypes.string_at(ptr, out_len.value)
     lib.FreeCArray(ptr)
@@ -872,7 +908,7 @@ def linear_transform_required_galois_elements(h, params_json):
     err = _make_errout()
     out_len = ctypes.c_int(0)
     ptr = lib.LinearTransformRequiredGaloisElements(
-        _uintptr(h), params_json.encode("utf-8"),
+        _uintptr(h.raw), params_json.encode("utf-8"),
         ctypes.byref(out_len), ctypes.byref(err),
     )
     _check_err(err)
