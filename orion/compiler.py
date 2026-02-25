@@ -554,6 +554,7 @@ class Compiler:
         """Release the Go backend. Idempotent."""
         if hasattr(self, "backend") and self.backend:
             self.backend.DeleteScheme()
+            self.backend = None
 
     def __del__(self):
         try:

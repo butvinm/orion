@@ -546,6 +546,8 @@ class TestErrorPathCleanup:
             first_key = keys_list[0]
             handles[(first_key[0], first_key[1] + 1)] = handles[first_key]
             added_synthetic = True
+        assert has_multi_col or added_synthetic, \
+            "Need multi-column transforms to exercise eval_add path"
 
         lt_results = []
         real_lt = ffi.eval_linear_transform

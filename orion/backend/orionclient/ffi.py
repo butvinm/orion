@@ -901,6 +901,8 @@ def client_moduli_chain(h):
     ptr = lib.ClientModuliChain(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
     _check_err(err)
     n = out_len.value
+    if n == 0:
+        return []
     result = [int(ptr[i]) for i in range(n)]
     lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
     return result

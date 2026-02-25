@@ -293,6 +293,16 @@ class CompilerBackend:
             self._client_h.close()              # step 2: DeleteHandle (frees cgo slot)
             self._client_h = None
 
+    def close(self):
+        """Release the Go backend. Idempotent."""
+        self.DeleteScheme()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
+
 
 # =========================================================================
 # PlainTensor (moved from backend/python/encoder.py)

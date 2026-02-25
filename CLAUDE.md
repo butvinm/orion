@@ -121,11 +121,12 @@ Each module carries a `level` (multiplicative depth) and `depth` (consumed depth
 
 **Five rules:**
 
-1. **GoHandle wraps every Go object.** `GoHandle.raw` returns the underlying int (raises `RuntimeError` if closed). `GoHandle.close()` calls `DeleteHandle` — idempotent, safe to call multiple times.
+1. **GoHandle wraps every Go object.** `GoHandle.__init__` accepts an optional `tag: str` (e.g. `"Client"`, `"Ciphertext"`, `"LinearTransform"`). All FFI wrapper functions pass a descriptive tag. `__repr__` includes the tag: `GoHandle(42 Client)` or `GoHandle(closed Client)`. `GoHandle.raw` returns the underlying int (raises `RuntimeError` if closed). `GoHandle.close()` calls `DeleteHandle` — idempotent, safe to call multiple times.
 2. **Bridge functions borrow, never consume.** `ClientClose(h)` zeros the secret key but does NOT delete the cgo handle. `EvaluatorClose(h)` same. Only `DeleteHandle` (called by `GoHandle.close()`) frees the handle slot.
 3. **Two-step close pattern.** `Client.close()` and `Evaluator.close()` call the Go Close method (resource cleanup) then `handle.close()` (handle table cleanup). Both idempotent.
 4. **Evaluator owns reconstruction handles.** `Evaluator._tracked_handles: list[GoHandle]` collects all handles created during module reconstruction (LinearTransform, Polynomial, bias PlainText, bootstrap prescale). `Evaluator.close()` closes them all. Modules do NOT clean up Go handles.
 5. **Intermediates freed immediately.** Multi-step FFI sequences (encrypt multiple CTs then combine, linear transform accumulation) close intermediate handles as soon as they're consumed. Error paths use try/except to clean up partial handles.
+6. **Canonical `__del__` for handle-owning classes.** Every class wrapping a Go handle uses `def __del__(self): try: self.close() except Exception: pass`. All handle-owning classes (`GoHandle`, `Ciphertext`, `PlainText`, `Client`, `_MultiPlainText`, `Evaluator`, `Compiler`, `CompilerBackend`, `PlainTensor`) follow this pattern. `Ciphertext` and `PlainText` expose `close()` for explicit deterministic handle release.
 
 ### Models (`orion/models/`)
 
