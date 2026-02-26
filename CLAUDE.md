@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Orion
 
-Orion is a Fully Homomorphic Encryption (FHE) framework for deep learning inference. It takes PyTorch neural networks, analyzes them, and executes inference on encrypted data using the CKKS scheme. The core pipeline is: **fit** (collect value range statistics) → **compile** (assign FHE levels, place bootstraps, pack data) → **encrypt & infer** (run on ciphertexts).
+This is an opinionated fork of [baahl-nyu/orion](https://github.com/baahl-nyu/orion), a research-grade FHE framework for deep learning inference. The fork refactors Orion for practical usage: instance-based API (no global state), binary serialization (no YAML/HDF5), explicit context passing, and full access to underlying Lattigo primitives.
+
+Orion takes PyTorch neural networks, analyzes them, and executes inference on encrypted data using the CKKS scheme. The core pipeline is: **fit** (collect value range statistics) → **compile** (assign FHE levels, place bootstraps, pack data) → **encrypt & infer** (run on ciphertexts).
 
 ## Build & Development
 
@@ -30,9 +32,13 @@ pytest tests/models/test_mlp.py
 
 The build process compiles Go code in `orionclient/bridge/` into a platform-specific shared library (`.so`/`.dylib`/`.dll`) that Python loads via ctypes.
 
+## Design Principle: Don't Constrain Lattigo Usage
+
+Orion provides three things: **model compilation**, **plaintext encoding**, and **model evaluation**. Encryption and decryption are the user's domain — Orion must not hide or restrict access to the underlying Lattigo primitives. Users may need per-ciphertext control for threshold encryption, custom key management, hybrid schemes, or any protocol Lattigo supports. Convenience methods (e.g. `encrypt_tensor`) are fine as shortcuts, but the per-ciphertext `encode`/`encrypt`/`decrypt`/`decode` path must always remain accessible.
+
 ## Architecture
 
-### v2 API — Three-class pipeline
+### Three-class pipeline
 
 The API uses three purpose-built classes: `Compiler`, `Client`, and `Evaluator`. No global state, no YAML configs, no HDF5 files. All artifacts serialize to bytes.
 
@@ -52,23 +58,22 @@ open("model.bin", "wb").write(compiled.to_bytes())
 compiled = orion.CompiledModel.from_bytes(open("model.bin", "rb").read())
 client = orion.Client(compiled.params)
 keys = client.generate_keys(compiled.manifest)
-pt = client.encode(input_tensor, level=compiled.input_level)
-ct = client.encrypt(pt)
+ct = client.encrypt_tensor(input_tensor, level=compiled.input_level)
 
 # 3. Server (has model class definition, no trained weights needed)
 compiled = orion.CompiledModel.from_bytes(open("model.bin", "rb").read())
 net_skeleton = MLP()  # fresh instance — weights baked into CompiledModel blobs
 evaluator = orion.Evaluator(net_skeleton, compiled, keys)
 ct_result = evaluator.run(ct)
-result = client.decode(client.decrypt(ct_result))
+result = client.decrypt_tensor(ct_result)
 ```
 
 **Key files:**
 
 - `orion/params.py` — `CKKSParams` (frozen dataclass for CKKS parameters), `CompilerConfig` (compilation settings)
 - `orion/compiler.py` — `Compiler` class: traces, fits, and compiles networks. No keys needed.
-- `orion/client.py` — `Client` class: key generation, encode/decode, encrypt/decrypt. Thin FFI wrapper over `orionclient`.
-- `orion/ciphertext.py` — Unified `Ciphertext` class wrapping a Go `*orionclient.Ciphertext` via `cgo.Handle`. Replaces old `CipherText` and `CipherTensor`. Also contains `PlainText` wrapper.
+- `orion/client.py` — `Client` class: key generation, `encrypt_tensor`/`decrypt_tensor` (convenience), `encode`/`encrypt`/`decrypt`/`decode` (per-ciphertext primitives for advanced use). Thin FFI wrapper over `orionclient`.
+- `orion/ciphertext.py` — `Ciphertext` and `PlainText` wrappers over Go objects via `cgo.Handle`.
 - `orion/evaluator.py` — `Evaluator` class: loads compiled model + keys, runs FHE inference. No secret key.
 - `orion/compiled_model.py` — `CompiledModel`, `KeyManifest`, `EvalKeys` with binary serialization (`to_bytes()`/`from_bytes()`).
 
@@ -78,7 +83,6 @@ Modules receive context via explicit parameters, not class variables:
 
 - **Compile time:** `module.compile(context)` and `module.fit(context)` take a namespace with `backend`, `params`, `encoder`, `lt_evaluator`, `poly_evaluator`, `margin`, `config`.
 - **Inference time:** `Ciphertext` carries a `context` attribute with the evaluator FFI handle and param info. Each module reads `x.context.eval_handle`, `x.context.ckks_params`, etc. Output ciphertexts propagate context automatically.
-- `Module.scheme` and `Module.margin` class variables are deleted. No `set_scheme()` or `set_margin()`.
 
 ### Evaluator type split
 
@@ -119,7 +123,7 @@ Each module carries a `level` (multiplicative depth) and `depth` (consumed depth
 
 `GoHandle` (`orion/backend/orionclient/ffi.py`) is an RAII wrapper for `cgo.Handle` values (`uintptr_t`). Every FFI function returning a Go object returns `GoHandle`; no raw ints escape `ffi.py`.
 
-**Five rules:**
+**Rules:**
 
 1. **GoHandle wraps every Go object.** `GoHandle.__init__` accepts an optional `tag: str` (e.g. `"Client"`, `"Ciphertext"`, `"LinearTransform"`). All FFI wrapper functions pass a descriptive tag. `__repr__` includes the tag: `GoHandle(42 Client)` or `GoHandle(closed Client)`. `GoHandle.raw` returns the underlying int (raises `RuntimeError` if closed). `GoHandle.close()` calls `DeleteHandle` — idempotent, safe to call multiple times.
 2. **Bridge functions borrow, never consume.** `ClientClose(h)` zeros the secret key but does NOT delete the cgo handle. `EvaluatorClose(h)` same. Only `DeleteHandle` (called by `GoHandle.close()`) frees the handle slot.
@@ -140,13 +144,19 @@ All artifacts use binary containers with magic headers, JSON metadata, length-pr
 - `EvalKeys`: magic `ORKEY\x00\x01\x00` — stores RLK, Galois keys, bootstrap keys
 - `Ciphertext`: simple shape header (`[ndim, d0, d1, ...]` as little-endian int32s) followed by Go Lattigo marshal bytes. No magic header or CRC32.
 
-### Go backend — instance-based
+## Roadmap
 
-The `orionclient` library is fully instance-based. Multiple `Client` and `Evaluator` instances with different parameters can coexist in the same process. No global state.
+- [ ] Get rid of python client, provide only Go API
+- [ ] Add threshold encryption to WASM demo
+- [ ] Store computation graph in compiled model, implement pure Go evaluator
+
+### Target architecture
+
+1. **Lattigo bindings (Golang)** — thin Python and JS bindings for demos. Not Orion-specific; anyone can implement Lattigo bindings for any language.
+2. **Orion Client (Golang)** — encoding/decoding of tensors into plaintexts (one list of numbers to another, nothing else). Thin Python and JS bindings for demos.
+3. **Orion Compiler and Torch modules (Python)** — Torch modules for Orion-specific blocks (e.g. `on.Conv2d`). Compiler that fits data, traverses model to build computation graph and packed diagonals, serializes model/inference/crypto params.
+4. **Orion Evaluator (Golang)** — accepts params and model, performs inference. Accepts Lattigo crypto context FROM USER — essential to stay independent from scheme so users can enable threshold encryption or whatever they want. Orion is only responsible for performing operations on ciphertexts in proper order.
 
 ## Conventions
 
-- Top-level API: `orion.Compiler`, `orion.Client`, `orion.Evaluator`, `orion.CompiledModel`, `orion.CKKSParams`, etc. (re-exported from `orion/__init__.py`).
-- Go FFI uses `cgo.Handle` for opaque pointer passing, wrapped in `GoHandle` on the Python side. Bridge functions return `(result, errOut)` pairs. Python wrapper checks `errOut` and raises `RuntimeError`. No raw `uintptr_t` values outside `ffi.py`.
-- Parameters are defined as frozen dataclasses (`CKKSParams`, `CompilerConfig`) — no YAML configs.
-- Binary serialization (`to_bytes()`/`from_bytes()`) for all cross-process artifacts — no HDF5.
+- Top-level API re-exported from `orion/__init__.py`: `Compiler`, `Client`, `Evaluator`, `CompiledModel`, `CKKSParams`, etc.
