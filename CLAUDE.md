@@ -36,7 +36,7 @@ The build process compiles Go code in `orionclient/bridge/` into a platform-spec
 
 Orion provides three things: **model compilation**, **plaintext encoding**, and **model evaluation**. Encryption and decryption are the user's domain — Orion must not hide or restrict access to the underlying Lattigo primitives. Users may need per-ciphertext control for threshold encryption, custom key management, hybrid schemes, or any protocol Lattigo supports. Convenience methods (e.g. `encrypt_tensor`) are fine as shortcuts, but the per-ciphertext `encode`/`encrypt`/`decrypt`/`decode` path must always remain accessible.
 
-## Architecture
+## Current Architecture
 
 ### Three-class pipeline
 
@@ -143,12 +143,6 @@ All artifacts use binary containers with magic headers, JSON metadata, length-pr
 - `CompiledModel`: magic `ORMDL\x00\x01\x00` — stores params, manifest, module metadata, LinearTransform blobs
 - `EvalKeys`: magic `ORKEY\x00\x01\x00` — stores RLK, Galois keys, bootstrap keys
 - `Ciphertext`: simple shape header (`[ndim, d0, d1, ...]` as little-endian int32s) followed by Go Lattigo marshal bytes. No magic header or CRC32.
-
-## Roadmap
-
-- [ ] Get rid of python client, provide only Go API
-- [ ] Add threshold encryption to WASM demo
-- [ ] Store computation graph in compiled model, implement pure Go evaluator
 
 ### Target architecture
 
