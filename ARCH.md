@@ -211,7 +211,7 @@ The secret key is generated in the browser and never leaves it. Lattigo bindings
 
 ## Compiled Model Format
 
-The compiled model uses a simple binary container: JSON header + length-prefixed binary blobs + CRC32 checksum. No third-party serialization libraries — Go reads it with `encoding/json` + `encoding/binary` (stdlib), Python with `json` + `struct` (stdlib), JS with `JSON.parse` + `DataView` (native).
+The compiled model uses a simple binary container: magic + JSON header + length-prefixed binary blobs. No third-party serialization libraries — Go reads it with `encoding/json` + `encoding/binary` (stdlib), Python with `json` + `struct` (stdlib), JS with `JSON.parse` + `DataView` (native).
 
 ### Binary layout
 
@@ -223,7 +223,6 @@ The compiled model uses a simple binary container: JSON header + length-prefixed
 for each blob:
   [8]  BLOB_LEN (uint64 LE)
   [N]  BLOB_DATA
-[4]   CRC32 of everything above
 ```
 
 ### Header JSON structure
@@ -254,9 +253,7 @@ for each blob:
   "input_level": 7,
   "cost": {
     "rotation_count": 248,
-    "bootstrap_count": 0,
-    "multiplicative_depth": 7,
-    "eval_key_size_mb": 97
+    "bootstrap_count": 0
   },
   "graph": {
     "input": "flatten",
@@ -351,7 +348,7 @@ type CompiledModel struct {
     Config     CompilerConfig `json:"config"`
     Manifest   KeyManifest    `json:"manifest"`
     InputLevel int            `json:"input_level"`
-    Cost       CostProfile    `json:"cost"`
+    Cost       CostProfile    `json:"cost"`       // informational, not validated by evaluator
     Graph      Graph          `json:"graph"`
 }
 
@@ -373,10 +370,8 @@ type Node struct {
 }
 
 type Edge struct {
-    Src     string `json:"src"`
-    Dst     string `json:"dst"`
-    SrcPort int    `json:"src_port,omitempty"`
-    DstPort int    `json:"dst_port,omitempty"`
+    Src string `json:"src"`
+    Dst string `json:"dst"`
 }
 ```
 
@@ -497,51 +492,623 @@ Four phases. No backward compatibility — the Python evaluator is deleted in Ph
 
 The `.orion` v2 format is the contract between compiler and evaluator. Everything else builds on it.
 
-1. **Rewrite `CompiledModel` serialization.** New magic (`ORION\x00\x02\x00`), JSON header with `graph.nodes[]` + `graph.edges[]` (replacing the flat topology + module_metadata dicts), raw float64 diagonal blobs (replacing Lattigo-serialized LinearTransform blobs).
+#### 1.1 Rewrite `CompiledModel` dataclass
 
-2. **Modify compiler output.** Store graph edges from the NetworkDAG (currently built then discarded). Store raw `module.diagonals` as float64 blobs instead of calling `SerializeLinearTransform()`. The compiler still calls `GenerateLinearTransform()` transiently — it's needed to compute required Galois elements via BSGS decomposition — but the Lattigo object is discarded after querying, not serialized.
+**File:** `orion/compiled_model.py`
 
-3. **Delete Python evaluator.** `evaluator.py` (422 lines) becomes dead code the moment the format changes. Delete it. The FHE forward paths in nn modules also become dead code (only the evaluator called them), but can be stripped later in Phase 3.
+Replace the current `CompiledModel` fields:
 
-4. **Cleartext graph validator.** A test that compiles an MLP to `.orion` v2, reads it back, walks the graph with numpy matrix multiplications and polynomial evaluations, and compares against PyTorch cleartext output. Validates format structure and numerical correctness without CKKS.
+```python
+# Current (v1)
+params: CKKSParams
+config: CompilerConfig
+manifest: KeyManifest
+input_level: int
+module_metadata: dict      # module_name -> per-type metadata dict
+topology: list[str]        # flat execution order
+blobs: list[bytes]         # Lattigo-serialized LinearTransform blobs + raw bias blobs
+
+# New (v2)
+params: CKKSParams
+config: CompilerConfig
+manifest: KeyManifest
+input_level: int
+cost: CostProfile          # new: rotation_count, bootstrap_count. Informational, not validated by evaluator
+graph: Graph               # new: nodes + edges (replaces topology + module_metadata)
+blobs: list[bytes]         # raw float64 diagonal blobs + raw bias blobs (no Lattigo artifacts)
+```
+
+New supporting types:
+
+```python
+@dataclass
+class CostProfile:
+    rotation_count: int
+    bootstrap_count: int
+
+@dataclass
+class Graph:
+    input: str              # name of input node
+    output: str             # name of output node
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+@dataclass
+class GraphNode:
+    name: str
+    op: str                 # one of the op types below
+    level: int
+    depth: int
+    shape: dict | None      # {"input": [...], "output": [...], "fhe_input": [...], "fhe_output": [...]}
+    config: dict            # op-specific, see table below
+    blob_refs: dict[str, int] | None  # key -> blob index
+
+@dataclass
+class GraphEdge:
+    src: str
+    dst: str
+```
+
+Change serialization magic from `ORMDL\x00\x01\x00` to `ORION\x00\x02\x00`. The `to_bytes()` / `from_bytes()` methods emit/parse the JSON header structure defined in the "Compiled Model Format" section above. The `_pack_container` / `_unpack_container` helpers stay — same binary container pattern, new magic and JSON structure.
+
+`EvalKeys` and `KeyManifest` are unchanged.
+
+#### 1.2 Define node op types and their configs
+
+Every node in `graph.nodes` has an `op` string and an op-specific `config` dict. Complete enumeration:
+
+| `op`               | `config` keys                                                                                                                                          | `blob_refs` keys                           | Notes                                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flatten`          | _(empty)_                                                                                                                                              | _(none)_                                   | Shape-only, no computation                                                                                                                                                   |
+| `linear_transform` | `bsgs_ratio` (float), `output_rotations` (int)                                                                                                         | `diag_{row}_{col}` (one per block), `bias` | Includes Linear, Conv2d, AvgPool2d                                                                                                                                           |
+| `quad`             | _(empty)_                                                                                                                                              | _(none)_                                   | x² + rescale. `depth: 1`                                                                                                                                                     |
+| `polynomial`       | `coeffs` (list[float]), `basis` (`"monomial"` or `"chebyshev"`), `prescale` (float), `postscale` (float), `constant` (float)                           | _(none)_                                   | Coefficients inline (degree ≤ 63). Covers Sigmoid, SiLU, GELU, generic Chebyshev                                                                                             |
+| `relu`             | `degrees` (list[int], length 3), `prec` (int), `logalpha` (int), `logerr` (int), `prescale` (float), `postscale` (float), `coeffs` (list[list[float]]) | _(none)_                                   | `coeffs` stores pre-computed minimax sign polynomial coefficients per degree, so evaluator doesn't need to regenerate                                                        |
+| `bootstrap`        | `input_level` (int), `input_min` (float), `input_max` (float), `prescale` (float), `postscale` (float), `constant` (float), `slots` (int)              | _(none)_                                   | `slots` = 2^ceil(log2(fhe_input elements))                                                                                                                                   |
+| `add`              | _(empty)_                                                                                                                                              | _(none)_                                   | Two incoming edges (residual connection)                                                                                                                                     |
+| `mult`             | _(empty)_                                                                                                                                              | _(none)_                                   | Two incoming edges                                                                                                                                                           |
+| `batch_norm`       | `fused` (bool)                                                                                                                                         | _(none)_                                   | If `fused: true`, node is informational only (weights folded into preceding linear). Unfused batch norms are not supported — the compiler must fuse all batch norms or error |
+
+All nodes carry `level` (int) and `depth` (int) as top-level fields. `shape` is required for `linear_transform` and `bootstrap`, optional for others.
+
+#### 1.3 Raw diagonal blob format
+
+Implement `pack_raw_diagonals()` and `unpack_raw_diagonals()` helpers.
+
+**Input:** one block of diagonals — `dict[int, list[float]]` mapping diagonal index to padded float64 values (length = `max_slots`). This is one `(row, col)` entry from `module.diagonals`.
+
+**Output blob:**
+
+```
+[4]                          NUM_DIAGS (uint32 LE)
+[NUM_DIAGS × 4]              DIAG_INDICES (int32 LE, sorted ascending)
+[NUM_DIAGS × max_slots × 8]  VALUES (float64 LE, IEEE 754)
+```
+
+Fixed stride: the evaluator can seek to diagonal `i` at offset `4 + NUM_DIAGS*4 + i*max_slots*8`.
+
+**Bias blobs:** raw float64 array, length = `max_slots`, zero-padded. No header — the evaluator knows the slot count from params.
+
+#### 1.4 Modify compiler to emit v2 format
+
+**File:** `orion/compiler.py`, method `Compiler.compile()`
+
+Changes to the compilation loop:
+
+1. **Emit graph edges.** After `network_dag.build_dag()` and all processing (fusion, bootstrap placement), iterate `network_dag.edges()` and serialize as `[{"src": u, "dst": v}, ...]`.
+
+2. **Insert bootstrap nodes into the graph.** Currently, bootstraps are forward hooks attached to modules — they don't exist as DAG nodes. Change `BootstrapPlacer` (or post-process the DAG) to insert explicit `bootstrap` nodes with edges. If bootstrap is placed after `act1` and `act1` → `fc2`:
+   - Remove edge `act1` → `fc2`
+   - Add node `boot_0` (op: `bootstrap`)
+   - Add edges `act1` → `boot_0` → `fc2`
+
+3. **Store raw diagonals instead of Lattigo blobs.** Replace the current flow:
+
+   ```python
+   # Current: CKKS-encode and serialize Lattigo object
+   module.compile(self._context)  # generates Lattigo LinearTransforms
+   blob_data = self.backend.SerializeLinearTransform(tid)
+   ```
+
+   With:
+
+   ```python
+   # New: store raw float64 diagonals
+   module.generate_diagonals(last=...)  # populates module.diagonals
+   # Still create Lattigo LT transiently for Galois element computation:
+   lt_ids = self._lt_evaluator.generate_transforms(module)
+   self._lt_evaluator.delete_transforms(lt_ids)
+   # Serialize raw diags:
+   for (row, col), diags_block in module.diagonals.items():
+       blob = pack_raw_diagonals(diags_block)
+       blob_refs[f"diag_{row}_{col}"] = len(blobs)
+       blobs.append(blob)
+   ```
+
+4. **Emit node metadata in `GraphNode` format.** Replace the current `_extract_module_metadata()` per-type dicts with unified `GraphNode` construction. Map module classes to op strings:
+
+   | Module class                           | `op` string                         |
+   | -------------------------------------- | ----------------------------------- |
+   | `Linear`, `Conv2d`, `AvgPool2d`        | `linear_transform`                  |
+   | `Quad`                                 | `quad`                              |
+   | `Activation` (monomial)                | `polynomial` (basis: `"monomial"`)  |
+   | `Chebyshev`, `Sigmoid`, `SiLU`, `GELU` | `polynomial` (basis: `"chebyshev"`) |
+   | `ReLU`                                 | `relu`                              |
+   | `Bootstrap`                            | `bootstrap`                         |
+   | `Add`                                  | `add`                               |
+   | `Mult`                                 | `mult`                              |
+   | `Flatten`                              | `flatten`                           |
+   | `BatchNorm1d`, `BatchNorm2d`           | `batch_norm`                        |
+
+5. **Compute cost profile.** Count total rotations (from Galois elements) and bootstrap count. The cost profile is informational metadata for the user — the evaluator does not validate it.
+
+6. **Determine graph input/output.** The first node in topological order with no predecessors is `graph.input`. The last node with no successors is `graph.output`.
+
+7. **Store ReLU minimax coefficients.** Currently the compiler calls `generate_minimax_sign_coeffs()` during compilation but only stores the `degrees`/`prec`/`logalpha`/`logerr` parameters. The Go evaluator would need to regenerate the coefficients. Instead, store the actual coefficients in `config.coeffs` as a list of lists (one per polynomial in the composition).
+
+#### 1.5 Delete Python evaluator
+
+**Delete:** `orion/evaluator.py`
+
+**Edit:** `orion/__init__.py` — remove `Evaluator` import and export.
+
+The FHE forward paths in nn modules (`if self.he_mode` branches in `Linear.forward()`, `Quad.forward()`, etc.) become dead code. Leave them for now — they'll be stripped in Phase 3.
+
+#### 1.6 Cleartext graph validator
+
+**New file:** `tests/test_compiled_format.py`
+
+Test that validates the `.orion` v2 format without any CKKS operations:
+
+1. **Structural tests:**
+   - `CompiledModel.to_bytes()` → `CompiledModel.from_bytes()` roundtrip preserves all fields
+   - All `blob_refs` point to valid blob indices (0 ≤ idx < len(blobs))
+   - All edge `src`/`dst` reference existing node names
+   - `graph.input` and `graph.output` exist in node list
+   - Topological sort of edges is acyclic
+   - Every non-input node has at least one incoming edge
+   - `add`/`mult` nodes have exactly two incoming edges
+
+2. **Numerical tests** (compile an MLP, walk the graph in cleartext):
+   - For each `linear_transform` node: unpack raw diags from blob, reconstruct dense weight matrix from diagonals (inverse of diagonal extraction), do `numpy.matmul(W, x) + bias`
+   - For each `quad` node: `x = x * x`
+   - For each `polynomial` node: evaluate polynomial using numpy (Horner's method for monomial, Clenshaw for Chebyshev)
+   - Compare final output against `net(x).detach().numpy()` — tolerance ≤ 1e-10 (cleartext, no FHE noise)
+
+3. **Blob format tests:**
+   - `pack_raw_diagonals()` → `unpack_raw_diagonals()` roundtrip
+   - Diagonal indices sorted ascending
+   - Each diagonal has exactly `max_slots` values
+   - Bias blob length = `max_slots * 8` bytes
+
+#### 1.7 Update existing tests
+
+Tests that import or use `Evaluator` will fail. Mark them `@pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")`. Keep all `Compiler` and `Client` tests running.
+
+#### Phase 1 acceptance checklist
+
+- [ ] `CompiledModel` uses magic `ORION\x00\x02\x00` and version 2
+- [ ] JSON header contains `graph` with `nodes`, `edges`, `input`, `output` (no `topology` or `modules` keys)
+- [ ] JSON header contains `cost` profile
+- [ ] All `linear_transform` blobs contain raw float64 diagonals, not Lattigo-serialized data
+- [ ] Bias blobs are raw float64 arrays
+- [ ] Polynomial coefficients are inline in node `config` (no blobs)
+- [ ] ReLU minimax coefficients stored in node `config.coeffs`
+- [ ] Bootstrap nodes appear as explicit graph nodes with edges (not hook metadata)
+- [ ] Fused batch norms either absent from graph or marked `fused: true`
+- [ ] `orion/evaluator.py` deleted, `Evaluator` removed from `orion/__init__.py`
+- [ ] `CompiledModel.to_bytes()` → `from_bytes()` roundtrip passes
+- [ ] Cleartext graph validator passes for MLP (compile → read → numpy walk → compare to PyTorch)
+- [ ] All non-evaluator tests pass (`pytest tests/ -k "not evaluator"` or equivalent)
+- [ ] `.orion` file size is ~6× smaller than v1 for the same model (raw vs CKKS-encoded diagonals)
+
+---
 
 ### Phase 2: Pure Go evaluator
 
-Reads `.orion` v2, walks the computation graph, runs FHE inference. No Python, no skeleton network.
+Reads `.orion` v2, walks the computation graph, runs FHE inference. No Python, no skeleton network. Built against `baahl-nyu/lattigo` (current fork). Migration to upstream `tuneinsight/lattigo` deferred until after the refactoring is complete.
 
-1. **`.orion` file reader and `Model` type.** Parse binary container, build graph from JSON header. For each `linear_transform` node: read raw float64 diagonals from blob, call `GenerateLinearTransform()` to CKKS-encode into Lattigo `LinearTransformation` (one-time startup cost). For each bias: CKKS-encode raw float64. For each polynomial node: parse coefficients from JSON config. The `Model` is immutable after creation and shared across evaluators.
+#### 2.1 Binary container reader
 
-2. **Graph walker and op dispatch.** Topological sort computed at load time. `Forward(model, ct)` walks the sorted nodes, dispatches by `node.Op`. All underlying Lattigo calls already exist in `orionclient/evaluator.go` (`EvalLinearTransform`, `EvalPoly`, `Bootstrap`, `Add`, `Mul`, `Rotate`, `Rescale`) — this phase is mostly wiring.
+**New file:** `evaluator/format.go`
 
-3. **Per-client `Evaluator`.** Wraps or extends the existing Go `Evaluator`, adding `Forward(model, ct)`. Accepts eval keys from the user, never owns secret keys.
+Implement the binary container parser in Go:
 
-4. **E2E testing.** Python compiles + encrypts, Go evaluates, Python decrypts, compare against cleartext PyTorch output. Test fixtures (`.orion` + serialized ciphertext + expected output) generated by Python, consumed by `go test`.
+1. Verify magic bytes (`ORION\x00\x02\x00`)
+2. Read header length (uint32 LE), parse JSON header into Go structs (types already defined in "Go types for the header" section above)
+3. Read blob count (uint32 LE), read each blob (uint64 LE length + data)
 
-Built against `baahl-nyu/lattigo` (current fork). Migration to upstream `tuneinsight/lattigo` deferred until after the refactoring is complete.
+Implement `ParseDiagonalBlob(data []byte, maxSlots int) (map[int][]float64, error)` — reads the fixed-stride diagonal format into `diagIndex → []float64`.
+
+Implement `ParseBiasBlob(data []byte, maxSlots int) ([]float64, error)` — reads raw float64 array.
+
+#### 2.2 `Model` type
+
+**New file:** `evaluator/model.go`
+
+```go
+type Model struct {
+    header     CompiledModel                                    // parsed JSON header
+    transforms map[string]map[string]*lintrans.LinearTransformation // node_name -> {"diag_0_0": LT, ...}
+    biases     map[string]*rlwe.Plaintext                       // node_name -> CKKS-encoded bias
+    polys      map[string]*polynomial.Polynomial                // node_name -> Lattigo polynomial
+    graph      *Graph                                           // processed graph with adjacency + topo order
+}
+```
+
+`LoadModel(data []byte) (*Model, error)`:
+
+1. Parse binary container → `CompiledModel` header + blobs
+2. Build `ckks.Parameters` from header params
+3. Create a temporary `ckks.Encoder` for encoding (no keys needed)
+4. For each node where `op == "linear_transform"`:
+   - For each blob*ref `diag*{row}\_{col}`→ parse diagonal blob → call`lintrans.NewLinearTransformation(params, diagMap, level, bsgsRatio)` or the equivalent Lattigo constructor to CKKS-encode
+   - For blob_ref `bias` → parse bias blob → `encoder.Encode(biasVec, level-depth)` → store `*rlwe.Plaintext`
+5. For each node where `op == "polynomial"`:
+   - Read `config.coeffs` and `config.basis`
+   - If `"chebyshev"`: `bignum.NewPolynomial(bignum.Chebyshev, coeffs, nil)`
+   - If `"monomial"`: `bignum.NewPolynomial(bignum.Monomial, coeffs, nil)`
+6. For each node where `op == "relu"`:
+   - Read `config.coeffs` (list of lists) → create one `bignum.Polynomial` per sub-polynomial
+7. Build `*Graph`: compute topological sort, build adjacency map (`nodeName → []inputNodeNames`)
+8. Validate: all blob_refs resolved, all edge endpoints exist, graph is acyclic
+
+`ClientParams() ClientParams` — returns `{Params, Manifest, InputLevel}` for the client.
+
+The `Model` is immutable after `LoadModel()` returns. Safe to share across goroutines.
+
+#### 2.3 Graph representation
+
+**New file:** `evaluator/graph.go`
+
+```go
+type Graph struct {
+    Input    string
+    Output   string
+    Nodes    map[string]*Node       // name -> node
+    Order    []string               // topological sort
+    Inputs   map[string][]string    // node_name -> ordered list of input node names
+}
+```
+
+`buildGraph(header CompiledModel) (*Graph, error)`:
+
+- Index nodes by name
+- Build reverse adjacency from edges: for each edge `{src, dst}`, append `src` to `Inputs[dst]`
+- Compute topological sort via Kahn's algorithm (edges already available)
+- Validate: `Input` node has no incoming edges, `Output` node has no outgoing edges, exactly one connected component
+
+For nodes with multiple inputs (`add`, `mult`, residual joins): `Inputs[name]` has length ≥ 2. The order of inputs matters — it's the order edges were listed in the JSON.
+
+#### 2.4 `Evaluator` type and `Forward()`
+
+**New file:** `evaluator/evaluator.go`
+
+```go
+type Evaluator struct {
+    params       ckks.Parameters
+    encoder      *ckks.Encoder
+    evaluator    *ckks.Evaluator
+    linEval      *lintrans.Evaluator
+    polyEval     *polynomial.Evaluator
+    bootstrappers map[int]*bootstrapping.Evaluator
+}
+
+func NewEvaluator(params CKKSParams, keys EvalKeyBundle) (*Evaluator, error)
+func (e *Evaluator) Forward(model *Model, input []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error)
+func (e *Evaluator) Close()
+```
+
+The `Evaluator` is created from `orionclient.NewEvaluator()` (reuse existing constructor that builds Lattigo evaluator from params + keys) or by directly constructing the Lattigo types. It holds per-client evaluation keys. No secret key.
+
+An `Evaluator` is **not goroutine-safe** — Lattigo evaluators carry internal NTT/decomposition buffers that are reused across operations. Use one `Evaluator` per goroutine, or protect `Forward()` with a mutex.
+
+`Forward()` walks `model.graph.Order`:
+
+```go
+func (e *Evaluator) Forward(model *Model, input []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
+    results := make(map[string][]*rlwe.Ciphertext)
+    results[model.graph.Input] = input
+
+    for _, name := range model.graph.Order {
+        if name == model.graph.Input {
+            continue
+        }
+        node := model.graph.Nodes[name]
+        inputs := gatherInputs(results, model.graph.Inputs, name)
+        out, err := e.evalNode(model, node, inputs)
+        if err != nil {
+            return nil, fmt.Errorf("node %s: %w", name, err)
+        }
+        results[name] = out
+    }
+    return results[model.graph.Output], nil
+}
+```
+
+**Scope limitation:** Phase 2 targets single-ciphertext-in, single-ciphertext-out models (MLP, LeNet, LoLA, small conv nets). Multi-ciphertext block-matrix routing (when weight matrices exceed the slot count in both dimensions) is deferred. The `[]*rlwe.Ciphertext` type signature is the extensibility point for future multi-CT support.
+
+**Memory:** The `results` map keeps all intermediate ciphertexts alive until `Forward()` returns. Implementations may free intermediate results once all downstream consumers have been evaluated.
+
+#### 2.5 Op implementations
+
+Each op is a method on `Evaluator`. All underlying Lattigo calls already exist in `orionclient/evaluator.go`.
+
+**`linear_transform`:**
+
+```go
+func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+```
+
+1. Look up pre-encoded `LinearTransformation` objects from `model.transforms[node.Name]`
+2. For each `(row, col)` block: `linEval.EvaluateNew(ct, lt)` → accumulate with `evaluator.Add`
+3. Rescale result: `evaluator.Rescale(ct)`
+4. Add bias: `evaluator.Add(ct, model.biases[node.Name])`
+5. If `config.output_rotations > 0`: apply hybrid output rotation (rotate and add `output_rotations` times, halving the rotation distance each time)
+
+**`quad`:**
+
+```go
+func (e *Evaluator) evalQuad(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+```
+
+1. `evaluator.MulRelinNew(ct, ct)` (ct × ct + relinearize)
+2. `evaluator.Rescale(ct)`
+
+**`polynomial`:**
+
+```go
+func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+```
+
+1. Look up `model.polys[node.Name]`
+2. If `config.prescale != 0 && config.constant != 0`: `evaluator.AddScalar(ct, constant)`, `evaluator.MulScalar(ct, prescale)`, `evaluator.Rescale(ct)`
+3. `polyEval.Evaluate(ct, poly, targetScale)` (Lattigo's Paterson-Stockmeyer or baby-step-giant-step polynomial evaluator)
+4. If `config.postscale != 1`: `evaluator.MulScalar(ct, postscale)`, `evaluator.Rescale(ct)`
+5. If `config.constant != 0`: `evaluator.AddScalar(ct, -constant)`
+
+**`relu`:**
+
+```go
+func (e *Evaluator) evalReLU(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+```
+
+ReLU is computed as `relu(x) = x * sign(x)` where the sign function is approximated by a composite of minimax Chebyshev polynomials. The evaluation sequence mirrors `ReLU.forward()` in HE mode (`orion/nn/activation.py`):
+
+1. **Prescale:** `x = x * prescale` (MulScalar + Rescale). Prescale normalizes the input range to [-1, 1] for the sign approximation. If `prescale == 1`, skip.
+2. **Compute sign:** save a copy of `x`. Evaluate each polynomial in `config.coeffs` in sequence: for each `coeffs[i]`, construct the Chebyshev polynomial and call `polyEval.Evaluate(x, poly, targetScale)`. Each polynomial refines the sign approximation and consumes `ceil(log2(degree+1))` multiplicative levels. The last polynomial's output scale is set to match `x`'s level for the subsequent multiplication.
+3. **Multiply:** `result = x * sign(x)` (MulRelin + Rescale). This produces `|x|` (approximately).
+4. **Postscale:** `result = result * postscale` (MulScalar + Rescale). Reverses the prescaling.
+
+Total depth per ReLU: `sum(ceil(log2(d+1)) for d in degrees) + 2` (one multiplication for prescale × input, one for input × sign). For default degrees `[15, 15, 27]`: depth = 4 + 4 + 5 + 2 = **15 levels**.
+
+**`bootstrap`:**
+
+```go
+func (e *Evaluator) evalBootstrap(node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+```
+
+1. If `config.constant != 0`: `evaluator.AddScalar(ct, constant)`
+2. Encode `prescale` as plaintext, `evaluator.Mul(ct, prescalePt)`, `evaluator.Rescale(ct)`
+3. `bootstrappers[config.slots].Bootstrap(ct)` (Lattigo bootstrap)
+4. If `config.postscale != 1`: `evaluator.MulScalar(ct, postscale)`, `evaluator.Rescale(ct)`
+5. If `config.constant != 0`: `evaluator.AddScalar(ct, -constant)`
+
+**`add`:**
+
+```go
+func (e *Evaluator) evalAdd(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+```
+
+1. `evaluator.AddNew(ct0, ct1)`
+
+**`mult`:**
+
+```go
+func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+```
+
+1. `evaluator.MulRelinNew(ct0, ct1)`
+2. `evaluator.Rescale(ct)`
+
+**`flatten`:** no-op. Return input unchanged.
+
+**`batch_norm`:** If `fused: true`, no-op (weights folded into preceding linear). Unfused batch norms are not supported — `LoadModel()` returns an error if a `batch_norm` node has `fused: false`.
+
+#### 2.6 E2E testing
+
+**Test fixture generation** (Python script, run before `go test`):
+
+1. Compile MLP → write `testdata/mlp.orion`
+2. Create Client, generate keys → write `testdata/mlp.keys` (EvalKeys serialized)
+3. Encrypt sample input → write `testdata/mlp.input.ct` (Ciphertext serialized)
+4. Compute cleartext expected output → write `testdata/mlp.expected.json` (float64 array)
+5. Write `testdata/mlp.params.json` (CKKSParams for Go to construct evaluator)
+
+**Go test** (`evaluator/evaluator_test.go`):
+
+1. `LoadModel("testdata/mlp.orion")`
+2. Parse keys, create `NewEvaluator(params, keys)`
+3. Unmarshal input ciphertext
+4. `result := eval.Forward(model, input)`
+5. Create a temporary `Client` (from a generated secret key also saved in testdata), decrypt result
+6. Compare decrypted output against `mlp.expected.json` — tolerance accounts for FHE noise (≤ 1e-3 for typical CKKS parameters)
+
+Repeat for at least: MLP (linear-only), model with Chebyshev activations, model with bootstrap (if feasible in test time).
+
+#### Phase 2 acceptance checklist
+
+- [ ] `evaluator.LoadModel(data)` successfully parses `.orion` v2 files produced by the Python compiler
+- [ ] `model.ClientParams()` returns correct CKKS params, key manifest, and input level
+- [ ] `evaluator.NewEvaluator(params, keys)` constructs from serialized eval keys
+- [ ] `eval.Forward(model, ct)` produces correct results for MLP (compare decrypted output to cleartext, tolerance ≤ 1e-3)
+- [ ] `eval.Forward()` handles all op types present in test models: `linear_transform`, `quad`, `polynomial`, `flatten`, `add`
+- [ ] Multiple `Evaluator` instances sharing one `Model` work correctly (concurrent reads)
+- [ ] `Evaluator.Close()` releases all resources, no leaked goroutines or memory
+- [ ] All methods return `(result, error)` — no panics on malformed input
+- [ ] `go test ./evaluator/...` passes
+- [ ] E2E test: Python compile → Python encrypt → Go evaluate → Python decrypt → correct output
+
+---
 
 ### Phase 3: Package restructuring
 
 Split the monolith into three Python packages. Can start after Phase 1, parallelizable with Phase 2 (except moving the Go evaluator).
 
-1. **Extract `python/lattigo/`.** Move `orionclient/bridge/` (Go CGO) and `orion/backend/orionclient/ffi.py` (Python ctypes, `GoHandle`). Own `pyproject.toml`. Not Orion-specific. The bridge surface shrinks: with no Python evaluator, it only exposes client ops (keygen, encrypt, decrypt, encode, decode) and compile-time ops (polynomial generation, linear transform creation for Galois element queries, parameter validation). All evaluation ops (`EvalAdd`, `EvalMul`, `EvalPoly`, etc.) are removed from the bridge.
+#### 3.1 Extract `python/lattigo/`
 
-2. **Extract `python/orion-client/`.** Move `client.py`, `params.py` (`CKKSParams`, `CompilerConfig`), `compiled_model.py`, `ciphertext.py`, tensor-to-slot mapping. Pure Python, depends on `lattigo`.
+Create `python/lattigo/` with its own `pyproject.toml` (`pip install lattigo`).
 
-3. **Rename remaining to `python/orion-compiler/`.** `compiler.py`, `nn/`, `core/`, `models/`, `core/compiler_backend.py`. Depends on `orion-client` + `lattigo` + torch.
+**Move into `python/lattigo/`:**
 
-4. **Clean up dead code.** Strip FHE forward paths from nn modules (the `if self.he_mode` branches). Remove context propagation from `Ciphertext`. Simplify `Module` base class.
+| From                                     | To                              |
+| ---------------------------------------- | ------------------------------- |
+| `orionclient/bridge/`                    | `python/lattigo/bridge/`        |
+| `orion/backend/orionclient/ffi.py`       | `python/lattigo/lattigo/ffi.py` |
+| `GoHandle` class and all ctypes bindings | `python/lattigo/lattigo/`       |
 
-5. **Move Go evaluator.** `evaluator/` at repo root, importable as `github.com/butvinm/orion/evaluator`. Root `go.mod` for the evaluator module. Depends on Phase 2.
+**Bridge API surface after cleanup.** With no Python evaluator, remove all evaluation-only bridge functions:
+
+| Keep (client + compile-time)                                                                                                  | Remove (evaluation-only)                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `NewClient`, `ClientClose`                                                                                                    | `NewEvaluator`, `EvalClose`                                                |
+| `ClientEncode`, `ClientDecode`                                                                                                | `EvalEncode`                                                               |
+| `ClientEncrypt`, `ClientDecrypt`                                                                                              | `EvalAdd`, `EvalSub`, `EvalMul`                                            |
+| `ClientGenerateRLK`, `ClientGenerateGaloisKey`, `ClientGenerateBootstrapKeys`, `ClientGenerateKeys`                           | `EvalAddPlaintext`, `EvalSubPlaintext`, `EvalMulPlaintext`                 |
+| `ClientSecretKey`, `ClientMaxSlots`, `ClientGaloisElement`, `ClientModuliChain`, `ClientAuxModuliChain`, `ClientDefaultScale` | `EvalAddScalar`, `EvalMulScalar`, `EvalNegate`                             |
+| `GenerateLinearTransformFromParams` (compile-time: Galois element computation)                                                | `EvalRotate`, `EvalRescale`                                                |
+| `LinearTransformRequiredGaloisElements`                                                                                       | `EvalPoly`, `EvalLinearTransform`, `EvalBootstrap`                         |
+| `GeneratePolynomialMonomial`, `GeneratePolynomialChebyshev`                                                                   | `EvalModuliChain`, `EvalDefaultScale`, `EvalMaxSlots`, `EvalGaloisElement` |
+| `GenerateMinimaxSignCoeffs`                                                                                                   | `NewEvalKeyBundle` and all `EvalKeyBundle*` setters                        |
+| `CiphertextMarshal`, `CiphertextUnmarshal`                                                                                    |                                                                            |
+| `LinearTransformMarshal`, `LinearTransformUnmarshal`                                                                          |                                                                            |
+| `DeleteHandle`                                                                                                                |                                                                            |
+
+Note: `GenerateLinearTransformFromParams` stays because the compiler creates transient LinearTransforms to query Galois elements. `LinearTransformRequiredGaloisElements` stays for the same reason. Both can be deleted later if Galois element computation is decoupled from LinearTransform creation.
+
+The bridge Go code (`bridge/*.go`) is updated to remove the deleted exports. The shared library shrinks.
+
+#### 3.2 Extract `python/orion-client/`
+
+Create `python/orion-client/` with its own `pyproject.toml` (`pip install orion-client`, depends on `lattigo`).
+
+**Move into `python/orion-client/orion_client/`:**
+
+| From                      | To                               |
+| ------------------------- | -------------------------------- |
+| `orion/client.py`         | `orion_client/client.py`         |
+| `orion/params.py`         | `orion_client/params.py`         |
+| `orion/compiled_model.py` | `orion_client/compiled_model.py` |
+| `orion/ciphertext.py`     | `orion_client/ciphertext.py`     |
+
+Pure Python. No torch dependency. `numpy` for tensor-to-slot mapping (flatten, pad, split, reshape).
+
+The `Client` class imports `lattigo` for FFI calls (keygen, encrypt, decrypt, encode, decode). `CompiledModel`, `CKKSParams`, `KeyManifest`, `EvalKeys` are pure dataclasses with no FFI dependency.
+
+#### 3.3 Rename remaining to `python/orion-compiler/`
+
+Create `python/orion-compiler/` with its own `pyproject.toml` (`pip install orion-compiler`, depends on `orion-client`, `lattigo`, `torch`, `networkx`).
+
+**Move into `python/orion-compiler/orion_compiler/`:**
+
+| From                | To                           |
+| ------------------- | ---------------------------- |
+| `orion/compiler.py` | `orion_compiler/compiler.py` |
+| `orion/nn/`         | `orion_compiler/nn/`         |
+| `orion/core/`       | `orion_compiler/core/`       |
+| `orion/models/`     | `orion_compiler/models/`     |
+
+The compiler imports `CKKSParams`, `CompilerConfig`, `CompiledModel` from `orion_client`. It imports `lattigo` for compile-time Go bridge operations (polynomial generation, linear transform Galois element queries, parameter validation).
+
+#### 3.4 Clean up dead code
+
+With the Python evaluator gone (Phase 1) and packages split:
+
+1. **Strip FHE forward paths from nn modules.** Remove the `if self.he_mode` branches in `forward()` methods of `Linear`, `Conv2d`, `Quad`, `Activation`, `Chebyshev`, `Bootstrap`, `Add`, `Mult`, `Flatten`, `BatchNorm`. These modules become compile-only: they have `compile(context)`, `fit(context)`, and cleartext `forward()`.
+
+2. **Remove `he()` toggle from `Module`.** The `he_mode` flag, `he()` method, and `eval()`/`train()` overrides are dead. Modules always run in cleartext mode (for tracing and fitting).
+
+3. **Remove context propagation from `Ciphertext`.** The `context` attribute on `Ciphertext` was used to carry the evaluator handle during FHE forward passes. With no Python evaluation, `Ciphertext` becomes a simpler wrapper: shape + serialized Go handle (for client-side encrypt/decrypt only).
+
+4. **Remove `_EvalContext` and `Evaluator._reconstruct_*` code.** Already deleted in Phase 1 (evaluator.py), but verify no remnants in other files.
+
+#### 3.5 Move Go evaluator
+
+After Phase 2 delivers the `evaluator/` package:
+
+- Place `evaluator/` at repo root
+- Root `go.mod`: `module github.com/butvinm/orion`
+- `python/lattigo/bridge/` retains its own `go.mod` (CGO shared library, separate build)
+- Delete `orionclient/` (its functionality split between `python/lattigo/bridge/` and `evaluator/`)
+
+#### Phase 3 acceptance checklist
+
+- [ ] `cd python/lattigo && pip install -e .` succeeds, builds `.so`
+- [ ] `cd python/orion-client && pip install -e .` succeeds (pure Python)
+- [ ] `cd python/orion-compiler && pip install -e .` succeeds (pure Python + torch)
+- [ ] `from lattigo import ffi, GoHandle` works
+- [ ] `from orion_client import Client, CKKSParams, CompiledModel, EvalKeys` works
+- [ ] `from orion_compiler import Compiler` works
+- [ ] `from orion_compiler.models import MLP` works
+- [ ] Compiler E2E: compile MLP → produces valid `.orion` v2
+- [ ] Client E2E: load compiled model → generate keys → encrypt/decrypt roundtrip
+- [ ] Bridge `.so` does not export evaluation functions (`EvalAdd`, `EvalMul`, etc.)
+- [ ] No `he_mode`, `he()`, or FHE forward branches in nn modules
+- [ ] `Ciphertext` has no `context` attribute
+- [ ] `orionclient/` directory deleted
+- [ ] `go.mod` at repo root, `go test ./evaluator/...` passes
+- [ ] No circular imports between packages
+- [ ] `python/tests/` pass with the new package structure
+
+---
 
 ### Phase 4: JS/WASM bindings
 
 Starts after Phases 1–3 are stable.
 
-1. **`js/lattigo/`** — Go compiled to WASM (~8 MB uncompressed, ~3 MB gzipped). Same Lattigo ops as the Python bridge: keygen, encrypt, decrypt, encode, decode, serialization.
+#### 4.1 `js/lattigo/` — WASM Lattigo bindings
 
-2. **`js/orion-client/`** — Pure TypeScript. Tensor-to-slot mapping, mirrors Python `orion-client`.
+Build the Go bridge code to WASM target (`GOOS=js GOARCH=wasm`). The WASM binary exposes the same client operations as the Python bridge:
 
-3. **Browser demo** — WASM keygen + encrypt in browser, Go server evaluates, browser decrypts.
+- `KeyGenerator`: `genSecretKey()`, `genPublicKey()`, `genRLK()`, `genGaloisKey(element)`, `genBootstrapKeys(slots, logP)`, `genEvalKeys(manifest)`
+- `Encoder`: `encode(values, level, scale)`, `decode(plaintext)`
+- `Encryptor`: `encrypt(plaintext)`
+- `Decryptor`: `decrypt(ciphertext)`
+- Serialization: `marshal()`/`unmarshal()` on all types
+
+TypeScript wrappers in `js/lattigo/src/` provide ergonomic API over the raw WASM exports. Memory management: Go objects tracked by the WASM runtime's finalizer or explicit `.free()` calls.
+
+Expected binary size: ~8 MB uncompressed, ~3 MB gzipped.
+
+#### 4.2 `js/orion-client/` — TypeScript tensor mapping
+
+Pure TypeScript package (`npm install orion-client`). Mirrors Python `orion_client`:
+
+- `encodeTensor(data: Float64Array, level: number, encoder: Encoder): Plaintext[]` — flatten, pad to slot count, split into chunks, encode each
+- `decodeTensor(plaintexts: Plaintext[], shape: number[], encoder: Encoder): Float64Array` — decode each, concatenate, reshape
+- `CKKSParams`, `KeyManifest` as TypeScript interfaces (parsed from server JSON)
+
+No CKKS operations — delegates to `js/lattigo/` for all crypto.
+
+#### 4.3 Browser demo
+
+`examples/wasm-demo/`:
+
+- Go HTTP server: loads `.orion` model, exposes `/params`, `/session`, `/session/{id}/infer`
+- HTML/JS client: loads WASM, generates keys, encrypts input, sends to server, decrypts result
+- End-to-end demonstration: browser-side secret key never leaves the client
+
+#### Phase 4 acceptance checklist
+
+- [ ] `js/lattigo/` builds to `.wasm` (< 10 MB uncompressed)
+- [ ] TypeScript wrappers compile without errors
+- [ ] `genSecretKey()` → `genEvalKeys(manifest)` → `encrypt()` → `decrypt()` roundtrip works in Node.js
+- [ ] `encodeTensor()` → `decodeTensor()` roundtrip matches Python `orion_client` output
+- [ ] Browser demo: compile MLP (Python) → serve (Go) → query (browser) → correct decrypted result
+- [ ] WASM loads and initializes in < 3 seconds on modern browser
+- [ ] No Go objects leaked after `.free()` calls
+
+---
 
 ### Dependency graph
 
