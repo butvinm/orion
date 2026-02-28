@@ -253,7 +253,9 @@ for each blob:
   "input_level": 7,
   "cost": {
     "rotation_count": 248,
-    "bootstrap_count": 0
+    "bootstrap_count": 0,
+    "galois_key_count": 14,
+    "bootstrap_key_count": 0
   },
   "graph": {
     "input": "flatten",
@@ -513,7 +515,7 @@ params: CKKSParams
 config: CompilerConfig
 manifest: KeyManifest
 input_level: int
-cost: CostProfile          # new: rotation_count, bootstrap_count. Informational, not validated by evaluator
+cost: CostProfile          # new: informational, not validated by evaluator
 graph: Graph               # new: nodes + edges (replaces topology + module_metadata)
 blobs: list[bytes]         # raw float64 diagonal blobs + raw bias blobs (no Lattigo artifacts)
 ```
@@ -525,6 +527,8 @@ New supporting types:
 class CostProfile:
     rotation_count: int
     bootstrap_count: int
+    galois_key_count: int       # = len(manifest.galois_elements)
+    bootstrap_key_count: int    # = len(manifest.bootstrap_slots)
 
 @dataclass
 class Graph:
@@ -640,7 +644,7 @@ Changes to the compilation loop:
    | `Flatten`                              | `flatten`                           |
    | `BatchNorm1d`, `BatchNorm2d`           | `batch_norm`                        |
 
-5. **Compute cost profile.** Count total rotations (from Galois elements) and bootstrap count. The cost profile is informational metadata for the user — the evaluator does not validate it.
+5. **Compute cost profile.** Count total rotations, bootstrap count, and key counts (Galois keys = `len(manifest.galois_elements)`, bootstrap keys = `len(manifest.bootstrap_slots)`). The cost profile is informational metadata for the user — the evaluator does not validate it.
 
 6. **Determine graph input/output.** The first node in topological order with no predecessors is `graph.input`. The last node with no successors is `graph.output`.
 
