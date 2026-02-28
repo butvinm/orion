@@ -10,7 +10,7 @@ Three core components:
 2. **Evaluator** — Pure Go. Loads the compiled model, CKKS-encodes the packed data into Lattigo format at load time, and runs FHE inference on ciphertexts.
 3. **Lattigo Bindings** — Go core with Python and JS wrappers. Thin bindings for Lattigo's key generation, encryption, decryption, encoding, and decoding. Not Orion-specific.
 
-Plus a client helper library (**orion-client**, Python/JS) that handles tensor-to-CKKS-slot mapping on top of lattigo bindings.
+Plus a client helper library (**orion-client**, Python/JS) that handles tensor-to-CKKS-slot mapping on top of lattigo bindings, and Python evaluator bindings (**orion-evaluator**) for self-contained Python workflows.
 
 ## Components
 
@@ -69,6 +69,43 @@ All methods return `(result, error)`. Errors include level mismatches, missing G
 
 Anyone doing FHE with Lattigo from Python or JS can use these bindings, regardless of whether they use Orion.
 
+### orion-evaluator (Python bindings to Go evaluator)
+
+**Dependencies:** `lattigo` (Python), `orion-client` (for `CompiledModel`, `CKKSParams`).
+
+Thin Python bindings over the Go `evaluator/` package, following the same CGO bridge pattern as `python/lattigo/`. Ships a separate `.so` that wraps the evaluator-specific Go code. The bridge exposes:
+
+- `LoadModel(data []byte) → Model` — parses `.orion` v2, CKKS-encodes diagonals at load time
+- `Model.ClientParams() → ClientParams` — returns CKKS params, key manifest, input level
+- `NewEvaluator(model, eval_keys) → Evaluator` — creates per-client evaluator from eval keys
+- `Evaluator.Forward(ciphertexts) → ciphertexts` — runs FHE inference on the loaded model
+
+Python API:
+
+```python
+from orion_evaluator import Model, Evaluator
+
+# Load model (one-time cost: parses .orion, CKKS-encodes diagonals)
+model = Model.load(open("model.orion", "rb").read())
+params = model.client_params()  # CKKSParams, KeyManifest, input_level
+
+# Create evaluator with client's eval keys
+evaluator = Evaluator(model, eval_keys)
+
+# Run inference
+result_cts = evaluator.forward(input_cts)
+
+# Cleanup
+evaluator.close()
+model.close()
+```
+
+The `Model` object is immutable and safe to share across multiple `Evaluator` instances. Each `Evaluator` holds one client's evaluation keys and is **not** thread-safe (same constraint as the Go evaluator — Lattigo evaluators carry internal buffers).
+
+`Model` and `Evaluator` are `GoHandle`-wrapped — they follow the same RAII pattern as other bridge objects (idempotent `close()`, `__del__` fallback).
+
+This package exists purely for convenience — it enables self-contained Python examples and testing without a separate Go server. Production deployments should use the Go evaluator directly for performance and to avoid CGO overhead.
+
 ### orion-client (Python/JS helper)
 
 A published package (pip/npm) on top of lattigo bindings. Handles the Orion-specific tensor-to-CKKS-slot mapping:
@@ -87,8 +124,23 @@ Three actors, three languages, three machines.
 ```python
 import torch
 from orion_compiler import Compiler
-from orion_compiler.models import MLP
+from orion_compiler.nn import Linear, BatchNorm1d, Quad, Flatten, Module
 from orion_client import CKKSParams
+
+# Define the model using Orion's FHE-compatible layers
+class MLP(Module):
+    def __init__(self):
+        super().__init__()
+        self.flatten = Flatten()
+        self.fc1 = Linear(784, 64)
+        self.bn1 = BatchNorm1d(64)
+        self.act1 = Quad()
+        self.fc2 = Linear(64, 10)
+
+    def forward(self, x):
+        x = self.flatten(x)
+        x = self.act1(self.bn1(self.fc1(x)))
+        return self.fc2(x)
 
 # Train the model (standard PyTorch, nothing Orion-specific)
 net = MLP()
@@ -208,6 +260,65 @@ const output = decodeTensor(resultPts, outputShape, encoder);
 ```
 
 The secret key is generated in the browser and never leaves it. Lattigo bindings (Go compiled to WASM, ~8 MB uncompressed / ~3 MB gzipped) handle all cryptographic operations and serialization. `encodeTensor`/`decodeTensor` from orion-client are pure JS helpers for tensor-to-slot mapping. `marshalCiphertexts`/`unmarshalCiphertexts` are Lattigo serialization — the wire format is application-specific, not mandated by Orion.
+
+### 4. Self-contained Python (single machine, prototyping)
+
+```python
+import torch
+from orion_compiler import Compiler
+from orion_compiler.nn import Linear, BatchNorm1d, Quad, Flatten, Module
+from orion_client import Client, CKKSParams, CompiledModel
+from orion_evaluator import Model, Evaluator
+
+# --- Define model (see examples/ for full architectures) ---
+class MLP(Module):
+    def __init__(self):
+        super().__init__()
+        self.flatten = Flatten()
+        self.fc1 = Linear(784, 64)
+        self.bn1 = BatchNorm1d(64)
+        self.act1 = Quad()
+        self.fc2 = Linear(64, 10)
+
+    def forward(self, x):
+        x = self.flatten(x)
+        x = self.act1(self.bn1(self.fc1(x)))
+        return self.fc2(x)
+
+# --- Train ---
+net = MLP()
+# ... training loop ...
+
+# --- Compile ---
+params = CKKSParams(
+    logn=14,
+    logq=[55, 40, 40, 40, 40, 40, 40, 40, 55],
+    logp=[56, 56],
+    logscale=40,
+)
+compiler = Compiler(net, params)
+compiler.fit(train_loader)
+compiled = compiler.compile()
+model_bytes = compiled.to_bytes()
+
+# --- Client: generate keys and encrypt ---
+client = Client(compiled.params)
+keys = client.generate_keys(compiled.manifest)
+ct = client.encrypt_tensor(input_tensor, level=compiled.input_level)
+
+# --- Evaluate (Go evaluator via Python bindings) ---
+model = Model.load(model_bytes)
+evaluator = Evaluator(model, keys)
+result_ct = evaluator.forward(ct)
+
+# --- Decrypt ---
+result = client.decrypt_tensor(result_ct)
+
+evaluator.close()
+model.close()
+```
+
+All four stages in one Python script. Useful for prototyping, testing, and research notebooks. The Go evaluator runs natively under the hood via CGO — same code path as a production Go server, just accessed through Python bindings.
 
 ## Compiled Model Format
 
@@ -418,7 +529,12 @@ orion/
 │   │                               #   tensor-to-slot mapping
 │   │
 │   ├── orion-compiler/             # pip install orion-compiler (pure Python, no Go)
-│   │   └── orion_compiler/         #   Compiler, nn/, core/, models/
+│   │   └── orion_compiler/         #   Compiler, nn/, core/
+│   │
+│   ├── orion-evaluator/            # pip install orion-evaluator (ships bridge .so)
+│   │   ├── bridge/                 #   Go CGO bridge wrapping evaluator/ pkg
+│   │   │                           #   imports evaluator/ and Lattigo directly
+│   │   └── orion_evaluator/        #   Python pkg: Model, Evaluator (ctypes over bridge)
 │   │
 │   └── tests/
 │
@@ -431,7 +547,13 @@ orion/
 │       └── src/
 │
 ├── examples/
-│   ├── mlp/                        # E2E: compile (Python) → serve (Go) → query
+│   ├── mlp/                        # MNIST, simplest: Flatten → Linear → Quad → Linear
+│   ├── lenet/                      # MNIST, conv: Conv2d → Quad → Conv2d → Quad → FC
+│   ├── lola/                       # MNIST, lightweight: 1 Conv2d + 1 FC
+│   ├── alexnet/                    # CIFAR-10, deeper CNN with SiLU activations
+│   ├── vgg/                        # CIFAR-10, deep CNN with ReLU (minimax sign)
+│   ├── resnet/                     # CIFAR-10, residual connections + bootstrap
+│   ├── yolo/                       # Object detection, ResNet34 backbone
 │   └── wasm-demo/                  # Browser demo: Go server + WASM client
 │
 └── docs/
@@ -443,9 +565,9 @@ orion/
 
 **`orion-client`** (`pip install orion-client`) — pure Python. Client, CKKSParams, CompiledModel, Ciphertext, PlainText, tensor-to-slot mapping. No Go, no FFI, no `.so`. Calls `lattigo` for all cryptographic operations.
 
-**`orion-compiler`** (`pip install orion-compiler`) — pure Python. Compiler, nn modules, core algorithms, pre-built models. No Go. Calls `lattigo` for polynomial generation and parameter validation.
+**`orion-compiler`** (`pip install orion-compiler`) — pure Python. Compiler, nn modules, core algorithms. No Go, no pre-built model architectures (see `examples/`). Calls `lattigo` for polynomial generation and parameter validation.
 
-**No Python evaluator.** Evaluation is Go-only.
+**`orion-evaluator`** (`pip install orion-evaluator`) — Python package shipping a Go bridge `.so` that wraps the `evaluator/` package. Exposes `Model` (load `.orion`, CKKS-encode at load time) and `Evaluator` (forward pass with eval keys). Requires Go/CGO to build from source (like `lattigo`). Enables self-contained Python examples without a separate Go server.
 
 **`js/lattigo/`** — npm package shipping the WASM bridge. Same pattern as Python: Go bridge builds `.wasm`, TypeScript wrappers expose Lattigo ops. Imports Lattigo directly.
 
@@ -453,16 +575,17 @@ orion/
 
 ## Dependencies
 
-| Component          | Go import                            | `pip install`    | Depends on                                 | Does NOT depend on        |
-| ------------------ | ------------------------------------ | ---------------- | ------------------------------------------ | ------------------------- |
-| `evaluator/`       | `github.com/butvinm/orion/evaluator` | —                | Lattigo                                    | Python, compiler, bridges |
-| `lattigo`          | (CGO, builds .so)                    | `lattigo`        | Lattigo (Go)                               | Anything Orion            |
-| `orion-client`     | —                                    | `orion-client`   | `lattigo`, numpy                           | torch, `evaluator/`       |
-| `orion-compiler`   | —                                    | `orion-compiler` | `orion-client`, `lattigo`, torch, networkx | `evaluator/`              |
-| `js/lattigo/`      | (WASM, builds .wasm)                 | —                | Lattigo                                    | `evaluator/`              |
-| `js/orion-client/` | —                                    | —                | `js/lattigo/` .wasm                        | Go (pure TS)              |
+| Component          | Go import                            | `pip install`     | Depends on                                 | Does NOT depend on        |
+| ------------------ | ------------------------------------ | ----------------- | ------------------------------------------ | ------------------------- |
+| `evaluator/`       | `github.com/butvinm/orion/evaluator` | —                 | Lattigo                                    | Python, compiler, bridges |
+| `lattigo`          | (CGO, builds .so)                    | `lattigo`         | Lattigo (Go)                               | Anything Orion            |
+| `orion-client`     | —                                    | `orion-client`    | `lattigo`, numpy                           | torch, `evaluator/`       |
+| `orion-compiler`   | —                                    | `orion-compiler`  | `orion-client`, `lattigo`, torch, networkx | `evaluator/`              |
+| `orion-evaluator`  | (CGO, builds .so)                    | `orion-evaluator` | `evaluator/`, Lattigo, `orion-client`      | torch, compiler           |
+| `js/lattigo/`      | (WASM, builds .wasm)                 | —                 | Lattigo                                    | `evaluator/`              |
+| `js/orion-client/` | —                                    | —                 | `js/lattigo/` .wasm                        | Go (pure TS)              |
 
-No circular dependencies. No shared Go packages. `lattigo` is the only package with Go code. `orion-client` and `orion-compiler` are pure Python.
+No circular dependencies. No shared Go packages. `lattigo` and `orion-evaluator` are the packages with Go code. `orion-client` and `orion-compiler` are pure Python.
 
 ## Build and Install
 
@@ -476,6 +599,8 @@ Source-only builds for now. Pre-built wheels with bundled Go shared library are 
 
 **JS:** Build script in `js/` compiles `js/lattigo/` to WASM (~8 MB uncompressed, ~3 MB gzipped). This single .wasm provides all lattigo bindings.
 
+**Orion evaluator (Python bindings):** `cd python/orion-evaluator && pip install -e .` — triggers Go compilation of `bridge/` into a shared library wrapping the `evaluator/` package. Requires the `evaluator/` Go package (repo root).
+
 **Go Evaluator:** Standard `go build`. Users import `"github.com/butvinm/orion/evaluator"` in their server code.
 
 ## Testing
@@ -484,7 +609,7 @@ Source-only builds for now. Pre-built wheels with bundled Go shared library are 
 - **Python:** `python/tests/` with pytest. All tests require the Go shared lib (compiler uses Lattigo).
 - **E2E / cross-language:** Runnable examples in `examples/` that validate correctness. Compiler (Python) produces `.orion` → evaluator (Go) consumes it → numerical results compared against cleartext PyTorch output.
 
-There is no Python-side evaluator. Testing compiled models requires Go.
+Python-side evaluation uses `orion-evaluator` bindings (Go evaluator via CGO bridge). Self-contained Python E2E tests: compile → encrypt → evaluate (via bindings) → decrypt → compare to cleartext.
 
 ## Roadmap
 
@@ -1020,7 +1145,6 @@ Create `python/orion-compiler/` with its own `pyproject.toml` (`pip install orio
 | `orion/compiler.py` | `orion_compiler/compiler.py` |
 | `orion/nn/`         | `orion_compiler/nn/`         |
 | `orion/core/`       | `orion_compiler/core/`       |
-| `orion/models/`     | `orion_compiler/models/`     |
 
 The compiler imports `CKKSParams`, `CompilerConfig`, `CompiledModel` from `orion_client`. It imports `lattigo` for compile-time Go bridge operations (polynomial generation, linear transform Galois element queries, parameter validation).
 
@@ -1045,17 +1169,72 @@ After Phase 2 delivers the `evaluator/` package:
 - `python/lattigo/bridge/` retains its own `go.mod` (CGO shared library, separate build)
 - Delete `orionclient/` (its functionality split between `python/lattigo/bridge/` and `evaluator/`)
 
+#### 3.6 Create `python/orion-evaluator/`
+
+After Phase 2 (Go evaluator exists) and 3.5 (Go evaluator at repo root).
+
+**New directory:** `python/orion-evaluator/`
+
+**Bridge (`python/orion-evaluator/bridge/`):**
+
+A separate CGO shared library that wraps the `evaluator/` Go package. Exports:
+
+| C export                                                 | Go implementation                      |
+| -------------------------------------------------------- | -------------------------------------- |
+| `LoadModel(data, len) → handle`                          | `evaluator.LoadModel(data) → *Model`   |
+| `ModelClientParams(h) → json`                            | `model.ClientParams() → ClientParams`  |
+| `ModelClose(h)`                                          | release handle                         |
+| `NewEvaluator(modelH, keysData, keysLen) → handle`       | `evaluator.NewEvaluator(params, keys)` |
+| `EvaluatorForward(evalH, modelH, ctData, ctLen) → ctOut` | `eval.Forward(model, cts)`             |
+| `EvaluatorClose(h)`                                      | release handle                         |
+
+All handles are `cgo.Handle` values, same pattern as `python/lattigo/bridge/`. Error propagation via `errOut` parameter.
+
+The bridge has its own `go.mod` that imports both `github.com/butvinm/orion/evaluator` and Lattigo. It builds a platform-specific `.so`/`.dylib`/`.dll`.
+
+**Python package (`python/orion-evaluator/orion_evaluator/`):**
+
+```python
+class Model:
+    """Loaded .orion model. Immutable, shareable across Evaluators."""
+
+    @staticmethod
+    def load(data: bytes) -> "Model":
+        """Parse .orion v2 and CKKS-encode diagonals (one-time cost)."""
+
+    def client_params(self) -> ClientParams:
+        """Returns CKKSParams, KeyManifest, input_level."""
+
+    def close(self) -> None: ...
+
+class Evaluator:
+    """Per-client evaluator. Holds eval keys. Not thread-safe."""
+
+    def __init__(self, model: Model, eval_keys: EvalKeys) -> None: ...
+
+    def forward(self, ciphertexts: list[Ciphertext]) -> list[Ciphertext]:
+        """Run FHE inference."""
+
+    def close(self) -> None: ...
+```
+
+Both classes wrap `GoHandle` with the standard RAII pattern (idempotent `close()`, `__del__` fallback).
+
+**`pyproject.toml`:** `pip install orion-evaluator`, depends on `orion-client` (for `CKKSParams`, `EvalKeys`, `Ciphertext` types). Build system triggers Go compilation of `bridge/`.
+
 #### Phase 3 acceptance checklist
 
 - [ ] `cd python/lattigo && pip install -e .` succeeds, builds `.so`
 - [ ] `cd python/orion-client && pip install -e .` succeeds (pure Python)
 - [ ] `cd python/orion-compiler && pip install -e .` succeeds (pure Python + torch)
+- [ ] `cd python/orion-evaluator && pip install -e .` succeeds, builds `.so`
 - [ ] `from lattigo import ffi, GoHandle` works
 - [ ] `from orion_client import Client, CKKSParams, CompiledModel, EvalKeys` works
 - [ ] `from orion_compiler import Compiler` works
-- [ ] `from orion_compiler.models import MLP` works
+- [ ] `from orion_evaluator import Model, Evaluator` works
 - [ ] Compiler E2E: compile MLP → produces valid `.orion` v2
 - [ ] Client E2E: load compiled model → generate keys → encrypt/decrypt roundtrip
+- [ ] Python E2E: compile → encrypt → evaluate (via `orion-evaluator`) → decrypt → correct output
 - [ ] Bridge `.so` does not export evaluation functions (`EvalAdd`, `EvalMul`, etc.)
 - [ ] No `he_mode`, `he()`, or FHE forward branches in nn modules
 - [ ] `Ciphertext` has no `context` attribute
@@ -1114,6 +1293,156 @@ No CKKS operations — delegates to `js/lattigo/` for all crypto.
 
 ---
 
+### Phase 5: Examples and model zoo
+
+Model architectures move out of the library into `examples/`. The `orion-compiler` package ships no pre-built models — it provides `orion_compiler.nn` layers, and users compose their own architectures. The `examples/` directory serves as both documentation and a model zoo: each example is a self-contained project showing how to define, train, compile, and run encrypted inference for a specific architecture.
+
+Starts after Phase 3 (packages split, `orion-evaluator` available).
+
+#### 5.1 Move models from `orion/models/` to `examples/`
+
+Delete `orion/models/` (or `orion_compiler/models/` after Phase 3). Each model becomes a standalone example:
+
+| Current location          | New location        | Dataset  | Key FHE features                                 |
+| ------------------------- | ------------------- | -------- | ------------------------------------------------ |
+| `orion/models/mlp.py`     | `examples/mlp/`     | MNIST    | Simplest: Linear + Quad                          |
+| `orion/models/lenet.py`   | `examples/lenet/`   | MNIST    | Conv2d + pooling                                 |
+| `orion/models/lola.py`    | `examples/lola/`    | MNIST    | Lightweight: 1 Conv + 1 FC                       |
+| `orion/models/alexnet.py` | `examples/alexnet/` | CIFAR-10 | Deeper CNN, SiLU (Chebyshev polynomial)          |
+| `orion/models/vgg.py`     | `examples/vgg/`     | CIFAR-10 | Deep CNN, ReLU (minimax sign approximation)      |
+| `orion/models/resnet.py`  | `examples/resnet/`  | CIFAR-10 | Residual connections (`Add`), bootstrapping      |
+| `orion/models/yolo.py`    | `examples/yolo/`    | Custom   | Object detection, ResNet34 backbone, large model |
+
+#### 5.2 Example directory structure
+
+Each example directory contains:
+
+```
+examples/<model>/
+├── model.py          # Model definition using orion_compiler.nn layers
+├── train.py          # Training script (standard PyTorch training loop)
+├── run.py            # Full pipeline: compile → encrypt → evaluate → decrypt
+└── README.md         # What the model does, CKKS params rationale, expected output
+```
+
+**`model.py`** — the architecture definition. Imports only from `orion_compiler.nn`. No training logic, no FHE parameters. Users can copy this file into their own project and modify it.
+
+**`train.py`** — standard PyTorch training. Downloads dataset, trains the model, saves weights to `weights.pt`. Uses `orion.core.utils` helpers (`get_mnist_datasets`, `get_cifar_datasets`, `train_on_mnist`, `train_on_cifar`) where applicable. Can be skipped — examples work with random weights for demonstrating the FHE pipeline (accuracy will be random, but the pipeline is correct).
+
+**`run.py`** — the FHE pipeline:
+
+```python
+import torch
+from orion_compiler import Compiler
+from orion_client import Client, CKKSParams
+from orion_evaluator import Model, Evaluator
+from model import Net  # import from local model.py
+
+# Load trained weights (optional — works with random weights too)
+net = Net()
+if Path("weights.pt").exists():
+    net.load_state_dict(torch.load("weights.pt"))
+net.eval()
+
+# Cleartext baseline
+inp = get_sample_input()  # dataset-specific
+out_clear = net(inp)
+
+# Compile
+params = CKKSParams(...)  # model-specific, documented in README.md
+compiler = Compiler(net, params)
+compiler.fit(train_loader)
+compiled = compiler.compile()
+
+# Client: keys + encryption
+client = Client(compiled.params)
+keys = client.generate_keys(compiled.manifest)
+ct = client.encrypt_tensor(inp, level=compiled.input_level)
+
+# Evaluate (Go evaluator via Python bindings)
+model = Model.load(compiled.to_bytes())
+evaluator = Evaluator(model, keys)
+ct_out = evaluator.forward(ct)
+
+# Decrypt and compare
+out_fhe = client.decrypt_tensor(ct_out)
+print(f"Cleartext: {out_clear}")
+print(f"FHE:       {out_fhe}")
+print(f"MAE:       {mae(out_clear, out_fhe):.6f}")
+
+evaluator.close()
+model.close()
+```
+
+**`README.md`** — per-example documentation:
+
+- What the model does (classification task, dataset, accuracy)
+- Architecture diagram (layers, shapes, activation types)
+- Why these CKKS parameters (logn, modulus chain depth, scale, bootstrap needs)
+- Expected FHE inference time and precision
+- How to train from scratch vs. using pre-trained weights
+
+#### 5.3 Model-specific notes
+
+**MLP, LeNet, LoLA** (MNIST, no bootstrap):
+
+- Small modulus chains (`logn=13`, 5-6 levels)
+- `Quad` activation (x², depth 1)
+- No bootstrap needed
+- FHE inference < 10s
+
+**AlexNet** (CIFAR-10, Chebyshev activations):
+
+- Deeper chain for `SiLU` polynomial approximation
+- `ring_type="standard"` (complex slots needed for CIFAR)
+- Demonstrates Chebyshev polynomial fitting via `compiler.fit()`
+
+**VGG** (CIFAR-10, ReLU):
+
+- `ReLU` uses composite minimax sign polynomials — very deep (15 levels per ReLU)
+- Requires bootstrap to reset levels between ReLU blocks
+- Longest modulus chain, largest key sizes
+- Demonstrates the most expensive FHE activation
+
+**ResNet** (CIFAR-10, residual connections):
+
+- `Add` nodes for skip connections
+- Bootstrap placement across residual blocks
+- Demonstrates how the compiler handles branching DAGs
+
+**YOLOv1** (object detection):
+
+- Largest model — demonstrates scalability
+- ResNet34 backbone with detection head
+- Multi-ciphertext packing (if supported) or notes on limitations
+
+#### 5.4 Update training utilities
+
+Move dataset/training helpers currently in `orion/core/utils.py` to a shared location accessible from examples:
+
+- `get_mnist_datasets()`, `train_on_mnist()` — used by MLP, LeNet, LoLA
+- `get_cifar_datasets()`, `train_on_cifar()` — used by AlexNet, VGG, ResNet
+
+These can stay in `orion_compiler.core.utils` (the compiler package still depends on torch) or be extracted to a small shared module in `examples/common/`. Decision: keep in `orion_compiler.core.utils` — the compiler already depends on torch, and training utilities are useful beyond examples (e.g., test fixtures).
+
+#### Phase 5 acceptance checklist
+
+- [ ] `orion/models/` (or `orion_compiler/models/`) deleted — no model architectures in the library
+- [ ] `examples/mlp/` — model.py, train.py, run.py, README.md all present and working
+- [ ] `examples/lenet/` — same structure, working
+- [ ] `examples/lola/` — same structure, working
+- [ ] `examples/alexnet/` — same structure, working
+- [ ] `examples/vgg/` — same structure, working
+- [ ] `examples/resnet/` — same structure, working (includes bootstrap)
+- [ ] `examples/yolo/` — same structure, working (or documented limitations for multi-CT)
+- [ ] Each `run.py` produces correct FHE output when run end-to-end (MAE within expected tolerance)
+- [ ] Each `train.py` trains to reasonable accuracy on its dataset
+- [ ] Each `README.md` documents CKKS parameter choices and expected performance
+- [ ] No imports of `orion_compiler.models` anywhere in the codebase
+- [ ] `examples/wasm-demo/` still works (Phase 4 deliverable, not modified here)
+
+---
+
 ### Dependency graph
 
 ```
@@ -1121,14 +1450,17 @@ Phase 1 (format)
     │
     ├──────────────────┐
     ▼                  ▼
-Phase 2 (Go eval)  Phase 3 (package split, except 3.5)
+Phase 2 (Go eval)  Phase 3 (package split, except 3.5/3.6)
     │                  │
     └──────┬───────────┘
            ▼
     Phase 3.5 (move Go evaluator)
+    Phase 3.6 (orion-evaluator Python bindings)
            │
-           ▼
-    Phase 4 (JS/WASM)
+     ┌─────┴─────┐
+     ▼           ▼
+Phase 4       Phase 5
+(JS/WASM)     (examples)
 ```
 
 ## Resolved Questions
