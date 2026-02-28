@@ -456,12 +456,12 @@ orion/
 
 ## Dependencies
 
-| Component        | Go import                            | `pip install`    | Depends on                                 | Does NOT depend on        |
-| ---------------- | ------------------------------------ | ---------------- | ------------------------------------------ | ------------------------- |
-| `evaluator/`     | `github.com/butvinm/orion/evaluator` | —                | Lattigo                                    | Python, compiler, bridges |
-| `lattigo`        | (CGO, builds .so)                    | `lattigo`        | Lattigo (Go)                               | Anything Orion            |
-| `orion-client`   | —                                    | `orion-client`   | `lattigo`, numpy                           | torch, `evaluator/`       |
-| `orion-compiler` | —                                    | `orion-compiler` | `orion-client`, `lattigo`, torch, networkx | `evaluator/`              |
+| Component          | Go import                            | `pip install`    | Depends on                                 | Does NOT depend on        |
+| ------------------ | ------------------------------------ | ---------------- | ------------------------------------------ | ------------------------- |
+| `evaluator/`       | `github.com/butvinm/orion/evaluator` | —                | Lattigo                                    | Python, compiler, bridges |
+| `lattigo`          | (CGO, builds .so)                    | `lattigo`        | Lattigo (Go)                               | Anything Orion            |
+| `orion-client`     | —                                    | `orion-client`   | `lattigo`, numpy                           | torch, `evaluator/`       |
+| `orion-compiler`   | —                                    | `orion-compiler` | `orion-client`, `lattigo`, torch, networkx | `evaluator/`              |
 | `js/lattigo/`      | (WASM, builds .wasm)                 | —                | Lattigo                                    | `evaluator/`              |
 | `js/orion-client/` | —                                    | —                | `js/lattigo/` .wasm                        | Go (pure TS)              |
 
@@ -489,7 +489,79 @@ Source-only builds for now. Pre-built wheels with bundled Go shared library are 
 
 There is no Python-side evaluator. Testing compiled models requires Go.
 
-## Open Questions
+## Roadmap
 
-- **Roadmap ordering:** What gets built first? TBD.
-- **Remez algorithm for ReLU:** Resolved. The compiler calls Lattigo's minimax package directly via the Go bridge. No pre-computation or Python reimplementation needed.
+Four phases. No backward compatibility — the Python evaluator is deleted in Phase 1, the project is broken until the Go evaluator lands in Phase 2. A cleartext graph validator provides testing coverage in between.
+
+### Phase 1: New compiled model format
+
+The `.orion` v2 format is the contract between compiler and evaluator. Everything else builds on it.
+
+1. **Rewrite `CompiledModel` serialization.** New magic (`ORION\x00\x02\x00`), JSON header with `graph.nodes[]` + `graph.edges[]` (replacing the flat topology + module_metadata dicts), raw float64 diagonal blobs (replacing Lattigo-serialized LinearTransform blobs).
+
+2. **Modify compiler output.** Store graph edges from the NetworkDAG (currently built then discarded). Store raw `module.diagonals` as float64 blobs instead of calling `SerializeLinearTransform()`. The compiler still calls `GenerateLinearTransform()` transiently — it's needed to compute required Galois elements via BSGS decomposition — but the Lattigo object is discarded after querying, not serialized.
+
+3. **Delete Python evaluator.** `evaluator.py` (422 lines) becomes dead code the moment the format changes. Delete it. The FHE forward paths in nn modules also become dead code (only the evaluator called them), but can be stripped later in Phase 3.
+
+4. **Cleartext graph validator.** A test that compiles an MLP to `.orion` v2, reads it back, walks the graph with numpy matrix multiplications and polynomial evaluations, and compares against PyTorch cleartext output. Validates format structure and numerical correctness without CKKS.
+
+### Phase 2: Pure Go evaluator
+
+Reads `.orion` v2, walks the computation graph, runs FHE inference. No Python, no skeleton network.
+
+1. **`.orion` file reader and `Model` type.** Parse binary container, build graph from JSON header. For each `linear_transform` node: read raw float64 diagonals from blob, call `GenerateLinearTransform()` to CKKS-encode into Lattigo `LinearTransformation` (one-time startup cost). For each bias: CKKS-encode raw float64. For each polynomial node: parse coefficients from JSON config. The `Model` is immutable after creation and shared across evaluators.
+
+2. **Graph walker and op dispatch.** Topological sort computed at load time. `Forward(model, ct)` walks the sorted nodes, dispatches by `node.Op`. All underlying Lattigo calls already exist in `orionclient/evaluator.go` (`EvalLinearTransform`, `EvalPoly`, `Bootstrap`, `Add`, `Mul`, `Rotate`, `Rescale`) — this phase is mostly wiring.
+
+3. **Per-client `Evaluator`.** Wraps or extends the existing Go `Evaluator`, adding `Forward(model, ct)`. Accepts eval keys from the user, never owns secret keys.
+
+4. **E2E testing.** Python compiles + encrypts, Go evaluates, Python decrypts, compare against cleartext PyTorch output. Test fixtures (`.orion` + serialized ciphertext + expected output) generated by Python, consumed by `go test`.
+
+Built against `baahl-nyu/lattigo` (current fork). Migration to upstream `tuneinsight/lattigo` deferred until after the refactoring is complete.
+
+### Phase 3: Package restructuring
+
+Split the monolith into three Python packages. Can start after Phase 1, parallelizable with Phase 2 (except moving the Go evaluator).
+
+1. **Extract `python/lattigo/`.** Move `orionclient/bridge/` (Go CGO) and `orion/backend/orionclient/ffi.py` (Python ctypes, `GoHandle`). Own `pyproject.toml`. Not Orion-specific. The bridge surface shrinks: with no Python evaluator, it only exposes client ops (keygen, encrypt, decrypt, encode, decode) and compile-time ops (polynomial generation, linear transform creation for Galois element queries, parameter validation). All evaluation ops (`EvalAdd`, `EvalMul`, `EvalPoly`, etc.) are removed from the bridge.
+
+2. **Extract `python/orion-client/`.** Move `client.py`, `params.py` (`CKKSParams`, `CompilerConfig`), `compiled_model.py`, `ciphertext.py`, tensor-to-slot mapping. Pure Python, depends on `lattigo`.
+
+3. **Rename remaining to `python/orion-compiler/`.** `compiler.py`, `nn/`, `core/`, `models/`, `core/compiler_backend.py`. Depends on `orion-client` + `lattigo` + torch.
+
+4. **Clean up dead code.** Strip FHE forward paths from nn modules (the `if self.he_mode` branches). Remove context propagation from `Ciphertext`. Simplify `Module` base class.
+
+5. **Move Go evaluator.** `evaluator/` at repo root, importable as `github.com/butvinm/orion/evaluator`. Root `go.mod` for the evaluator module. Depends on Phase 2.
+
+### Phase 4: JS/WASM bindings
+
+Starts after Phases 1–3 are stable.
+
+1. **`js/lattigo/`** — Go compiled to WASM (~8 MB uncompressed, ~3 MB gzipped). Same Lattigo ops as the Python bridge: keygen, encrypt, decrypt, encode, decode, serialization.
+
+2. **`js/orion-client/`** — Pure TypeScript. Tensor-to-slot mapping, mirrors Python `orion-client`.
+
+3. **Browser demo** — WASM keygen + encrypt in browser, Go server evaluates, browser decrypts.
+
+### Dependency graph
+
+```
+Phase 1 (format)
+    │
+    ├──────────────────┐
+    ▼                  ▼
+Phase 2 (Go eval)  Phase 3 (package split, except 3.5)
+    │                  │
+    └──────┬───────────┘
+           ▼
+    Phase 3.5 (move Go evaluator)
+           │
+           ▼
+    Phase 4 (JS/WASM)
+```
+
+## Resolved Questions
+
+- **Roadmap ordering:** Defined above.
+- **Remez algorithm for ReLU:** The compiler calls Lattigo's minimax package directly via the Go bridge. No pre-computation or Python reimplementation needed.
+- **Lattigo upstream migration:** Deferred until after the main refactoring (Phases 1–3). Built against `baahl-nyu/lattigo` fork for now.
