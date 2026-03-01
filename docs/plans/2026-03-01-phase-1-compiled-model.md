@@ -139,51 +139,51 @@ This is the core task. Both `CompiledModel` and `Compiler.compile()` change toge
 
 **CompiledModel changes:**
 
-- [ ] Change `CompiledModel` fields: remove `module_metadata`, `topology`; add `cost` (CostProfile), `graph` (Graph)
-- [ ] Update magic from `ORMDL\x00\x01\x00` to `ORION\x00\x02\x00`
-- [ ] Update `to_bytes()`: serialize JSON header with `version: 2`, `graph` (nodes, edges, input, output), `cost`, `params`, `config`, `manifest`, `input_level` — matching ARCH.md JSON structure
-- [ ] Update `from_bytes()`: parse new magic, deserialize v2 JSON header, reconstruct `Graph`, `CostProfile`, etc.
-- [ ] Keep `_pack_container` / `_unpack_container` helpers (same binary container pattern, new magic and JSON)
-- [ ] `EvalKeys` and `KeyManifest` are unchanged
+- [x] Change `CompiledModel` fields: remove `module_metadata`, `topology`; add `cost` (CostProfile), `graph` (Graph)
+- [x] Update magic from `ORMDL\x00\x01\x00` to `ORION\x00\x02\x00`
+- [x] Update `to_bytes()`: serialize JSON header with `version: 2`, `graph` (nodes, edges, input, output), `cost`, `params`, `config`, `manifest`, `input_level` — matching ARCH.md JSON structure
+- [x] Update `from_bytes()`: parse new magic, deserialize v2 JSON header, reconstruct `Graph`, `CostProfile`, etc.
+- [x] Keep `_pack_container` / `_unpack_container` helpers (same binary container pattern, new magic and JSON)
+- [x] `EvalKeys` and `KeyManifest` are unchanged
 
 **Compiler changes:**
 
-- [ ] Add helper to extract edges from `network_dag`, filtering out fork/join auxiliary nodes (re-link A -> fork -> B as A -> B, and A -> join -> B as A -> B)
-- [ ] Rewrite the main compilation loop in `Compiler.compile()`:
+- [x] Add helper to extract edges from `network_dag`, filtering out fork/join auxiliary nodes (re-link A -> fork -> B as A -> B, and A -> join -> B as A -> B)
+- [x] Rewrite the main compilation loop in `Compiler.compile()`:
   - Do NOT call `module.compile()` on any module
   - For LinearTransforms: serialize raw diagonals via `pack_raw_diagonals()` and raw bias via `pack_raw_bias(packing.construct_linear_bias(module), max_slots)`. Galois elements computed via `orion.core.galois.compute_galois_elements_for_linear_transform()` (pure Python, no Go calls)
   - For all other modules: read attributes directly from module state (set by `fit()`)
-- [ ] Compute Galois elements for `KeyManifest` entirely in Python:
+- [x] Compute Galois elements for `KeyManifest` entirely in Python:
   - Per-LinearTransform: `compute_galois_elements_for_linear_transform(diag_indices_per_block, slots, bsgs_ratio, logn, ring_type)` from `orion.core.galois`
   - Power-of-2 rotations: `galois_element(2^i, nth_root)` for `i` in `[0, log2(slots))`
   - Output rotations: `galois_element(slots // 2^i, nth_root)` for each LT with `output_rotations > 0`
   - No `TransformEncoder.generate_transforms()` or `_lt_evaluator` needed for Galois elements
-- [ ] Build `GraphNode` list from DAG nodes:
+- [x] Build `GraphNode` list from DAG nodes:
   - Map module classes to op strings: `LinearTransform` -> `"linear_transform"`, `Quad` -> `"quad"`, `Chebyshev`/`Sigmoid`/`SiLU`/`GELU` -> `"polynomial"`, `Activation` (monomial) -> `"polynomial"`, `Add` -> `"add"`, `Mult` -> `"mult"`, `Flatten` -> `"flatten"`, `Bootstrap` -> `"bootstrap"`
   - Build op-specific `config` dicts per ARCH.md section 1.2 (with ReLU deviation: sub-components as individual nodes)
   - Populate `shape` dict for `linear_transform` and `bootstrap` nodes
   - Store polynomial coefficients inline: `{"coeffs": [...], "basis": "chebyshev"|"monomial", "prescale": ..., "postscale": ..., "constant": ...}`
-- [ ] Build `GraphEdge` list from filtered DAG edges (fork/join removed)
-- [ ] Determine `graph.input` (first node with no predecessors) and `graph.output` (last node with no successors)
-- [ ] Remove `_extract_module_metadata()` — replaced by GraphNode construction
-- [ ] Remove `_extract_bootstrap_metadata()` — bootstraps are now regular DAG nodes (from Task 4)
-- [ ] Compute `CostProfile`: bootstrap_count from solver, galois_key_count = `len(manifest.galois_elements)`, bootstrap_key_count = `len(manifest.bootstrap_slots)`
-- [ ] Construct `CompiledModel` with new fields: `cost`, `graph`, `blobs`
+- [x] Build `GraphEdge` list from filtered DAG edges (fork/join removed)
+- [x] Determine `graph.input` (first node with no predecessors) and `graph.output` (last node with no successors)
+- [x] Remove `_extract_module_metadata()` — replaced by GraphNode construction
+- [x] Remove `_extract_bootstrap_metadata()` — bootstraps are now regular DAG nodes (from Task 4)
+- [x] Compute `CostProfile`: bootstrap_count from solver, galois_key_count = `len(manifest.galois_elements)`, bootstrap_key_count = `len(manifest.bootstrap_slots)`
+- [x] Construct `CompiledModel` with new fields: `cost`, `graph`, `blobs`
 
 **Test updates:**
 
-- [ ] Update `test_compiler_produces_compiled_model`: assert `compiled.graph` has nodes/edges, remove assertions on `compiled.topology` and `compiled.module_metadata`
-- [ ] Write test: `CompiledModel.to_bytes()` -> `from_bytes()` roundtrip with real compiled data
-- [ ] Write test: magic bytes are `ORION\x00\x02\x00`
-- [ ] Write test: JSON header has `graph` key, no `topology` or `modules` keys
-- [ ] Write test: all `blob_refs` point to valid blob indices
-- [ ] Write test: all edge src/dst reference existing node names
-- [ ] Write test: all `linear_transform` blobs are raw float64 (unpack with `unpack_raw_diagonals`, verify structure)
-- [ ] Write test: bias blobs are raw float64 of length `max_slots * 8`
-- [ ] Write test: polynomial coefficients are inline in node config (not in blobs)
-- [ ] Write test: edges form a valid DAG (acyclic, connected)
-- [ ] Write test: CostProfile fields are populated and reasonable
-- [ ] Run tests — must pass before task 6
+- [x] Update `test_compiler_produces_compiled_model`: assert `compiled.graph` has nodes/edges, remove assertions on `compiled.topology` and `compiled.module_metadata`
+- [x] Write test: `CompiledModel.to_bytes()` -> `from_bytes()` roundtrip with real compiled data
+- [x] Write test: magic bytes are `ORION\x00\x02\x00`
+- [x] Write test: JSON header has `graph` key, no `topology` or `modules` keys
+- [x] Write test: all `blob_refs` point to valid blob indices
+- [x] Write test: all edge src/dst reference existing node names
+- [x] Write test: all `linear_transform` blobs are raw float64 (unpack with `unpack_raw_diagonals`, verify structure)
+- [x] Write test: bias blobs are raw float64 of length `max_slots * 8`
+- [x] Write test: polynomial coefficients are inline in node config (not in blobs)
+- [x] Write test: edges form a valid DAG (acyclic, connected)
+- [x] Write test: CostProfile fields are populated and reasonable
+- [x] Run tests — must pass before task 6
 
 ### Task 6: Delete Python evaluator
 

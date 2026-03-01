@@ -11,12 +11,12 @@ import zlib
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from orion.params import CKKSParams, CompilerConfig
+from orion.params import CKKSParams, CompilerConfig, CostProfile
 
 
 # -- Binary format helpers --
 
-_MODEL_MAGIC = b"ORMDL\x00\x01\x00"
+_MODEL_MAGIC = b"ORION\x00\x02\x00"
 _KEYS_MAGIC = b"ORKEY\x00\x01\x00"
 
 
@@ -316,21 +316,21 @@ class Graph:
 class CompiledModel:
     """Holds all compilation artifacts needed by Client and Evaluator.
 
-    Contains the CKKS params, compiler config, key manifest, per-module
-    metadata, execution topology, and serialized LinearTransform blobs.
+    Contains the CKKS params, compiler config, key manifest, computation
+    graph (nodes + edges), cost profile, and raw diagonal/bias blobs.
     """
 
     params: CKKSParams
     config: CompilerConfig
     manifest: KeyManifest
     input_level: int
-    module_metadata: dict  # module_name -> metadata dict
-    topology: list[str]  # execution order
-    blobs: list[bytes]  # binary blobs indexed by module metadata
+    cost: CostProfile
+    graph: Graph
+    blobs: list[bytes]  # binary blobs indexed by node blob_refs
 
     def to_bytes(self) -> bytes:
         metadata = {
-            "version": 1,
+            "version": 2,
             "params": {
                 "logn": self.params.logn,
                 "logq": list(self.params.logq),
@@ -351,8 +351,8 @@ class CompiledModel:
             },
             "manifest": self.manifest.to_dict(),
             "input_level": self.input_level,
-            "modules": self.module_metadata,
-            "topology": self.topology,
+            "cost": self.cost.to_dict(),
+            "graph": self.graph.to_dict(),
             "blob_count": len(self.blobs),
         }
         return _pack_container(_MODEL_MAGIC, metadata, self.blobs)
@@ -380,14 +380,16 @@ class CompiledModel:
         )
 
         manifest = KeyManifest.from_dict(metadata["manifest"])
+        cost = CostProfile.from_dict(metadata["cost"])
+        graph = Graph.from_dict(metadata["graph"])
 
         return cls(
             params=params,
             config=config,
             manifest=manifest,
             input_level=metadata["input_level"],
-            module_metadata=metadata["modules"],
-            topology=metadata["topology"],
+            cost=cost,
+            graph=graph,
             blobs=blobs,
         )
 

@@ -11,7 +11,6 @@ from orion.compiled_model import CompiledModel, KeyManifest, EvalKeys
 from orion.compiler import Compiler
 from orion.client import Client
 from orion.ciphertext import Ciphertext, PlainText
-from orion.evaluator import Evaluator
 from orion.backend.orionclient import ffi
 from orion.backend.orionclient.ffi import GoHandle
 import orion.nn as on
@@ -178,6 +177,7 @@ class TestClientLifecycle:
 # --- Evaluator lifecycle tests ---
 
 
+@pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")
 class TestEvaluatorLifecycle:
     def test_evaluator_close_clears_tracked_handles(self):
         """After evaluator.close(), all _tracked_handles have _raw == 0."""
@@ -359,6 +359,7 @@ class MLPWithBN(on.Module):
         return self.fc2(x)
 
 
+@pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")
 class TestHandleTracking:
     """F3: Verify _tracked_handles includes BatchNorm PlainText handles
     and Bootstrap prescale handles after Evaluator construction.
@@ -520,6 +521,7 @@ class TestErrorPathCleanup:
         client.close()
         _cleanup()
 
+    @pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")
     def test_evaluate_transforms_eval_add_failure(self):
         """eval_add fails mid-transform; intermediate handles cleaned up."""
         compiled_bytes, keys_bytes, sk_bytes = _compile_model()
@@ -577,6 +579,7 @@ class TestErrorPathCleanup:
         client.close()
         _cleanup()
 
+    @pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")
     def test_evaluator_init_evaluator_creation_failure(self):
         """new_evaluator() fails after key bundle built; cleanup runs cleanly."""
         compiled_bytes, keys_bytes, _ = _compile_model()
@@ -593,6 +596,7 @@ class TestErrorPathCleanup:
         # (no _eval_handle, empty _tracked_handles). Must not crash.
         _cleanup()
 
+    @pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")
     def test_evaluator_init_reconstruct_bias_failure(self):
         """eval_encode fails during bias reconstruction; all prior handles freed."""
         compiled_bytes, keys_bytes, _ = _compile_model()

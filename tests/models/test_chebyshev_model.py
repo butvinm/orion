@@ -10,13 +10,13 @@ This exercises code paths that Quad-only models skip:
 import gc
 
 import torch
+import pytest
 
 from orion.params import CKKSParams
 from orion.compiled_model import CompiledModel, EvalKeys
 from orion.compiler import Compiler
 from orion.client import Client
 from orion.ciphertext import Ciphertext as CipherText
-from orion.evaluator import Evaluator
 import orion.nn as on
 
 
@@ -53,12 +53,8 @@ class SigmoidMLP(on.Module):
         return self.fc2(x)
 
 
-def test_sigmoid_compile_and_reconstruct():
-    """Compiler -> CompiledModel -> Evaluator roundtrip with Sigmoid.
-
-    This specifically tests that Evaluator._reconstruct_modules can
-    call set_depth() on Chebyshev subclasses without crashing.
-    """
+def test_sigmoid_compile_produces_polynomial_nodes():
+    """Compiler produces polynomial nodes for Sigmoid activation."""
     torch.manual_seed(42)
     net = SigmoidMLP()
     net.eval()
@@ -67,92 +63,25 @@ def test_sigmoid_compile_and_reconstruct():
     compiler.fit(torch.randn(1, 1, 28, 28))
     compiled = compiler.compile()
 
-    # Verify Chebyshev metadata is present
-    has_chebyshev = any(
-        m.get("type") == "Chebyshev"
-        for m in compiled.module_metadata.values()
+    # Verify polynomial node is present in graph
+    has_poly = any(
+        n.op == "polynomial" for n in compiled.graph.nodes
     )
-    assert has_chebyshev, "Expected Chebyshev module in metadata"
+    assert has_poly, "Expected polynomial node in graph"
 
-    compiled_bytes = compiled.to_bytes()
+    # Verify polynomial coefficients are inline
+    poly_node = next(
+        n for n in compiled.graph.nodes if n.op == "polynomial"
+    )
+    assert "coeffs" in poly_node.config
+    assert "basis" in poly_node.config
+    assert poly_node.config["basis"] == "chebyshev"
+
     del compiler
     _cleanup()
 
-    # Client: generate keys
-    compiled = CompiledModel.from_bytes(compiled_bytes)
-    client = Client(compiled.params)
-    keys = client.generate_keys(compiled.manifest)
-    keys_bytes = keys.to_bytes()
-    del client
-    _cleanup()
 
-    # Evaluator: reconstruct modules — this is the critical test.
-    # Before the fix, set_depth(depth) on Sigmoid would crash with
-    # TypeError: set_depth() takes 1 positional argument but 2 were given.
-    compiled = CompiledModel.from_bytes(compiled_bytes)
-    keys = EvalKeys.from_bytes(keys_bytes)
-    net_eval = SigmoidMLP()
-    evaluator = Evaluator(net_eval, compiled, keys)
-
-    # Verify the Sigmoid module has the correct depth from metadata
-    sigmoid_meta = next(
-        m for m in compiled.module_metadata.values()
-        if m["type"] == "Chebyshev"
-    )
-    assert net_eval.act1.depth == sigmoid_meta["depth"]
-    assert net_eval.act1.level == sigmoid_meta["level"]
-
-    del evaluator
-    _cleanup()
-
-
+@pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")
 def test_sigmoid_full_roundtrip():
     """Full Compiler -> Client -> Evaluator -> Client roundtrip with Sigmoid."""
-    torch.manual_seed(42)
-    net = SigmoidMLP()
-    net.eval()
-    inp = torch.randn(1, 1, 28, 28)
-    out_clear = net(inp)
-
-    # Compile
-    compiler = Compiler(net, SIGMOID_PARAMS)
-    compiler.fit(inp)
-    compiled = compiler.compile()
-    compiled_bytes = compiled.to_bytes()
-    del compiler
-    _cleanup()
-
-    # Client: keys + encrypt
-    compiled = CompiledModel.from_bytes(compiled_bytes)
-    client = Client(compiled.params)
-    keys = client.generate_keys(compiled.manifest)
-    pt = client.encode(inp, level=compiled.input_level)
-    ct = client.encrypt(pt)
-    ct_bytes = ct.to_bytes()
-    keys_bytes = keys.to_bytes()
-    sk_bytes = client.secret_key
-    del client
-    _cleanup()
-
-    # Evaluator: run
-    compiled = CompiledModel.from_bytes(compiled_bytes)
-    keys = EvalKeys.from_bytes(keys_bytes)
-    net_eval = SigmoidMLP()
-    evaluator = Evaluator(net_eval, compiled, keys)
-    ct_in = CipherText.from_bytes(ct_bytes)
-    ct_out = evaluator.run(ct_in)
-    ct_out_bytes = ct_out.to_bytes()
-    del evaluator
-    _cleanup()
-
-    # Client: decrypt
-    client = Client(compiled.params, secret_key=sk_bytes)
-    ct_result = CipherText.from_bytes(ct_out_bytes)
-    pt_result = client.decrypt(ct_result)
-    out_fhe = client.decode(pt_result)
-
-    dist = (out_clear.detach() - out_fhe[:, :10].float()).abs().mean()
-    del client
-    _cleanup()
-
-    assert dist < 1.0, f"MAE {dist:.6f} exceeds threshold"
+    pass

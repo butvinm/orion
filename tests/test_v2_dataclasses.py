@@ -3,8 +3,15 @@ KeyManifest, CompiledModel, EvalKeys, and the NewParameters adapter."""
 
 import pytest
 
-from orion.params import CKKSParams, CompilerConfig
-from orion.compiled_model import CompiledModel, KeyManifest, EvalKeys
+from orion.params import CKKSParams, CostProfile, CompilerConfig
+from orion.compiled_model import (
+    CompiledModel,
+    KeyManifest,
+    EvalKeys,
+    Graph,
+    GraphNode,
+    GraphEdge,
+)
 from orion.core.compiler_backend import NewParameters
 
 
@@ -170,6 +177,19 @@ class TestKeyManifest:
 # ---------------------------------------------------------------------------
 
 
+def _sample_graph():
+    nodes = [
+        GraphNode(name="fc1", op="linear_transform", level=2, depth=1,
+                  config={"bsgs_ratio": 2.0, "output_rotations": 0},
+                  blob_refs={"diag_0_0": 0, "bias": 1}),
+        GraphNode(name="act1", op="polynomial", level=1, depth=2,
+                  config={"coeffs": [0.5, 0.1], "basis": "chebyshev",
+                          "prescale": 1, "postscale": 1, "constant": 0}),
+    ]
+    edges = [GraphEdge(src="fc1", dst="act1")]
+    return Graph(input="fc1", output="act1", nodes=nodes, edges=edges)
+
+
 def _sample_compiled_model():
     params = CKKSParams(logn=14, logq=(55, 40, 40), logp=(61,), logscale=40)
     config = CompilerConfig()
@@ -179,19 +199,16 @@ def _sample_compiled_model():
         boot_logp=None,
         needs_rlk=True,
     )
-    module_metadata = {
-        "fc1": {"type": "Linear", "level": 2, "depth": 1},
-        "act1": {"type": "Sigmoid", "level": 1, "depth": 2},
-    }
-    topology = ["fc1", "act1"]
+    cost = CostProfile(bootstrap_count=0, galois_key_count=2, bootstrap_key_count=0)
+    graph = _sample_graph()
     blobs = [b"blob_for_fc1_transform", b"blob_for_fc1_bias", b""]
     return CompiledModel(
         params=params,
         config=config,
         manifest=manifest,
         input_level=2,
-        module_metadata=module_metadata,
-        topology=topology,
+        cost=cost,
+        graph=graph,
         blobs=blobs,
     )
 
@@ -201,7 +218,8 @@ class TestCompiledModel:
         cm = _sample_compiled_model()
         assert cm.input_level == 2
         assert len(cm.blobs) == 3
-        assert cm.topology == ["fc1", "act1"]
+        assert len(cm.graph.nodes) == 2
+        assert len(cm.graph.edges) == 1
 
     def test_serialization_roundtrip(self):
         cm = _sample_compiled_model()
@@ -219,8 +237,12 @@ class TestCompiledModel:
         assert cm2.manifest.galois_elements == cm.manifest.galois_elements
         assert cm2.manifest.needs_rlk == cm.manifest.needs_rlk
         assert cm2.input_level == cm.input_level
-        assert cm2.module_metadata == cm.module_metadata
-        assert cm2.topology == cm.topology
+        assert cm2.cost.bootstrap_count == cm.cost.bootstrap_count
+        assert cm2.cost.galois_key_count == cm.cost.galois_key_count
+        assert cm2.graph.input == cm.graph.input
+        assert cm2.graph.output == cm.graph.output
+        assert len(cm2.graph.nodes) == len(cm.graph.nodes)
+        assert len(cm2.graph.edges) == len(cm.graph.edges)
         assert cm2.blobs == cm.blobs
 
     def test_crc32_corruption_detected(self):
@@ -241,6 +263,11 @@ class TestCompiledModel:
 
     def test_empty_blobs(self):
         params = CKKSParams(logn=14, logq=(55, 40), logp=(61,), logscale=40)
+        graph = Graph(
+            input="x", output="x",
+            nodes=[GraphNode(name="x", op="flatten", level=0, depth=0)],
+            edges=[],
+        )
         cm = CompiledModel(
             params=params,
             config=CompilerConfig(),
@@ -251,19 +278,25 @@ class TestCompiledModel:
                 needs_rlk=False,
             ),
             input_level=1,
-            module_metadata={},
-            topology=[],
+            cost=CostProfile(bootstrap_count=0, galois_key_count=0,
+                             bootstrap_key_count=0),
+            graph=graph,
             blobs=[],
         )
         data = cm.to_bytes()
         cm2 = CompiledModel.from_bytes(data)
         assert cm2.blobs == []
-        assert cm2.module_metadata == {}
+        assert len(cm2.graph.nodes) == 1
 
     def test_large_blob(self):
         """Verify blobs up to ~1MB roundtrip correctly."""
         params = CKKSParams(logn=14, logq=(55, 40), logp=(61,), logscale=40)
         big_blob = bytes(range(256)) * 4096  # ~1MB
+        graph = Graph(
+            input="x", output="x",
+            nodes=[GraphNode(name="x", op="flatten", level=0, depth=0)],
+            edges=[],
+        )
         cm = CompiledModel(
             params=params,
             config=CompilerConfig(),
@@ -274,8 +307,9 @@ class TestCompiledModel:
                 needs_rlk=False,
             ),
             input_level=1,
-            module_metadata={},
-            topology=[],
+            cost=CostProfile(bootstrap_count=0, galois_key_count=0,
+                             bootstrap_key_count=0),
+            graph=graph,
             blobs=[big_blob],
         )
         data = cm.to_bytes()
