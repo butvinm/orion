@@ -179,7 +179,7 @@ import (
     "os"
     "sync"
 
-    "github.com/butvinm/orion/evaluator"
+    "github.com/baahl-nyu/orion/evaluator"
 )
 
 func main() {
@@ -508,11 +508,11 @@ default:
 
 ## Repo Structure
 
-Monorepo. Go module at root (`github.com/butvinm/orion`). One Go package — `evaluator`. Three Python packages — `lattigo` (Go bridge `.so` + Python FFI), `orion-client` (pure Python: tensor-to-slot mapping + client API), and `orion-compiler` (torch + compilation). The evaluator, Python bridge, and JS bridge each import Lattigo directly — no shared Go wrapper package.
+Monorepo. Go module at root (`github.com/baahl-nyu/orion`). One Go package — `evaluator`. Three Python packages — `lattigo` (Go bridge `.so` + Python FFI), `orion-client` (pure Python: tensor-to-slot mapping + client API), and `orion-compiler` (torch + compilation). The evaluator, Python bridge, and JS bridge each import Lattigo directly — no shared Go wrapper package.
 
 ```
 orion/
-├── go.mod                          # module github.com/butvinm/orion
+├── go.mod                          # module github.com/baahl-nyu/orion
 │
 ├── evaluator/                      # Go pkg: Orion FHE inference engine
 │                                   #   imports Lattigo directly
@@ -558,7 +558,7 @@ orion/
 └── docs/
 ```
 
-**`evaluator/`** (`github.com/butvinm/orion/evaluator`) — the only Orion-specific Go package. Reads `.orion` files, CKKS-encodes diagonals at load time, walks the computation graph. Imports Lattigo directly.
+**`evaluator/`** (`github.com/baahl-nyu/orion/evaluator`) — the only Orion-specific Go package. Reads `.orion` files, CKKS-encodes diagonals at load time, walks the computation graph. Imports Lattigo directly.
 
 **`lattigo`** (`pip install lattigo`) — Python package shipping the Go bridge `.so`. Contains all ctypes bindings (`ffi.py`, `GoHandle`). Not Orion-specific — exposes Lattigo's keygen, encrypt, decrypt, encode, decode, polynomial generation, parameter construction. The only Python package requiring Go/CGO to build from source (pre-built wheels eliminate this).
 
@@ -574,15 +574,15 @@ orion/
 
 ## Dependencies
 
-| Component          | Go import                            | `pip install`     | Depends on                                 | Does NOT depend on        |
-| ------------------ | ------------------------------------ | ----------------- | ------------------------------------------ | ------------------------- |
-| `evaluator/`       | `github.com/butvinm/orion/evaluator` | —                 | Lattigo                                    | Python, compiler, bridges |
-| `lattigo`          | (CGO, builds .so)                    | `lattigo`         | Lattigo (Go)                               | Anything Orion            |
-| `orion-client`     | —                                    | `orion-client`    | `lattigo`, numpy                           | torch, `evaluator/`       |
-| `orion-compiler`   | —                                    | `orion-compiler`  | `orion-client`, `lattigo`, torch, networkx | `evaluator/`              |
-| `orion-evaluator`  | (CGO, builds .so)                    | `orion-evaluator` | `evaluator/`, Lattigo, `orion-client`      | torch, compiler           |
-| `js/lattigo/`      | (WASM, builds .wasm)                 | —                 | Lattigo                                    | `evaluator/`              |
-| `js/orion-client/` | —                                    | —                 | `js/lattigo/` .wasm                        | Go (pure TS)              |
+| Component          | Go import                              | `pip install`     | Depends on                                 | Does NOT depend on        |
+| ------------------ | -------------------------------------- | ----------------- | ------------------------------------------ | ------------------------- |
+| `evaluator/`       | `github.com/baahl-nyu/orion/evaluator` | —                 | Lattigo                                    | Python, compiler, bridges |
+| `lattigo`          | (CGO, builds .so)                      | `lattigo`         | Lattigo (Go)                               | Anything Orion            |
+| `orion-client`     | —                                      | `orion-client`    | `lattigo`, numpy                           | torch, `evaluator/`       |
+| `orion-compiler`   | —                                      | `orion-compiler`  | `orion-client`, `lattigo`, torch, networkx | `evaluator/`              |
+| `orion-evaluator`  | (CGO, builds .so)                      | `orion-evaluator` | `evaluator/`, Lattigo, `orion-client`      | torch, compiler           |
+| `js/lattigo/`      | (WASM, builds .wasm)                   | —                 | Lattigo                                    | `evaluator/`              |
+| `js/orion-client/` | —                                      | —                 | `js/lattigo/` .wasm                        | Go (pure TS)              |
 
 No circular dependencies. No shared Go packages. `lattigo` and `orion-evaluator` are the packages with Go code. `orion-client` and `orion-compiler` are pure Python.
 
@@ -600,7 +600,7 @@ Source-only builds for now. Pre-built wheels with bundled Go shared library are 
 
 **Orion evaluator (Python bindings):** `cd python/orion-evaluator && pip install -e .` — triggers Go compilation of `bridge/` into a shared library wrapping the `evaluator/` package. Requires the `evaluator/` Go package (repo root).
 
-**Go Evaluator:** Standard `go build`. Users import `"github.com/butvinm/orion/evaluator"` in their server code.
+**Go Evaluator:** Standard `go build`. Users import `"github.com/baahl-nyu/orion/evaluator"` in their server code.
 
 ## Testing
 
@@ -869,7 +869,7 @@ type Model struct {
 3. Create a temporary `ckks.Encoder` for encoding (no keys needed)
 4. For each node where `op == "linear_transform"`:
    - For each blob*ref `diag*{row}\_{col}`→ parse diagonal blob → call`lintrans.NewLinearTransformation(params, diagMap, level, bsgsRatio)` or the equivalent Lattigo constructor to CKKS-encode
-   - For blob_ref `bias` → parse bias blob → `encoder.Encode(biasVec, level-depth)` → store `*rlwe.Plaintext`
+   - For blob_ref `bias` → parse bias blob → create `ckks.NewPlaintext(params, level-depth)` with scale `rlwe.NewScale(params.DefaultScale())` → `encoder.Encode(biasVec, pt)` → store `*rlwe.Plaintext`. The bias scale must match the ciphertext scale after LT + rescale (`DefaultScale()` ≈ `2^logscale`).
 5. For each node where `op == "polynomial"`:
    - Read `config.coeffs` and `config.basis`
    - If `"chebyshev"`: `bignum.NewPolynomial(bignum.Chebyshev, coeffs, nil)`
@@ -986,7 +986,7 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 ```
 
 1. Look up `model.polys[node.Name]`
-2. If `config.prescale != 0 && config.constant != 0`: `evaluator.AddScalar(ct, constant)`, `evaluator.MulScalar(ct, prescale)`, `evaluator.Rescale(ct)`
+2. If `config.constant != 0`: `evaluator.AddScalar(ct, constant)`. If `config.prescale != 1`: `evaluator.MulScalar(ct, prescale)`, `evaluator.Rescale(ct)`
 3. `polyEval.Evaluate(ct, poly, targetScale)` (Lattigo's Paterson-Stockmeyer or baby-step-giant-step polynomial evaluator)
 4. If `config.postscale != 1`: `evaluator.MulScalar(ct, postscale)`, `evaluator.Rescale(ct)`
 5. If `config.constant != 0`: `evaluator.AddScalar(ct, -constant)`
@@ -1024,26 +1024,27 @@ func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error
 
 **`flatten`:** no-op. Return input unchanged.
 
-**`batch_norm`:** If `fused: true`, no-op (weights folded into preceding linear). Unfused batch norms are not supported — `LoadModel()` returns an error if a `batch_norm` node has `fused: false`.
+Note: `batch_norm` is never emitted as a graph node. The compiler fuses batch norm weights into the preceding `linear_transform` via `remove_fused_batchnorms()` before graph construction (see 1.4). `LoadModel()` returns an error if an unknown op type is encountered.
 
 #### 2.6 E2E testing
 
 **Test fixture generation** (Python script, run before `go test`):
 
 1. Compile MLP → write `testdata/mlp.orion`
-2. Create Client, generate keys → write `testdata/mlp.keys` (EvalKeys serialized)
-3. Encrypt sample input → write `testdata/mlp.input.ct` (Ciphertext serialized)
-4. Compute cleartext expected output → write `testdata/mlp.expected.json` (float64 array)
-5. Write `testdata/mlp.params.json` (CKKSParams for Go to construct evaluator)
+2. Generate random input, compute cleartext expected output → write `testdata/mlp.input.json` (float64 array), `testdata/mlp.expected.json` (float64 array)
+
+Only `.orion` files and cleartext JSON cross the Python→Go boundary. Python's `EvalKeys` and `Ciphertext` serialization formats have no Go parser — keys and ciphertexts must be generated in Go.
 
 **Go test** (`evaluator/evaluator_test.go`):
 
-1. `LoadModel("testdata/mlp.orion")`
-2. Parse keys, create `NewEvaluator(params, keys)`
-3. Unmarshal input ciphertext
-4. `result := eval.Forward(model, input)`
-5. Create a temporary `Client` (from a generated secret key also saved in testdata), decrypt result
-6. Compare decrypted output against `mlp.expected.json` — tolerance accounts for FHE noise (≤ 1e-3 for typical CKKS parameters)
+1. `LoadModel("testdata/mlp.orion")` → model
+2. `model.ClientParams()` → params, manifest, inputLevel
+3. `orionclient.New(params)` → client (fresh key pair, Go side)
+4. `client.GenerateKeys(manifest)` → eval keys (Go side)
+5. `NewEvaluator(params, keys)` → evaluator
+6. Load input from `mlp.input.json`, encode and encrypt via `client` (Go side)
+7. `eval.Forward(model, ct)` → result
+8. Decrypt result via `client`, compare against `mlp.expected.json` — tolerance ≤ 1e-3
 
 Repeat for at least: MLP (linear-only), model with Chebyshev activations, model with bootstrap (if feasible in test time).
 
@@ -1058,7 +1059,7 @@ Repeat for at least: MLP (linear-only), model with Chebyshev activations, model 
 - [ ] `Evaluator.Close()` releases all resources, no leaked goroutines or memory
 - [ ] All methods return `(result, error)` — no panics on malformed input
 - [ ] `go test ./evaluator/...` passes
-- [ ] E2E test: Python compile → Python encrypt → Go evaluate → Python decrypt → correct output
+- [ ] E2E test: Python compile → Go keygen + encrypt → Go evaluate → Go decrypt → correct output
 
 ---
 
@@ -1147,7 +1148,7 @@ With the Python evaluator gone (Phase 1) and packages split:
 After Phase 2 delivers the `evaluator/` package:
 
 - Place `evaluator/` at repo root
-- Root `go.mod`: `module github.com/butvinm/orion`
+- Root `go.mod`: `module github.com/baahl-nyu/orion`
 - `python/lattigo/bridge/` retains its own `go.mod` (CGO shared library, separate build)
 - Delete `orionclient/` (its functionality split between `python/lattigo/bridge/` and `evaluator/`)
 
@@ -1172,7 +1173,7 @@ A separate CGO shared library that wraps the `evaluator/` Go package. Exports:
 
 All handles are `cgo.Handle` values, same pattern as `python/lattigo/bridge/`. Error propagation via `errOut` parameter.
 
-The bridge has its own `go.mod` that imports both `github.com/butvinm/orion/evaluator` and Lattigo. It builds a platform-specific `.so`/`.dylib`/`.dll`.
+The bridge has its own `go.mod` that imports both `github.com/baahl-nyu/orion/evaluator` and Lattigo. It builds a platform-specific `.so`/`.dylib`/`.dll`.
 
 **Python package (`python/orion-evaluator/orion_evaluator/`):**
 
