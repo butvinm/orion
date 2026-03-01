@@ -414,9 +414,10 @@ func TestForwardMLP(t *testing.T) {
 	decoded, expected := loadModelAndEvaluate(t,
 		"testdata/mlp.orion", "testdata/mlp.input.json", "testdata/mlp.expected.json")
 
-	// Tolerance 0.02: with logscale=26 and multiple FHE ops (2 LTs + quad + rescales),
-	// CKKS noise accumulates to ~0.01. Observed max error is ~0.01 with these params.
-	tolerance := 0.02
+	// Calibrated from 30-run distribution (logscale=26, conjugate_invariant, h=8192):
+	//   MLP: 2 LTs + quad. max_error distribution: median=0.009, p95=0.015, max=0.016.
+	//   Tolerance = max_observed * 1.5 = 0.025.
+	tolerance := 0.025
 
 	t.Logf("MLP output (first %d values):", len(expected))
 	for i, v := range expected {
@@ -433,10 +434,11 @@ func TestForwardSigmoid(t *testing.T) {
 	decoded, expected := loadModelAndEvaluate(t,
 		"testdata/sigmoid.orion", "testdata/sigmoid.input.json", "testdata/sigmoid.expected.json")
 
-	// Tolerance 0.05: With logscale=26 parameters, 2 LTs + Chebyshev polynomial eval + rescales,
-	// CKKS noise varies across random key generations. Observed range: 0.007–0.033 max error.
-	// Higher than MLP because polynomial evaluation introduces more noise than simple squaring.
-	tolerance := 0.05
+	// Calibrated from 30-run distribution (logscale=26, conjugate_invariant, h=8192):
+	//   Sigmoid (fused): 2 LTs + degree-7 Chebyshev. Fat-tailed noise distribution —
+	//   median=0.006 but max=0.047 (polynomial eval amplifies noise nonlinearly).
+	//   Tolerance = max_observed * 1.5 = 0.07.
+	tolerance := 0.07
 
 	t.Logf("Sigmoid output (first %d values):", len(expected))
 	for i, v := range expected {
@@ -453,13 +455,15 @@ func TestForwardSigmoid(t *testing.T) {
 func TestForwardSigmoidUnfused(t *testing.T) {
 	// This test exercises the fuse_modules=false code path in evalPolynomial.
 	// When unfused, prescale and constant are applied before polynomial evaluation:
-	//   x = x * prescale
-	//   x = x + constant
-	//   x = chebyshev(x)
+	//   x = x * prescale, rescale, x = x + constant, x = chebyshev(x)
 	decoded, expected := loadModelAndEvaluate(t,
 		"testdata/sigmoid_unfused.orion", "testdata/sigmoid_unfused.input.json", "testdata/sigmoid_unfused.expected.json")
 
-	tolerance := 0.05
+	// Calibrated from 30-run distribution (logscale=26, conjugate_invariant, h=8192):
+	//   Sigmoid (unfused): 2 LTs + prescale/constant + degree-7 Chebyshev.
+	//   Tighter than fused (median=0.006, max=0.020) — extra rescale after prescale
+	//   may stabilize scale matching. Tolerance = max_observed * 1.5 = 0.03.
+	tolerance := 0.03
 
 	t.Logf("Sigmoid unfused output (first %d values):", len(expected))
 	for i, v := range expected {
@@ -540,8 +544,8 @@ func TestMultipleEvaluatorsShareModel(t *testing.T) {
 	wrapped2 := orionclient.NewCiphertext([]*rlwe.Ciphertext{result2}, nil)
 	decoded2 := decryptVector(t, client2, wrapped2)
 
-	// Both should produce correct results independently.
-	tolerance := 0.02
+	// Both should produce correct results independently (MLP model, same calibration).
+	tolerance := 0.025
 	for i, v := range expectedValues {
 		assert.InDelta(t, v, decoded1[i], tolerance,
 			"eval1 slot %d: expected %f, got %f", i, v, decoded1[i])
