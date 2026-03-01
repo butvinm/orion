@@ -104,20 +104,20 @@ Add the v2 data structures alongside the existing v1 code (don't break anything 
 
 Implement `pack_raw_diagonals()` and `unpack_raw_diagonals()` for the v2 blob format.
 
-- [ ] Add `pack_raw_diagonals(diags: dict[int, list[float]], max_slots: int) -> bytes` to `orion/compiled_model.py`
+- [x] Add `pack_raw_diagonals(diags: dict[int, list[float]], max_slots: int) -> bytes` to `orion/compiled_model.py`
   - Format: `[4B NUM_DIAGS uint32 LE][NUM_DIAGS x 4B DIAG_INDICES int32 LE sorted ascending][NUM_DIAGS x max_slots x 8B VALUES float64 LE]`
-- [ ] Add `unpack_raw_diagonals(data: bytes, max_slots: int) -> dict[int, list[float]]`
+- [x] Add `unpack_raw_diagonals(data: bytes, max_slots: int) -> dict[int, list[float]]`
   - Parse fixed-stride format, return `{diag_index: [float64_values]}`
-- [ ] Add `pack_raw_bias(bias, max_slots: int) -> bytes`
+- [x] Add `pack_raw_bias(bias, max_slots: int) -> bytes`
   - Zero-pad to `max_slots`, write as raw float64 LE
-- [ ] Add `unpack_raw_bias(data: bytes, max_slots: int) -> list[float]`
-- [ ] Write tests for `pack_raw_diagonals` -> `unpack_raw_diagonals` roundtrip (various diagonal counts, indices, values)
-- [ ] Write tests: diagonal indices sorted ascending in packed output
-- [ ] Write tests: each diagonal has exactly `max_slots` values
-- [ ] Write tests for `pack_raw_bias` -> `unpack_raw_bias` roundtrip
-- [ ] Write tests: bias blob length = `max_slots * 8` bytes
-- [ ] Write edge case tests: empty diagonals, single diagonal, max diagonal index
-- [ ] Run tests — must pass before task 4
+- [x] Add `unpack_raw_bias(data: bytes, max_slots: int) -> list[float]`
+- [x] Write tests for `pack_raw_diagonals` -> `unpack_raw_diagonals` roundtrip (various diagonal counts, indices, values)
+- [x] Write tests: diagonal indices sorted ascending in packed output
+- [x] Write tests: each diagonal has exactly `max_slots` values
+- [x] Write tests for `pack_raw_bias` -> `unpack_raw_bias` roundtrip
+- [x] Write tests: bias blob length = `max_slots * 8` bytes
+- [x] Write edge case tests: empty diagonals, single diagonal, max diagonal index
+- [x] Run tests — must pass before task 4
 
 ### Task 4: Insert bootstrap nodes into DAG
 

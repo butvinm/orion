@@ -9,6 +9,7 @@ import json
 import struct
 import zlib
 from dataclasses import dataclass, field
+from typing import Sequence
 
 from orion.params import CKKSParams, CompilerConfig
 
@@ -88,6 +89,76 @@ def _unpack_container(
         offset += blob_len
 
     return metadata, blobs
+
+
+# -- Raw diagonal blob helpers --
+
+
+def pack_raw_diagonals(diags: dict[int, Sequence[float]], max_slots: int) -> bytes:
+    """Pack diagonal vectors into a fixed-stride binary blob.
+
+    Format:
+        [4B]                         NUM_DIAGS (uint32 LE)
+        [NUM_DIAGS x 4B]             DIAG_INDICES (int32 LE, sorted ascending)
+        [NUM_DIAGS x max_slots x 8B] VALUES (float64 LE)
+
+    Each diagonal is zero-padded or truncated to exactly max_slots values.
+    """
+    indices = sorted(diags.keys())
+    num_diags = len(indices)
+
+    parts = [struct.pack("<I", num_diags)]
+
+    for idx in indices:
+        parts.append(struct.pack("<i", idx))
+
+    for idx in indices:
+        vals = diags[idx]
+        padded = list(vals[:max_slots])
+        if len(padded) < max_slots:
+            padded.extend([0.0] * (max_slots - len(padded)))
+        parts.append(struct.pack(f"<{max_slots}d", *padded))
+
+    return b"".join(parts)
+
+
+def unpack_raw_diagonals(
+    data: bytes, max_slots: int
+) -> dict[int, list[float]]:
+    """Unpack a raw diagonal blob into {diag_index: [float64_values]}.
+
+    Inverse of pack_raw_diagonals().
+    """
+    offset = 0
+    (num_diags,) = struct.unpack_from("<I", data, offset)
+    offset += 4
+
+    indices = []
+    for _ in range(num_diags):
+        (idx,) = struct.unpack_from("<i", data, offset)
+        indices.append(idx)
+        offset += 4
+
+    result = {}
+    for idx in indices:
+        vals = list(struct.unpack_from(f"<{max_slots}d", data, offset))
+        result[idx] = vals
+        offset += max_slots * 8
+
+    return result
+
+
+def pack_raw_bias(bias: Sequence[float], max_slots: int) -> bytes:
+    """Pack a bias vector into a raw float64 blob, zero-padded to max_slots."""
+    padded = list(bias[:max_slots])
+    if len(padded) < max_slots:
+        padded.extend([0.0] * (max_slots - len(padded)))
+    return struct.pack(f"<{max_slots}d", *padded)
+
+
+def unpack_raw_bias(data: bytes, max_slots: int) -> list[float]:
+    """Unpack a raw float64 bias blob. Inverse of pack_raw_bias()."""
+    return list(struct.unpack(f"<{max_slots}d", data))
 
 
 # -- Data classes --

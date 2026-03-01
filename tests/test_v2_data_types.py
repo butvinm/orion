@@ -1,9 +1,20 @@
-"""Tests for v2 data types: CostProfile, GraphNode, GraphEdge, Graph."""
+"""Tests for v2 data types: CostProfile, GraphNode, GraphEdge, Graph, blob helpers."""
+
+import math
+import struct
 
 import pytest
 
 from orion.params import CostProfile
-from orion.compiled_model import GraphNode, GraphEdge, Graph
+from orion.compiled_model import (
+    GraphNode,
+    GraphEdge,
+    Graph,
+    pack_raw_diagonals,
+    unpack_raw_diagonals,
+    pack_raw_bias,
+    unpack_raw_bias,
+)
 
 
 # -----------------------------------------------------------------------
@@ -334,3 +345,177 @@ class TestGraph:
         nodes = [GraphNode(name="only", op="flatten", level=0, depth=0)]
         g = Graph(input="only", output="only", nodes=nodes, edges=[])
         assert len(g.edges) == 0
+
+
+# -----------------------------------------------------------------------
+# pack_raw_diagonals / unpack_raw_diagonals
+# -----------------------------------------------------------------------
+
+
+class TestPackRawDiagonals:
+    def test_roundtrip_basic(self):
+        """Pack then unpack preserves diagonal data."""
+        diags = {0: [1.0, 2.0, 3.0, 4.0], 3: [5.0, 6.0, 7.0, 8.0]}
+        max_slots = 4
+        packed = pack_raw_diagonals(diags, max_slots)
+        restored = unpack_raw_diagonals(packed, max_slots)
+        assert sorted(restored.keys()) == [0, 3]
+        assert restored[0] == [1.0, 2.0, 3.0, 4.0]
+        assert restored[3] == [5.0, 6.0, 7.0, 8.0]
+
+    def test_roundtrip_various_counts(self):
+        """Roundtrip with 1, 3, and 5 diagonals."""
+        for n_diags in [1, 3, 5]:
+            diags = {i: [float(i * 10 + j) for j in range(8)] for i in range(n_diags)}
+            packed = pack_raw_diagonals(diags, 8)
+            restored = unpack_raw_diagonals(packed, 8)
+            assert len(restored) == n_diags
+            for i in range(n_diags):
+                assert restored[i] == diags[i]
+
+    def test_indices_sorted_ascending(self):
+        """Diagonal indices must be sorted ascending in packed output."""
+        diags = {5: [1.0, 2.0], -3: [3.0, 4.0], 0: [5.0, 6.0]}
+        max_slots = 2
+        packed = pack_raw_diagonals(diags, max_slots)
+        # Read back the indices from the raw bytes
+        (num_diags,) = struct.unpack_from("<I", packed, 0)
+        assert num_diags == 3
+        indices = []
+        for i in range(num_diags):
+            (idx,) = struct.unpack_from("<i", packed, 4 + i * 4)
+            indices.append(idx)
+        assert indices == [-3, 0, 5]
+
+    def test_each_diagonal_has_max_slots_values(self):
+        """Each diagonal in the packed output has exactly max_slots float64 values."""
+        diags = {0: [1.0, 2.0], 1: [3.0, 4.0, 5.0]}
+        max_slots = 4
+        packed = pack_raw_diagonals(diags, max_slots)
+        restored = unpack_raw_diagonals(packed, max_slots)
+        for idx in restored:
+            assert len(restored[idx]) == max_slots
+
+    def test_zero_padding(self):
+        """Short diagonals are zero-padded to max_slots."""
+        diags = {0: [1.0, 2.0]}
+        max_slots = 4
+        packed = pack_raw_diagonals(diags, max_slots)
+        restored = unpack_raw_diagonals(packed, max_slots)
+        assert restored[0] == [1.0, 2.0, 0.0, 0.0]
+
+    def test_empty_diagonals(self):
+        """Empty diagonal dict produces a valid but minimal blob."""
+        diags = {}
+        max_slots = 4
+        packed = pack_raw_diagonals(diags, max_slots)
+        restored = unpack_raw_diagonals(packed, max_slots)
+        assert restored == {}
+        # Only 4 bytes for NUM_DIAGS=0
+        assert len(packed) == 4
+
+    def test_single_diagonal(self):
+        """Single diagonal roundtrip."""
+        diags = {42: [1.5, 2.5, 3.5, 4.5]}
+        max_slots = 4
+        packed = pack_raw_diagonals(diags, max_slots)
+        restored = unpack_raw_diagonals(packed, max_slots)
+        assert list(restored.keys()) == [42]
+        assert restored[42] == [1.5, 2.5, 3.5, 4.5]
+
+    def test_negative_indices(self):
+        """Negative diagonal indices are handled correctly."""
+        diags = {-5: [1.0, 2.0], -1: [3.0, 4.0], 0: [5.0, 6.0]}
+        max_slots = 2
+        packed = pack_raw_diagonals(diags, max_slots)
+        restored = unpack_raw_diagonals(packed, max_slots)
+        assert sorted(restored.keys()) == [-5, -1, 0]
+        assert restored[-5] == [1.0, 2.0]
+
+    def test_max_diagonal_index(self):
+        """Large diagonal index (near int32 max) roundtrips correctly."""
+        max_idx = 2**31 - 1
+        diags = {max_idx: [1.0, 2.0]}
+        max_slots = 2
+        packed = pack_raw_diagonals(diags, max_slots)
+        restored = unpack_raw_diagonals(packed, max_slots)
+        assert max_idx in restored
+        assert restored[max_idx] == [1.0, 2.0]
+
+    def test_blob_size(self):
+        """Blob size matches expected: 4 + num_diags*4 + num_diags*max_slots*8."""
+        diags = {0: [1.0] * 16, 1: [2.0] * 16, 2: [3.0] * 16}
+        max_slots = 16
+        packed = pack_raw_diagonals(diags, max_slots)
+        expected_size = 4 + 3 * 4 + 3 * 16 * 8
+        assert len(packed) == expected_size
+
+    def test_roundtrip_with_special_floats(self):
+        """Values like very small/large floats roundtrip correctly."""
+        diags = {0: [1e-300, 1e300, -1e-300, -1e300]}
+        max_slots = 4
+        packed = pack_raw_diagonals(diags, max_slots)
+        restored = unpack_raw_diagonals(packed, max_slots)
+        assert restored[0] == [1e-300, 1e300, -1e-300, -1e300]
+
+
+# -----------------------------------------------------------------------
+# pack_raw_bias / unpack_raw_bias
+# -----------------------------------------------------------------------
+
+
+class TestPackRawBias:
+    def test_roundtrip_basic(self):
+        """Pack then unpack preserves bias values."""
+        bias = [0.1, 0.2, 0.3, 0.4]
+        max_slots = 4
+        packed = pack_raw_bias(bias, max_slots)
+        restored = unpack_raw_bias(packed, max_slots)
+        for a, b in zip(bias, restored):
+            assert a == pytest.approx(b)
+
+    def test_bias_blob_length(self):
+        """Bias blob length must be exactly max_slots * 8 bytes."""
+        for max_slots in [4, 16, 128, 1024]:
+            bias = [float(i) for i in range(max_slots)]
+            packed = pack_raw_bias(bias, max_slots)
+            assert len(packed) == max_slots * 8
+
+    def test_zero_padding(self):
+        """Short bias is zero-padded to max_slots."""
+        bias = [1.0, 2.0]
+        max_slots = 4
+        packed = pack_raw_bias(bias, max_slots)
+        restored = unpack_raw_bias(packed, max_slots)
+        assert restored == [1.0, 2.0, 0.0, 0.0]
+
+    def test_empty_bias(self):
+        """Empty bias produces all-zero blob."""
+        max_slots = 4
+        packed = pack_raw_bias([], max_slots)
+        restored = unpack_raw_bias(packed, max_slots)
+        assert restored == [0.0, 0.0, 0.0, 0.0]
+        assert len(packed) == max_slots * 8
+
+    def test_exact_length_bias(self):
+        """Bias with exactly max_slots values."""
+        bias = [float(i) for i in range(8)]
+        packed = pack_raw_bias(bias, 8)
+        restored = unpack_raw_bias(packed, 8)
+        assert restored == bias
+
+    def test_truncation(self):
+        """Bias longer than max_slots is truncated."""
+        bias = [1.0, 2.0, 3.0, 4.0, 5.0]
+        max_slots = 3
+        packed = pack_raw_bias(bias, max_slots)
+        restored = unpack_raw_bias(packed, max_slots)
+        assert restored == [1.0, 2.0, 3.0]
+
+    def test_negative_values(self):
+        """Negative bias values roundtrip correctly."""
+        bias = [-1.5, -0.5, 0.0, 0.5]
+        max_slots = 4
+        packed = pack_raw_bias(bias, max_slots)
+        restored = unpack_raw_bias(packed, max_slots)
+        assert restored == bias
