@@ -1,13 +1,11 @@
 """Compilation artifacts: CompiledModel, KeyManifest, EvalKeys.
 
 All three support binary serialization via to_bytes()/from_bytes().
-The binary format uses a magic header, JSON metadata, length-prefixed
-blobs, and a CRC32 checksum for integrity verification.
+The binary format uses a magic header, JSON metadata, and length-prefixed blobs.
 """
 
 import json
 import struct
-import zlib
 from dataclasses import dataclass, field
 from typing import Sequence
 
@@ -31,7 +29,6 @@ def _pack_container(magic: bytes, metadata: dict, blobs: list[bytes]) -> bytes:
         for each blob:
             [8 bytes]  BLOB_LENGTH (uint64 LE)
             [N bytes]  BLOB_DATA
-        [4 bytes]  CRC32 of everything above
     """
     meta_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
     parts = [
@@ -43,33 +40,22 @@ def _pack_container(magic: bytes, metadata: dict, blobs: list[bytes]) -> bytes:
     for blob in blobs:
         parts.append(struct.pack("<Q", len(blob)))
         parts.append(blob)
-    payload = b"".join(parts)
-    crc = zlib.crc32(payload) & 0xFFFFFFFF
-    return payload + struct.pack("<I", crc)
+    return b"".join(parts)
 
 
 def _unpack_container(
     data: bytes, expected_magic: bytes
 ) -> tuple[dict, list[bytes]]:
-    """Unpack a binary container, verifying magic and CRC32.
+    """Unpack a binary container, verifying magic.
 
     Returns (metadata_dict, list_of_blobs).
     Raises ValueError on corruption or format mismatch.
     """
-    if len(data) < 20:  # 8 magic + 4 meta_len + 4 blob_count + 4 CRC32
+    if len(data) < 16:  # 8 magic + 4 meta_len + 4 blob_count
         raise ValueError("Data too short to contain a valid container")
     if data[:8] != expected_magic:
         raise ValueError(
             f"Invalid magic: expected {expected_magic!r}, got {data[:8]!r}"
-        )
-
-    # Verify CRC32 (last 4 bytes)
-    stored_crc = struct.unpack_from("<I", data, len(data) - 4)[0]
-    computed_crc = zlib.crc32(data[:-4]) & 0xFFFFFFFF
-    if stored_crc != computed_crc:
-        raise ValueError(
-            f"CRC32 mismatch: stored {stored_crc:#010x}, "
-            f"computed {computed_crc:#010x}"
         )
 
     offset = 8

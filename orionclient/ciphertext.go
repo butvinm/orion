@@ -3,7 +3,6 @@ package orionclient
 import (
 	"encoding/binary"
 	"fmt"
-	"hash/crc32"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 )
@@ -100,7 +99,6 @@ func (c *Ciphertext) Degree() int {
 //	for each ciphertext:
 //	  [8]  ct_len  (uint64 LE)
 //	  [ct_len] ct_data (Lattigo MarshalBinary)
-//	[4]  CRC32 of everything above
 func (c *Ciphertext) Marshal() ([]byte, error) {
 	// Estimate capacity
 	buf := make([]byte, 0, 1024)
@@ -135,31 +133,18 @@ func (c *Ciphertext) Marshal() ([]byte, error) {
 		buf = append(buf, data...)
 	}
 
-	// CRC32
-	checksum := crc32.ChecksumIEEE(buf)
-	binary.LittleEndian.PutUint32(tmp4, checksum)
-	buf = append(buf, tmp4...)
-
 	return buf, nil
 }
 
 // UnmarshalCiphertext deserializes a Ciphertext from wire format.
 func UnmarshalCiphertext(data []byte) (*Ciphertext, error) {
-	if len(data) < 8+4+4+4 {
+	if len(data) < 8+4+4 {
 		return nil, fmt.Errorf("ciphertext data too short: %d bytes", len(data))
 	}
 
 	// Verify magic
 	if string(data[:8]) != string(ciphertextMagic[:]) {
 		return nil, fmt.Errorf("invalid ciphertext magic: %x", data[:8])
-	}
-
-	// Verify CRC32
-	payload := data[:len(data)-4]
-	storedCRC := binary.LittleEndian.Uint32(data[len(data)-4:])
-	computedCRC := crc32.ChecksumIEEE(payload)
-	if storedCRC != computedCRC {
-		return nil, fmt.Errorf("CRC32 mismatch: stored=%08x computed=%08x", storedCRC, computedCRC)
 	}
 
 	off := 8
@@ -175,7 +160,7 @@ func UnmarshalCiphertext(data []byte) (*Ciphertext, error) {
 	// shape
 	shape := make([]int, shapeLen)
 	for i := range shape {
-		if off+4 > len(payload) {
+		if off+4 > len(data) {
 			return nil, fmt.Errorf("unexpected end of data reading shape")
 		}
 		shape[i] = int(int32(binary.LittleEndian.Uint32(data[off : off+4])))
@@ -185,13 +170,13 @@ func UnmarshalCiphertext(data []byte) (*Ciphertext, error) {
 	// ciphertexts
 	cts := make([]*rlwe.Ciphertext, numCts)
 	for i := range cts {
-		if off+8 > len(payload) {
+		if off+8 > len(data) {
 			return nil, fmt.Errorf("unexpected end of data reading ciphertext %d length", i)
 		}
 		ctLen := int(binary.LittleEndian.Uint64(data[off : off+8]))
 		off += 8
 
-		if off+ctLen > len(payload) {
+		if off+ctLen > len(data) {
 			return nil, fmt.Errorf("unexpected end of data reading ciphertext %d body", i)
 		}
 

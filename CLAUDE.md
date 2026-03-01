@@ -138,7 +138,7 @@ Key modules: `Linear`, `Conv2d`, `AvgPool2d`, `Quad`, `Sigmoid`, `SiLU`, `GELU`,
 
 ### Current serialization formats
 
-All artifacts use binary containers with magic headers, JSON metadata, length-prefixed blobs, and CRC32 checksums:
+All artifacts use binary containers with magic headers, JSON metadata, and length-prefixed blobs:
 
 - `CompiledModel`: magic `ORION\x00\x02\x00` — v2 format with computation graph (nodes + edges), raw float64 diagonal blobs, raw float64 bias blobs. Polynomial coefficients inline in node config. No Lattigo artifacts.
 - `EvalKeys`: magic `ORKEY\x00\x01\x00` — RLK, Galois keys, bootstrap keys

@@ -134,8 +134,8 @@ func TestCiphertextSetScale(t *testing.T) {
 }
 
 func TestUnmarshalCiphertextBadMagic(t *testing.T) {
-	// Must be at least 20 bytes to pass the length check (8 magic + 4 numCts + 4 shapeLen + 4 CRC)
-	data := []byte("BADMAGIC0000000000001234")
+	// Must be at least 16 bytes to pass the length check (8 magic + 4 numCts + 4 shapeLen)
+	data := []byte("BADMAGIC00000000")
 	_, err := UnmarshalCiphertext(data)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid ciphertext magic")
@@ -145,27 +145,6 @@ func TestUnmarshalCiphertextTooShort(t *testing.T) {
 	_, err := UnmarshalCiphertext([]byte{1, 2, 3})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "too short")
-}
-
-func TestUnmarshalCiphertextBadCRC(t *testing.T) {
-	c, err := New(testParams())
-	require.NoError(t, err)
-	defer c.Close()
-
-	pt, err := c.Encode([]float64{1.0}, 3, c.DefaultScale())
-	require.NoError(t, err)
-	ct, err := c.Encrypt(pt)
-	require.NoError(t, err)
-
-	data, err := ct.Marshal()
-	require.NoError(t, err)
-
-	// Corrupt the CRC
-	data[len(data)-1] ^= 0xFF
-
-	_, err = UnmarshalCiphertext(data)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "CRC32 mismatch")
 }
 
 func TestEmptyCiphertextMetadata(t *testing.T) {

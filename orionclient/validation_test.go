@@ -266,7 +266,7 @@ func TestSecretKeyCoefficientsZeroed(t *testing.T) {
 }
 
 // TestWireFormatTestVectors verifies the Ciphertext wire format structure:
-// magic header, metadata encoding, and CRC32 integrity.
+// magic header and metadata encoding.
 func TestWireFormatTestVectors(t *testing.T) {
 	c, err := New(testParams())
 	require.NoError(t, err)
@@ -294,9 +294,6 @@ func TestWireFormatTestVectors(t *testing.T) {
 
 	// After magic: uint32 numCiphertexts = 1
 	assert.True(t, len(data) > 12)
-
-	// CRC32 is the last 4 bytes
-	assert.True(t, len(data) >= 12, "data too short for CRC32")
 
 	// Round-trip: unmarshal must reproduce identical metadata
 	ct2, err := UnmarshalCiphertext(data)

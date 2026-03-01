@@ -245,15 +245,6 @@ class TestCompiledModel:
         assert len(cm2.graph.edges) == len(cm.graph.edges)
         assert cm2.blobs == cm.blobs
 
-    def test_crc32_corruption_detected(self):
-        cm = _sample_compiled_model()
-        data = bytearray(cm.to_bytes())
-        # Flip a byte in the middle of the payload
-        midpoint = len(data) // 2
-        data[midpoint] ^= 0xFF
-        with pytest.raises(ValueError, match="CRC32 mismatch"):
-            CompiledModel.from_bytes(bytes(data))
-
     def test_wrong_magic(self):
         cm = _sample_compiled_model()
         data = bytearray(cm.to_bytes())
@@ -362,13 +353,6 @@ class TestEvalKeys:
         ek2 = EvalKeys.from_bytes(data)
         assert ek2.rlk_data is None
         assert ek2.galois_keys == {5: b"gk5"}
-
-    def test_crc32_corruption(self):
-        ek = EvalKeys(rlk_data=b"rlk", galois_keys={5: b"gk"})
-        data = bytearray(ek.to_bytes())
-        data[len(data) // 2] ^= 0xFF
-        with pytest.raises(ValueError, match="CRC32 mismatch"):
-            EvalKeys.from_bytes(bytes(data))
 
     def test_wrong_magic(self):
         ek = EvalKeys(rlk_data=b"rlk")
