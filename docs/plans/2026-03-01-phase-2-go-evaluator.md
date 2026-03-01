@@ -104,24 +104,24 @@ for each blob:
 
 Create the Go module and generate test data from Python.
 
-- [ ] Create `evaluator/` directory at repo root
-- [ ] Create `evaluator/go.mod`:
+- [x] Create `evaluator/` directory at repo root
+- [x] Create `evaluator/go.mod`:
   - Module path: `github.com/baahl-nyu/orion/evaluator`
   - Import `github.com/baahl-nyu/orion/orionclient` and `github.com/baahl-nyu/lattigo/v6` (same versions as `orionclient/go.mod`)
   - Add `replace github.com/baahl-nyu/orion/orionclient => ../orionclient` (local dependency, not published to module proxy)
   - Add `github.com/stretchr/testify` for tests
-- [ ] Run `cd evaluator && go mod tidy` to generate `go.sum`
-- [ ] Create placeholder `evaluator/doc.go` with `package evaluator` so the module compiles
-- [ ] Create Python script `evaluator/testdata/generate.py` that:
+- [x] Run `cd evaluator && go mod tidy` to generate `go.sum`
+- [x] Create placeholder `evaluator/doc.go` with `package evaluator` so the module compiles
+- [x] Create Python script `evaluator/testdata/generate.py` that:
   - Compiles SimpleMLP (Flatten → Linear(784,32) → Quad → Linear(32,10)) with `logn=13, logq=[29,26,26,26,26,26], h=8192, conjugate_invariant`
   - Writes `testdata/mlp.orion` (CompiledModel.to_bytes()) — the compiled model file (~26 KB)
   - Sets `torch.manual_seed(42)`, generates input `torch.randn(1,1,28,28)`, writes `testdata/mlp.input.json` (flattened float64 array as JSON list)
   - Computes cleartext expected output (float64), writes `testdata/mlp.expected.json` (float64 array)
   - Repeats for SigmoidMLP (Flatten → Linear(784,32) → Sigmoid(degree=7) → Linear(32,10)) with `logn=13, logq=[29,26,26,26,26,26,26,26], h=8192, conjugate_invariant` — writes `testdata/sigmoid.orion`, `testdata/sigmoid.input.json`, `testdata/sigmoid.expected.json`
-- [ ] Run the Python script to generate fixtures (use venv)
-- [ ] Commit generated fixtures to `evaluator/testdata/` (only `.orion`, `.input.json`, `.expected.json` files — no key or ciphertext files)
-- [ ] Verify `cd evaluator && go build ./...` succeeds
-- [ ] Run `cd evaluator && go test ./...` — must pass (no tests yet, should be no-op)
+- [x] Run the Python script to generate fixtures (use venv)
+- [x] Commit generated fixtures to `evaluator/testdata/` (only `.orion`, `.input.json`, `.expected.json` files — no key or ciphertext files)
+- [x] Verify `cd evaluator && go build ./...` succeeds
+- [x] Run `cd evaluator && go test ./...` — must pass (no tests yet, should be no-op)
 
 ### Task 2: Binary format parser (format.go)
 
