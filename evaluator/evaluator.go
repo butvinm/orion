@@ -295,11 +295,17 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 	// When fused, prescale and constant are already absorbed into the preceding LT's weights/bias.
 	if !model.header.Config.FuseModules {
 		var err error
-		// Apply prescale (scalar multiply, no level consumed).
+		// Apply prescale: scalar multiply then rescale.
+		// MulNew(ct, float64) encodes the scalar at ct's scale, so the result
+		// has scale = ct.Scale^2. Rescale brings it back to ~DefaultScale.
+		// This consumes 1 level (accounted for by Python's set_depth += 1).
 		if cfg.Prescale != 1 {
 			work, err = e.eval.MulNew(work, cfg.Prescale)
 			if err != nil {
 				return nil, fmt.Errorf("prescale mul: %w", err)
+			}
+			if err = e.eval.Rescale(work, work); err != nil {
+				return nil, fmt.Errorf("prescale rescale: %w", err)
 			}
 		}
 

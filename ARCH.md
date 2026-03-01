@@ -986,10 +986,9 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 ```
 
 1. Look up `model.polys[node.Name]`
-2. If `config.constant != 0`: `evaluator.AddScalar(ct, constant)`. If `config.prescale != 1`: `evaluator.MulScalar(ct, prescale)`, `evaluator.Rescale(ct)`
+2. If `config.prescale != 1`: `evaluator.MulScalar(ct, prescale)`, `evaluator.Rescale(ct)`. If `config.constant != 0`: `evaluator.AddScalar(ct, constant)`. Together these map the input into the polynomial's domain (e.g., [-1, 1] for Chebyshev). Skipped when `fuse_modules=true` (prescale/constant absorbed into preceding LT weights/bias).
 3. `polyEval.Evaluate(ct, poly, targetScale)` (Lattigo's Paterson-Stockmeyer or baby-step-giant-step polynomial evaluator)
 4. If `config.postscale != 1`: `evaluator.MulScalar(ct, postscale)`, `evaluator.Rescale(ct)`
-5. If `config.constant != 0`: `evaluator.AddScalar(ct, -constant)`
 
 **ReLU:** There is no `evalReLU` handler. ReLU is decomposed into sub-nodes by FX tracing (`mult` -> `polynomial` x N -> `mult`). The evaluator walks these as individual `evalMult` and `evalPolynomial` calls. Total depth per ReLU: `sum(ceil(log2(d+1)) for d in degrees) + 2` (one multiplication for prescale × input, one for input × sign). For default degrees `[15, 15, 27]`: depth = 4 + 4 + 5 + 2 = **15 levels**.
 

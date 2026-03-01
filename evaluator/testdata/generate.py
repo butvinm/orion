@@ -78,12 +78,13 @@ def eval_chebyshev_torch(x, coeffs):
     return result
 
 
-def compute_expected_fhe(net, input_tensor):
+def compute_expected_fhe(net, input_tensor, fused=True):
     """Compute expected output matching what the Go evaluator produces in exact arithmetic.
 
-    Uses the compiled model's fused weights (on_weight/on_bias) and polynomial
-    approximations instead of exact activation functions. This accounts for:
-    - fuse_modules: prescale/constant absorbed into linear layer weights
+    Uses the compiled model's weights and polynomial approximations instead of
+    exact activation functions. This accounts for:
+    - fuse_modules: when True, prescale/constant absorbed into linear layer weights
+    - When False, prescale/constant applied before polynomial evaluation
     - Chebyshev polynomial approximation instead of exact sigmoid/SiLU/etc.
     """
     import torch.nn.functional as F
@@ -101,6 +102,14 @@ def compute_expected_fhe(net, input_tensor):
                 x = x * x
             elif hasattr(module, 'coeffs') and module.coeffs is not None:
                 # Chebyshev activation (Sigmoid, SiLU, GELU, etc.)
+                if not fused:
+                    # When not fused, apply prescale then constant before polynomial
+                    prescale = getattr(module, 'prescale', 1)
+                    constant = getattr(module, 'constant', 0)
+                    if prescale != 1:
+                        x = x * prescale
+                    if constant != 0:
+                        x = x + constant
                 x = eval_chebyshev_torch(x, module.coeffs)
             else:
                 raise ValueError(f"Unsupported module type: {type(module).__name__}")
@@ -108,16 +117,17 @@ def compute_expected_fhe(net, input_tensor):
     return x
 
 
-def generate_fixture(name, net_cls, params):
+def generate_fixture(name, net_cls, params, config=None):
     """Compile a model and write .orion + input/expected JSON files."""
     torch.manual_seed(42)
     net = net_cls()
     net.eval()
 
     # Compile
-    compiler = orion.Compiler(net, params)
+    compiler = orion.Compiler(net, params, config=config)
     compiler.fit(torch.randn(1, 1, 28, 28))
     compiled = compiler.compile()
+    fused = config.fuse_modules if config else True
 
     # Write compiled model
     outdir = os.path.dirname(__file__)
@@ -139,7 +149,7 @@ def generate_fixture(name, net_cls, params):
     # Compute expected output matching FHE evaluator's exact-arithmetic computation.
     # Uses fused on_weight/on_bias for linear layers, Chebyshev polynomial for activations.
     # This differs from cleartext forward (which uses original weight + exact sigmoid).
-    expected = compute_expected_fhe(net, input_tensor)
+    expected = compute_expected_fhe(net, input_tensor, fused=fused)
     expected_flat = expected.flatten().tolist()
 
     expected_path = os.path.join(outdir, f"{name}.expected.json")
@@ -179,6 +189,21 @@ def main():
 
     print("Generating SigmoidMLP fixture...")
     generate_fixture("sigmoid", SigmoidMLP, sigmoid_params)
+
+    # SigmoidMLP unfused: same params but fuse_modules=False
+    # Needs extra level because prescale adds 1 to depth
+    sigmoid_unfused_params = orion.CKKSParams(
+        logn=13,
+        logq=[29, 26, 26, 26, 26, 26, 26, 26, 26],
+        logp=[29, 29],
+        logscale=26,
+        h=8192,
+        ring_type="conjugate_invariant",
+    )
+    unfused_config = orion.CompilerConfig(fuse_modules=False)
+
+    print("Generating SigmoidMLP unfused fixture...")
+    generate_fixture("sigmoid_unfused", SigmoidMLP, sigmoid_unfused_params, config=unfused_config)
 
     print("Done!")
 

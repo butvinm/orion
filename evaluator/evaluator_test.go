@@ -450,6 +450,29 @@ func TestForwardSigmoid(t *testing.T) {
 	}
 }
 
+func TestForwardSigmoidUnfused(t *testing.T) {
+	// This test exercises the fuse_modules=false code path in evalPolynomial.
+	// When unfused, prescale and constant are applied before polynomial evaluation:
+	//   x = x * prescale
+	//   x = x + constant
+	//   x = chebyshev(x)
+	decoded, expected := loadModelAndEvaluate(t,
+		"testdata/sigmoid_unfused.orion", "testdata/sigmoid_unfused.input.json", "testdata/sigmoid_unfused.expected.json")
+
+	tolerance := 0.05
+
+	t.Logf("Sigmoid unfused output (first %d values):", len(expected))
+	for i, v := range expected {
+		diff := math.Abs(v - decoded[i])
+		t.Logf("  [%d] expected=%.6f got=%.6f diff=%.6f", i, v, decoded[i], diff)
+	}
+
+	for i, v := range expected {
+		assert.InDelta(t, v, decoded[i], tolerance,
+			"slot %d: expected %f, got %f", i, v, decoded[i])
+	}
+}
+
 func TestMultipleEvaluatorsShareModel(t *testing.T) {
 	// Load model once — it should be shareable across evaluators.
 	data, err := os.ReadFile("testdata/mlp.orion")
