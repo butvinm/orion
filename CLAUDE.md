@@ -26,7 +26,7 @@ poetry build
 pytest tests/
 
 # Run a single test
-pytest tests/test_v2_api.py::TestEvaluator::test_full_roundtrip
+pytest tests/test_v2_api.py::TestCompiler::test_compiler_produces_compiled_model
 
 # Run tests for a specific model
 pytest tests/models/test_mlp.py
@@ -61,9 +61,9 @@ Four components, detailed in `ARCH.md`:
 
 The codebase is being refactored toward the target. The sections below describe **what currently exists in the code**.
 
-### Three-class pipeline
+### Two-class pipeline (Compiler + Client)
 
-The API uses three purpose-built classes: `Compiler`, `Client`, and `Evaluator`. No global state, no YAML configs, no HDF5 files. All artifacts serialize to bytes.
+The API uses two purpose-built classes: `Compiler` and `Client`. The Python `Evaluator` has been deleted — Phase 2 provides a pure Go evaluator. No global state, no YAML configs, no HDF5 files. All artifacts serialize to bytes.
 
 **End-to-end usage:**
 
@@ -71,38 +71,34 @@ The API uses three purpose-built classes: `Compiler`, `Client`, and `Evaluator`.
 import orion
 from orion.models import MLP
 
-# 1. Compile (requires Go backend, no keys)
+# 1. Compile (fit() requires Go backend; compile() is Go-free)
 compiler = orion.Compiler(net, orion.CKKSParams(logn=14, logq=[...], logp=[...], logscale=40))
 compiler.fit(dataloader)
-compiled = compiler.compile()  # -> CompiledModel
-open("model.bin", "wb").write(compiled.to_bytes())
+compiled = compiler.compile()  # -> CompiledModel (v2 format with computation graph)
+open("model.orion", "wb").write(compiled.to_bytes())
 
 # 2. Client (has secret key)
-compiled = orion.CompiledModel.from_bytes(open("model.bin", "rb").read())
+compiled = orion.CompiledModel.from_bytes(open("model.orion", "rb").read())
 client = orion.Client(compiled.params)
 keys = client.generate_keys(compiled.manifest)
 ct = client.encrypt_tensor(input_tensor, level=compiled.input_level)
 
-# 3. Server (has model class definition, no trained weights needed)
-compiled = orion.CompiledModel.from_bytes(open("model.bin", "rb").read())
-net_skeleton = MLP()  # fresh instance — weights baked into CompiledModel blobs
-evaluator = orion.Evaluator(net_skeleton, compiled, keys)
-ct_result = evaluator.run(ct)
-result = client.decrypt_tensor(ct_result)
+# 3. Server — Go evaluator (Phase 2, not yet implemented)
+# The .orion v2 file is the input contract for the Go evaluator
 ```
 
 **Key files:**
 
-- `orion/params.py` — `CKKSParams` (frozen dataclass), `CompilerConfig`
-- `orion/compiler.py` — `Compiler` class: traces, fits, compiles. No keys needed.
+- `orion/params.py` — `CKKSParams` (frozen dataclass), `CompilerConfig`, `CostProfile`
+- `orion/compiler.py` — `Compiler` class: traces, fits, compiles. `compile()` has zero Go/Lattigo dependency.
 - `orion/client.py` — `Client` class: key generation, encode/decode, encrypt/decrypt.
 - `orion/ciphertext.py` — `Ciphertext` and `PlainText` wrappers over Go objects via `cgo.Handle`.
-- `orion/evaluator.py` — `Evaluator` class: loads compiled model + keys, runs FHE inference. No secret key.
-- `orion/compiled_model.py` — `CompiledModel`, `KeyManifest`, `EvalKeys` with binary serialization.
+- `orion/compiled_model.py` — `CompiledModel` (v2 format), `Graph`, `GraphNode`, `GraphEdge`, `KeyManifest`, `EvalKeys` with binary serialization.
+- `orion/core/galois.py` — Pure Python BSGS Galois element computation (replaces Lattigo calls during compile).
 
 ### Context passing (no global state)
 
-- **Compile time:** `module.compile(context)` and `module.fit(context)` take a namespace with `backend`, `params`, `encoder`, `lt_evaluator`, `poly_evaluator`, `margin`, `config`.
+- **Compile time:** `module.fit(context)` takes a namespace with `backend`, `params`, `encoder`, `lt_evaluator`, `poly_evaluator`, `margin`, `config`. The `compile()` step does NOT call `module.compile()` — it reads module attributes directly (set by `fit()` + `generate_diagonals()`). Galois elements computed in pure Python.
 - **Inference time:** `Ciphertext` carries a `context` attribute with the evaluator FFI handle and param info. Output ciphertexts propagate context automatically.
 
 ### Custom NN modules (`orion/nn/`)
@@ -118,10 +114,11 @@ Key modules: `Linear`, `Conv2d`, `AvgPool2d`, `Quad`, `Sigmoid`, `SiLU`, `GELU`,
 
 - **`network_dag.py`** — Converts PyTorch FX trace to NetworkX DAG; detects residual connections.
 - **`level_dag.py`** — Assigns multiplicative levels per layer; handles residual paths.
-- **`auto_bootstrap.py`** — Minimizes bootstrap insertions while keeping levels valid.
+- **`auto_bootstrap.py`** — Minimizes bootstrap insertions while keeping levels valid. Inserts explicit bootstrap nodes into the DAG (not forward hooks).
 - **`packing.py`** — Converts Conv2d/Linear to matrix-vector products via Toeplitz matrices, extracts diagonals.
 - **`tracer.py`** — Custom PyTorch FX tracer (`OrionTracer`); `StatsTracker` captures value ranges.
 - **`fuser.py`** — Fuses consecutive linear+activation ops to reduce multiplicative depth.
+- **`galois.py`** — Pure Python BSGS Galois element computation. Reimplements Lattigo's `lintrans.GaloisElements()` algorithm, validated against Lattigo.
 
 ### Backend layer
 
@@ -136,19 +133,16 @@ Key modules: `Linear`, `Conv2d`, `AvgPool2d`, `Quad`, `Sigmoid`, `SiLU`, `GELU`,
 1. **GoHandle wraps every Go object.** Tagged with descriptive strings (`"Client"`, `"Ciphertext"`, etc.).
 2. **Bridge functions borrow, never consume.** Only `DeleteHandle` (called by `GoHandle.close()`) frees the handle slot.
 3. **Two-step close pattern.** Resource cleanup (Go Close method) then handle table cleanup (`handle.close()`). Both idempotent.
-4. **Evaluator owns reconstruction handles.** `Evaluator._tracked_handles` collects all handles created during module reconstruction. `Evaluator.close()` closes them all.
-5. **Intermediates freed immediately.** Error paths use try/except to clean up partial handles.
-6. **Canonical `__del__`.** Every handle-owning class uses `def __del__(self): try: self.close() except Exception: pass`.
+4. **Intermediates freed immediately.** Error paths use try/except to clean up partial handles.
+5. **Canonical `__del__`.** Every handle-owning class uses `def __del__(self): try: self.close() except Exception: pass`.
 
 ### Current serialization formats
 
 All artifacts use binary containers with magic headers, JSON metadata, length-prefixed blobs, and CRC32 checksums:
 
-- `CompiledModel`: magic `ORMDL\x00\x01\x00` — params, manifest, module metadata, Lattigo-serialized LinearTransform blobs
+- `CompiledModel`: magic `ORION\x00\x02\x00` — v2 format with computation graph (nodes + edges), raw float64 diagonal blobs, raw float64 bias blobs. Polynomial coefficients inline in node config. No Lattigo artifacts.
 - `EvalKeys`: magic `ORKEY\x00\x01\x00` — RLK, Galois keys, bootstrap keys
 - `Ciphertext`: shape header + Go Lattigo marshal bytes
-
-**Note:** The current `CompiledModel` stores Lattigo-serialized blobs (CKKS-encoded, version-coupled). The target format (see `ARCH.md`) stores raw float64 packed diagonals instead — Lattigo-version-independent, ~6× smaller.
 
 ### Models (`orion/models/`)
 
@@ -156,4 +150,4 @@ Pre-built architectures using Orion's custom layers: LoLA, LeNet, MLP, VGG, Alex
 
 ## Conventions
 
-- Top-level API re-exported from `orion/__init__.py`: `Compiler`, `Client`, `Evaluator`, `CompiledModel`, `CKKSParams`, etc.
+- Top-level API re-exported from `orion/__init__.py`: `Compiler`, `Client`, `CompiledModel`, `CKKSParams`, etc. (Python `Evaluator` deleted — Go evaluator in Phase 2).

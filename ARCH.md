@@ -363,7 +363,6 @@ for each blob:
   },
   "input_level": 7,
   "cost": {
-    "rotation_count": 248,
     "bootstrap_count": 0,
     "galois_key_count": 14,
     "bootstrap_key_count": 0
@@ -650,10 +649,10 @@ New supporting types:
 ```python
 @dataclass
 class CostProfile:
-    rotation_count: int
     bootstrap_count: int
     galois_key_count: int       # = len(manifest.galois_elements)
     bootstrap_key_count: int    # = len(manifest.bootstrap_slots)
+    # rotation_count deferred — requires counting actual eval-time rotations per node
 
 @dataclass
 class Graph:
@@ -686,19 +685,23 @@ Change serialization magic from `ORMDL\x00\x01\x00` to `ORION\x00\x02\x00`. The 
 
 Every node in `graph.nodes` has an `op` string and an op-specific `config` dict. Complete enumeration:
 
-| `op`               | `config` keys                                                                                                                                          | `blob_refs` keys                           | Notes                                                                                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `flatten`          | _(empty)_                                                                                                                                              | _(none)_                                   | Shape-only, no computation                                                                                                                                                   |
-| `linear_transform` | `bsgs_ratio` (float), `output_rotations` (int)                                                                                                         | `diag_{row}_{col}` (one per block), `bias` | Includes Linear, Conv2d, AvgPool2d                                                                                                                                           |
-| `quad`             | _(empty)_                                                                                                                                              | _(none)_                                   | x² + rescale. `depth: 1`                                                                                                                                                     |
-| `polynomial`       | `coeffs` (list[float]), `basis` (`"monomial"` or `"chebyshev"`), `prescale` (float), `postscale` (float), `constant` (float)                           | _(none)_                                   | Coefficients inline (degree ≤ 63). Covers Sigmoid, SiLU, GELU, generic Chebyshev                                                                                             |
-| `relu`             | `degrees` (list[int], length 3), `prec` (int), `logalpha` (int), `logerr` (int), `prescale` (float), `postscale` (float), `coeffs` (list[list[float]]) | _(none)_                                   | `coeffs` stores pre-computed minimax sign polynomial coefficients per degree, so evaluator doesn't need to regenerate                                                        |
-| `bootstrap`        | `input_level` (int), `input_min` (float), `input_max` (float), `prescale` (float), `postscale` (float), `constant` (float), `slots` (int)              | _(none)_                                   | `slots` = 2^ceil(log2(fhe_input elements))                                                                                                                                   |
-| `add`              | _(empty)_                                                                                                                                              | _(none)_                                   | Two incoming edges (residual connection)                                                                                                                                     |
-| `mult`             | _(empty)_                                                                                                                                              | _(none)_                                   | Two incoming edges                                                                                                                                                           |
-| `batch_norm`       | `fused` (bool)                                                                                                                                         | _(none)_                                   | If `fused: true`, node is informational only (weights folded into preceding linear). Unfused batch norms are not supported — the compiler must fuse all batch norms or error |
+| `op`               | `config` keys                                                                                                                             | `blob_refs` keys                           | Notes                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `flatten`          | _(empty)_                                                                                                                                 | _(none)_                                   | Shape-only, no computation                                                       |
+| `linear_transform` | `bsgs_ratio` (float), `output_rotations` (int)                                                                                            | `diag_{row}_{col}` (one per block), `bias` | Includes Linear, Conv2d, AvgPool2d                                               |
+| `quad`             | _(empty)_                                                                                                                                 | _(none)_                                   | x² + rescale. `depth: 1`                                                         |
+| `polynomial`       | `coeffs` (list[float]), `basis` (`"monomial"` or `"chebyshev"`), `prescale` (float), `postscale` (float), `constant` (float)              | _(none)_                                   | Coefficients inline (degree ≤ 63). Covers Sigmoid, SiLU, GELU, generic Chebyshev |
+| `bootstrap`        | `input_level` (int), `input_min` (float), `input_max` (float), `prescale` (float), `postscale` (float), `constant` (float), `slots` (int) | _(none)_                                   | `slots` = 2^ceil(log2(fhe_input elements))                                       |
+| `add`              | _(empty)_                                                                                                                                 | _(none)_                                   | Two incoming edges (residual connection)                                         |
+| `mult`             | _(empty)_                                                                                                                                 | _(none)_                                   | Two incoming edges                                                               |
 
 All nodes carry `level` (int) and `depth` (int) as top-level fields. `shape` is required for `linear_transform` and `bootstrap`, optional for others.
+
+**ReLU deviation:** There is no single `relu` op type. ReLU traces to its sub-components via PyTorch FX: `mult` -> `polynomial` x N -> `mult`. Each sub-component is a separate graph node with its own level/depth. Chebyshev coefficients for the minimax sign polynomials are stored inline on each `polynomial` node's `config`. The Go evaluator walks these nodes individually — no special `evalReLU` handler needed.
+
+**Fused batch norms:** Not present in the graph. The compiler calls `remove_fused_batchnorms()` before graph construction, folding batch norm weights into the preceding `linear_transform`. Unfused batch norms are not supported.
+
+**Fork/join filtering:** The compiler's `NetworkDAG` uses auxiliary `fork` and `join` nodes for residual connections (needed by the bootstrap solver). These are filtered out during edge extraction: `A -> fork -> B, C` becomes `A -> B` and `A -> C`; `A, B -> join -> C` becomes `A -> C` and `B -> C`. Only real operation nodes appear in the final graph.
 
 #### 1.3 Raw diagonal blob format
 
@@ -724,35 +727,29 @@ Fixed stride: the evaluator can seek to diagonal `i` at offset `4 + NUM_DIAGS*4 
 
 Changes to the compilation loop:
 
-1. **Emit graph edges.** After `network_dag.build_dag()` and all processing (fusion, bootstrap placement), iterate `network_dag.edges()` and serialize as `[{"src": u, "dst": v}, ...]`.
+1. **Emit graph edges.** After `network_dag.build_dag()` and all processing (fusion, bootstrap placement), extract edges from the DAG, filtering out fork/join auxiliary nodes (re-linking `A -> fork -> B` as `A -> B`, `A -> join -> B` as `A -> B`). Serialize as `[{"src": u, "dst": v}, ...]`.
 
 2. **Insert bootstrap nodes into the graph.** Currently, bootstraps are forward hooks attached to modules — they don't exist as DAG nodes. Change `BootstrapPlacer` (or post-process the DAG) to insert explicit `bootstrap` nodes with edges. If bootstrap is placed after `act1` and `act1` → `fc2`:
    - Remove edge `act1` → `fc2`
    - Add node `boot_0` (op: `bootstrap`)
    - Add edges `act1` → `boot_0` → `fc2`
 
-3. **Store raw diagonals instead of Lattigo blobs.** Replace the current flow:
+3. **Store raw diagonals instead of Lattigo blobs.** Replace CKKS-encoded Lattigo serialization with raw float64 diagonals:
 
    ```python
-   # Current: CKKS-encode and serialize Lattigo object
-   module.compile(self._context)  # generates Lattigo LinearTransforms
-   blob_data = self.backend.SerializeLinearTransform(tid)
-   ```
-
-   With:
-
-   ```python
-   # New: store raw float64 diagonals
+   # New: store raw float64 diagonals, compute Galois elements in pure Python
    module.generate_diagonals(last=...)  # populates module.diagonals
-   # Still create Lattigo LT transiently for Galois element computation:
-   lt_ids = self._lt_evaluator.generate_transforms(module)
-   self._lt_evaluator.delete_transforms(lt_ids)
+   # Galois elements computed via pure Python BSGS (orion.core.galois) — no Go calls:
+   galois_elems = compute_galois_elements_for_linear_transform(
+       diag_indices_per_block, slots, bsgs_ratio, logn, ring_type)
    # Serialize raw diags:
    for (row, col), diags_block in module.diagonals.items():
-       blob = pack_raw_diagonals(diags_block)
+       blob = pack_raw_diagonals(diags_block, max_slots)
        blob_refs[f"diag_{row}_{col}"] = len(blobs)
        blobs.append(blob)
    ```
+
+   The `compile()` step has **zero Go/Lattigo dependency** — only `fit()` still needs Go (for minimax polynomial generation in ReLU).
 
 4. **Emit node metadata in `GraphNode` format.** Replace the current `_extract_module_metadata()` per-type dicts with unified `GraphNode` construction. Map module classes to op strings:
 
@@ -762,18 +759,18 @@ Changes to the compilation loop:
    | `Quad`                                 | `quad`                              |
    | `Activation` (monomial)                | `polynomial` (basis: `"monomial"`)  |
    | `Chebyshev`, `Sigmoid`, `SiLU`, `GELU` | `polynomial` (basis: `"chebyshev"`) |
-   | `ReLU`                                 | `relu`                              |
    | `Bootstrap`                            | `bootstrap`                         |
    | `Add`                                  | `add`                               |
    | `Mult`                                 | `mult`                              |
    | `Flatten`                              | `flatten`                           |
-   | `BatchNorm1d`, `BatchNorm2d`           | `batch_norm`                        |
 
-5. **Compute cost profile.** Count total rotations, bootstrap count, and key counts (Galois keys = `len(manifest.galois_elements)`, bootstrap keys = `len(manifest.bootstrap_slots)`). The cost profile is informational metadata for the user — the evaluator does not validate it.
+   Note: `ReLU` decomposes into sub-components via FX tracing (`mult`, `polynomial` x N, `mult`) — no single `relu` op. `BatchNorm1d`/`BatchNorm2d` are fused into the preceding `linear_transform` and excluded from the graph.
+
+5. **Compute cost profile.** Count bootstrap count and key counts (Galois keys = `len(manifest.galois_elements)`, bootstrap keys = `len(manifest.bootstrap_slots)`). Rotation count is deferred — it requires counting actual eval-time rotations per node. The cost profile is informational metadata for the user — the evaluator does not validate it.
 
 6. **Determine graph input/output.** The first node in topological order with no predecessors is `graph.input`. The last node with no successors is `graph.output`.
 
-7. **Store ReLU minimax coefficients.** Currently the compiler calls `generate_minimax_sign_coeffs()` during compilation but only stores the `degrees`/`prec`/`logalpha`/`logerr` parameters. The Go evaluator would need to regenerate the coefficients. Instead, store the actual coefficients in `config.coeffs` as a list of lists (one per polynomial in the composition).
+7. **ReLU handling.** ReLU is not a single graph node. PyTorch FX tracing decomposes it into sub-components (`mult`, `polynomial` x N, `mult`), each becoming a separate graph node. Chebyshev coefficients for the minimax sign polynomials are stored inline on each `polynomial` node's `config`. No special `relu` op type or `evalReLU` handler needed — the evaluator walks the individual sub-nodes.
 
 #### 1.5 Delete Python evaluator
 
@@ -822,9 +819,9 @@ Tests that import or use `Evaluator` will fail. Mark them `@pytest.mark.skip(rea
 - [ ] All `linear_transform` blobs contain raw float64 diagonals, not Lattigo-serialized data
 - [ ] Bias blobs are raw float64 arrays
 - [ ] Polynomial coefficients are inline in node `config` (no blobs)
-- [ ] ReLU minimax coefficients stored in node `config.coeffs`
+- [ ] ReLU decomposed into sub-nodes (`mult`, `polynomial` x N, `mult`) — no single `relu` op
 - [ ] Bootstrap nodes appear as explicit graph nodes with edges (not hook metadata)
-- [ ] Fused batch norms either absent from graph or marked `fused: true`
+- [ ] Fused batch norms absent from graph (removed by `remove_fused_batchnorms()`, weights folded into preceding linear)
 - [ ] `orion/evaluator.py` deleted, `Evaluator` removed from `orion/__init__.py`
 - [ ] `CompiledModel.to_bytes()` → `from_bytes()` roundtrip passes
 - [ ] Cleartext graph validator passes for MLP (compile → read → numpy walk → compare to PyTorch)
@@ -877,10 +874,8 @@ type Model struct {
    - Read `config.coeffs` and `config.basis`
    - If `"chebyshev"`: `bignum.NewPolynomial(bignum.Chebyshev, coeffs, nil)`
    - If `"monomial"`: `bignum.NewPolynomial(bignum.Monomial, coeffs, nil)`
-6. For each node where `op == "relu"`:
-   - Read `config.coeffs` (list of lists) → create one `bignum.Polynomial` per sub-polynomial
-7. Build `*Graph`: compute topological sort, build adjacency map (`nodeName → []inputNodeNames`)
-8. Validate: all blob_refs resolved, all edge endpoints exist, graph is acyclic
+6. Build `*Graph`: compute topological sort, build adjacency map (`nodeName → []inputNodeNames`)
+7. Validate: all blob_refs resolved, all edge endpoints exist, graph is acyclic
 
 `ClientParams() ClientParams` — returns `{Params, Manifest, InputLevel}` for the client.
 
@@ -996,20 +991,7 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 4. If `config.postscale != 1`: `evaluator.MulScalar(ct, postscale)`, `evaluator.Rescale(ct)`
 5. If `config.constant != 0`: `evaluator.AddScalar(ct, -constant)`
 
-**`relu`:**
-
-```go
-func (e *Evaluator) evalReLU(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
-```
-
-ReLU is computed as `relu(x) = x * sign(x)` where the sign function is approximated by a composite of minimax Chebyshev polynomials. The evaluation sequence mirrors `ReLU.forward()` in HE mode (`orion/nn/activation.py`):
-
-1. **Prescale:** `x = x * prescale` (MulScalar + Rescale). Prescale normalizes the input range to [-1, 1] for the sign approximation. If `prescale == 1`, skip.
-2. **Compute sign:** save a copy of `x`. Evaluate each polynomial in `config.coeffs` in sequence: for each `coeffs[i]`, construct the Chebyshev polynomial and call `polyEval.Evaluate(x, poly, targetScale)`. Each polynomial refines the sign approximation and consumes `ceil(log2(degree+1))` multiplicative levels. The last polynomial's output scale is set to match `x`'s level for the subsequent multiplication.
-3. **Multiply:** `result = x * sign(x)` (MulRelin + Rescale). This produces `|x|` (approximately).
-4. **Postscale:** `result = result * postscale` (MulScalar + Rescale). Reverses the prescaling.
-
-Total depth per ReLU: `sum(ceil(log2(d+1)) for d in degrees) + 2` (one multiplication for prescale × input, one for input × sign). For default degrees `[15, 15, 27]`: depth = 4 + 4 + 5 + 2 = **15 levels**.
+**ReLU:** There is no `evalReLU` handler. ReLU is decomposed into sub-nodes by FX tracing (`mult` -> `polynomial` x N -> `mult`). The evaluator walks these as individual `evalMult` and `evalPolynomial` calls. Total depth per ReLU: `sum(ceil(log2(d+1)) for d in degrees) + 2` (one multiplication for prescale × input, one for input × sign). For default degrees `[15, 15, 27]`: depth = 4 + 4 + 5 + 2 = **15 levels**.
 
 **`bootstrap`:**
 

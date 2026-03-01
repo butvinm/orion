@@ -241,8 +241,8 @@ New test file that validates the `.orion` v2 format without any CKKS operations.
 
 ### Task 9: [Final] Update documentation
 
-- [ ] Update ARCH.md: document ReLU deviation (sub-components as separate nodes instead of single `relu` node), note fork/join filtering, note no `rotation_count` yet
-- [ ] Update CLAUDE.md if new patterns discovered during implementation
+- [x] Update ARCH.md: document ReLU deviation (sub-components as separate nodes instead of single `relu` node), note fork/join filtering, note no `rotation_count` yet
+- [x] Update CLAUDE.md if new patterns discovered during implementation
 
 _Note: ralphex automatically moves completed plans to `docs/plans/completed/`_
 
