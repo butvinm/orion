@@ -306,10 +306,10 @@ func TestEvalFlatten(t *testing.T) {
 	_, _, inputLevel := model.ClientParams()
 	ct := encryptVector(t, client, input, inputLevel)
 
-	// Flatten should return the same ciphertext (pointer equality).
+	// Flatten should return a copy (not the same pointer) to prevent aliasing.
 	result, err := eval.evalFlatten(ct.Raw()[0])
 	require.NoError(t, err)
-	assert.Same(t, ct.Raw()[0], result, "flatten should return the same ciphertext pointer")
+	assert.NotSame(t, ct.Raw()[0], result, "flatten should return a copy, not the same pointer")
 
 	// Verify values are preserved.
 	wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)

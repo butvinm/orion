@@ -161,8 +161,11 @@ func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphert
 }
 
 // evalFlatten is a no-op — the input ciphertext already contains the flattened data.
+// Returns a copy so the caller owns the result exclusively. This prevents
+// pointer aliasing when the same ciphertext feeds multiple downstream nodes
+// (e.g., residual connections with fan-out).
 func (e *Evaluator) evalFlatten(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	return ct, nil
+	return ct.CopyNew(), nil
 }
 
 // evalQuad computes ct^2 via MulRelin + Rescale.
