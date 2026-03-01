@@ -203,27 +203,27 @@ This is the core task. Both `CompiledModel` and `Compiler.compile()` change toge
 
 New test file that validates the `.orion` v2 format without any CKKS operations.
 
-- [ ] Create `tests/test_compiled_format.py`
-- [ ] **Structural tests:**
-  - [ ] `CompiledModel.to_bytes()` -> `from_bytes()` roundtrip preserves all fields
-  - [ ] All `blob_refs` point to valid blob indices (0 <= idx < len(blobs))
-  - [ ] All edge `src`/`dst` reference existing node names
-  - [ ] `graph.input` and `graph.output` exist in node list
-  - [ ] Topological sort of edges is acyclic
-  - [ ] Every non-input node has at least one incoming edge
-  - [ ] `add`/`mult` nodes have exactly two incoming edges
-- [ ] **Numerical tests** (compile an MLP, walk graph in cleartext):
-  - [ ] Implement `reconstruct_dense_matrix(diags, max_slots, block_height)` helper — this is the inverse of `packing.diagonalize()` and is non-trivial: it reconstructs a dense matrix from packed diagonals, accounting for hybrid/square embedding and block structure. It needs `fhe_input_shape` and `fhe_output_shape` from the node's `shape` field to determine dimensions.
-  - [ ] For each `linear_transform` node: unpack raw diags from blob, reconstruct dense weight matrix, do `numpy.matmul(W, x) + bias`
-  - [ ] For each `quad` node: `x = x * x`
-  - [ ] For each `polynomial` node: evaluate polynomial using numpy (Horner for monomial, Clenshaw for Chebyshev)
-  - [ ] Compare final output against `net(x).detach().numpy()` — tolerance <= 1e-10
-- [ ] **Blob format tests:**
-  - [ ] `pack_raw_diagonals()` -> `unpack_raw_diagonals()` roundtrip with real compiled data
-  - [ ] Diagonal indices sorted ascending
-  - [ ] Each diagonal has exactly `max_slots` values
-  - [ ] Bias blob length = `max_slots * 8` bytes
-- [ ] Run tests — must pass before task 8
+- [x] Create `tests/test_compiled_format.py`
+- [x] **Structural tests:**
+  - [x] `CompiledModel.to_bytes()` -> `from_bytes()` roundtrip preserves all fields
+  - [x] All `blob_refs` point to valid blob indices (0 <= idx < len(blobs))
+  - [x] All edge `src`/`dst` reference existing node names
+  - [x] `graph.input` and `graph.output` exist in node list
+  - [x] Topological sort of edges is acyclic
+  - [x] Every non-input node has at least one incoming edge
+  - [x] `add`/`mult` nodes have exactly two incoming edges
+- [x] **Numerical tests** (compile an MLP, walk graph in cleartext):
+  - [x] Implement `reconstruct_dense_matrix(diags, max_slots, block_height)` helper — this is the inverse of `packing.diagonalize()` and is non-trivial: it reconstructs a dense matrix from packed diagonals, accounting for hybrid/square embedding and block structure. It needs `fhe_input_shape` and `fhe_output_shape` from the node's `shape` field to determine dimensions.
+  - [x] For each `linear_transform` node: unpack raw diags from blob, reconstruct dense weight matrix, do `numpy.matmul(W, x) + bias`
+  - [x] For each `quad` node: `x = x * x`
+  - [x] For each `polynomial` node: evaluate polynomial using numpy (Horner for monomial, Clenshaw for Chebyshev)
+  - [x] Compare final output against `net(x).detach().numpy()` — tolerance <= 1e-10
+- [x] **Blob format tests:**
+  - [x] `pack_raw_diagonals()` -> `unpack_raw_diagonals()` roundtrip with real compiled data
+  - [x] Diagonal indices sorted ascending
+  - [x] Each diagonal has exactly `max_slots` values
+  - [x] Bias blob length = `max_slots * 8` bytes
+- [x] Run tests — must pass before task 8
 
 ### Task 8: Verify acceptance criteria
 
