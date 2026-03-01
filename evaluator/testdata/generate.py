@@ -57,6 +57,57 @@ class SigmoidMLP(on.Module):
         return self.fc2(x)
 
 
+def eval_chebyshev_torch(x, coeffs):
+    """Evaluate Chebyshev polynomial: sum(c_k * T_k(x)) element-wise."""
+    coeffs_t = [torch.tensor(c, dtype=x.dtype) for c in coeffs]
+    if len(coeffs) == 0:
+        return torch.zeros_like(x)
+    if len(coeffs) == 1:
+        return torch.full_like(x, coeffs[0])
+
+    T_prev = torch.ones_like(x)  # T_0(x) = 1
+    T_curr = x.clone()           # T_1(x) = x
+    result = coeffs_t[0] * T_prev + coeffs_t[1] * T_curr
+
+    for k in range(2, len(coeffs)):
+        T_next = 2 * x * T_curr - T_prev
+        result = result + coeffs_t[k] * T_next
+        T_prev = T_curr
+        T_curr = T_next
+
+    return result
+
+
+def compute_expected_fhe(net, input_tensor):
+    """Compute expected output matching what the Go evaluator produces in exact arithmetic.
+
+    Uses the compiled model's fused weights (on_weight/on_bias) and polynomial
+    approximations instead of exact activation functions. This accounts for:
+    - fuse_modules: prescale/constant absorbed into linear layer weights
+    - Chebyshev polynomial approximation instead of exact sigmoid/SiLU/etc.
+    """
+    import torch.nn.functional as F
+
+    with torch.no_grad():
+        x = input_tensor.flatten()
+
+        for name, module in net.named_children():
+            if isinstance(module, on.Flatten):
+                pass  # already flattened
+            elif isinstance(module, on.Linear):
+                # Use on_weight/on_bias (fused if fuser ran, same as original otherwise)
+                x = F.linear(x, module.on_weight, module.on_bias)
+            elif isinstance(module, on.Quad):
+                x = x * x
+            elif hasattr(module, 'coeffs') and module.coeffs is not None:
+                # Chebyshev activation (Sigmoid, SiLU, GELU, etc.)
+                x = eval_chebyshev_torch(x, module.coeffs)
+            else:
+                raise ValueError(f"Unsupported module type: {type(module).__name__}")
+
+    return x
+
+
 def generate_fixture(name, net_cls, params):
     """Compile a model and write .orion + input/expected JSON files."""
     torch.manual_seed(42)
@@ -85,12 +136,10 @@ def generate_fixture(name, net_cls, params):
         json.dump(input_flat, f)
     print(f"  wrote {input_path}")
 
-    # Compute cleartext expected output
-    torch.manual_seed(42)
-    net2 = net_cls()
-    net2.eval()
-    with torch.no_grad():
-        expected = net2(input_tensor)
+    # Compute expected output matching FHE evaluator's exact-arithmetic computation.
+    # Uses fused on_weight/on_bias for linear layers, Chebyshev polynomial for activations.
+    # This differs from cleartext forward (which uses original weight + exact sigmoid).
+    expected = compute_expected_fhe(net, input_tensor)
     expected_flat = expected.flatten().tolist()
 
     expected_path = os.path.join(outdir, f"{name}.expected.json")

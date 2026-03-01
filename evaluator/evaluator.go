@@ -254,6 +254,64 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphe
 	return result, nil
 }
 
+// evalPolynomial evaluates a polynomial node: optional prescale/constant, polynomial evaluation,
+// optional postscale. Follows the Python Chebyshev class: prescale first, then constant, then poly eval.
+//
+// When the model is compiled with fuse_modules=true, the fuser absorbs prescale/constant into the
+// preceding linear layer's weights/bias. In that case, prescale/constant must NOT be applied here
+// (the Python Chebyshev.forward checks `if not self.fused:` before applying them).
 func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	return nil, fmt.Errorf("op polynomial not yet implemented")
+	cfg, err := parsePolynomialConfig(node.ConfigRaw)
+	if err != nil {
+		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
+	poly, ok := model.polys[node.Name]
+	if !ok {
+		return nil, fmt.Errorf("no polynomial found for node %q", node.Name)
+	}
+
+	// Copy input to avoid modifying it (Lattigo's polynomial evaluator may modify in-place).
+	work := ckks.NewCiphertext(e.params, 1, ct.Level())
+	work.Copy(ct)
+
+	// Apply prescale/constant only if modules were NOT fused during compilation.
+	// When fused, prescale and constant are already absorbed into the preceding LT's weights/bias.
+	if !model.header.Config.FuseModules {
+		// Apply prescale (scalar multiply, no level consumed).
+		if cfg.Prescale != 1 {
+			work, err = e.eval.MulNew(work, cfg.Prescale)
+			if err != nil {
+				return nil, fmt.Errorf("prescale mul: %w", err)
+			}
+		}
+
+		// Apply constant offset (scalar add, no level consumed).
+		if cfg.Constant != 0 {
+			work, err = e.eval.AddNew(work, cfg.Constant)
+			if err != nil {
+				return nil, fmt.Errorf("constant add: %w", err)
+			}
+		}
+	}
+
+	// Evaluate polynomial. Target scale = DefaultScale so output matches expected scale.
+	targetScale := e.params.DefaultScale()
+	result, err := e.polyEval.Evaluate(work, poly, targetScale)
+	if err != nil {
+		return nil, fmt.Errorf("polynomial evaluate: %w", err)
+	}
+
+	// Apply postscale if needed (scalar multiply + rescale, consumes 1 level).
+	if cfg.Postscale != 1 {
+		result, err = e.eval.MulNew(result, cfg.Postscale)
+		if err != nil {
+			return nil, fmt.Errorf("postscale mul: %w", err)
+		}
+		if err := e.eval.Rescale(result, result); err != nil {
+			return nil, fmt.Errorf("postscale rescale: %w", err)
+		}
+	}
+
+	return result, nil
 }
