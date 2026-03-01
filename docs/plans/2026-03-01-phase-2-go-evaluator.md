@@ -178,7 +178,7 @@ Build the computation graph with topological ordering.
 
 Load a compiled model, CKKS-encode diagonals and biases at load time.
 
-- [ ] Create `evaluator/model.go` with `Model` struct:
+- [x] Create `evaluator/model.go` with `Model` struct:
   ```go
   type Model struct {
       header     *CompiledHeader
@@ -189,7 +189,7 @@ Load a compiled model, CKKS-encode diagonals and biases at load time.
       polys      map[string]bignum.Polynomial                        // node -> polynomial
   }
   ```
-- [ ] Implement `LoadModel(data []byte) (*Model, error)`:
+- [x] Implement `LoadModel(data []byte) (*Model, error)`:
   1. `ParseContainer(data)` → header + blobs
   2. Convert `header.Params` to `orionclient.Params`, call `.NewCKKSParameters()` → `ckks.Parameters`
   3. Create `ckks.Encoder` (temporary, used only during loading)
@@ -204,15 +204,15 @@ Load a compiled model, CKKS-encode diagonals and biases at load time.
      - If `basis == "chebyshev"`: `bignum.NewPolynomial(bignum.Chebyshev, coeffs, [2]float64{-1, 1})`
      - If `basis == "monomial"`: `bignum.NewPolynomial(bignum.Monomial, coeffs, nil)`
   7. Validate: all blob_refs resolved, all edge endpoints exist
-- [ ] Implement `(m *Model) ClientParams() (orionclient.Params, orionclient.Manifest, int)`:
+- [x] Implement `(m *Model) ClientParams() (orionclient.Params, orionclient.Manifest, int)`:
   - Convert header params to `orionclient.Params`
   - Convert header manifest to `orionclient.Manifest` (note: manifest `GaloisElements` are `[]int` in JSON but `[]uint64` in Go Manifest — cast during conversion)
   - Return `(params, manifest, inputLevel)`
-- [ ] Write tests: `LoadModel` on `testdata/mlp.orion` — verify node count, LT count (2), bias count (2), polynomial count (0)
-- [ ] Write tests: `LoadModel` on `testdata/sigmoid.orion` — verify polynomial count (1), polynomial basis = "chebyshev", coeffs length > 0
-- [ ] Write tests: `ClientParams()` — verify returned params match header, manifest galois_elements non-empty, inputLevel > 0
-- [ ] Write tests: `LoadModel` with truncated data returns error
-- [ ] Run `go test ./evaluator/...` — must pass before task 5
+- [x] Write tests: `LoadModel` on `testdata/mlp.orion` — verify node count, LT count (2), bias count (2), polynomial count (0)
+- [x] Write tests: `LoadModel` on `testdata/sigmoid.orion` — verify polynomial count (1), polynomial basis = "chebyshev", coeffs length > 0
+- [x] Write tests: `ClientParams()` — verify returned params match header, manifest galois_elements non-empty, inputLevel > 0
+- [x] Write tests: `LoadModel` with truncated data returns error
+- [x] Run `go test ./evaluator/...` — must pass before task 5
 
 ### Task 5: Evaluator struct, constructor, and Forward skeleton (evaluator.go)
 
