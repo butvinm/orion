@@ -360,10 +360,11 @@ class TestNumerical:
                 coeffs = node.config["coeffs"]
                 basis = node.config.get("basis", "monomial")
                 prescale = node.config.get("prescale", 1)
+                postscale = node.config.get("postscale", 1)
                 constant = node.config.get("constant", 0)
                 x_scaled = inp * prescale + constant
                 if basis == "chebyshev":
-                    values[name] = np.polynomial.chebyshev.chebval(
+                    result = np.polynomial.chebyshev.chebval(
                         x_scaled, coeffs
                     )
                 else:
@@ -371,7 +372,7 @@ class TestNumerical:
                     result = np.zeros_like(x_scaled)
                     for c in coeffs:
                         result = c + x_scaled * result
-                    values[name] = result
+                values[name] = result * postscale
 
             elif node.op in ("add", "mult"):
                 a, b = values[preds[0]], values[preds[1]]

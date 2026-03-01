@@ -128,7 +128,7 @@ class Client:
                 for pt_h in plaintext.handles:
                     ct_h = ffi.client_encrypt(self._handle, pt_h)
                     ct_handles.append(ct_h)
-            except:
+            except Exception:
                 for h in ct_handles:
                     h.close()
                 raise
@@ -139,7 +139,7 @@ class Client:
                 combined_h = ffi.combine_single_ciphertexts(
                     ct_handles, list(plaintext.shape),
                 )
-            except:
+            except Exception:
                 for h in ct_handles:
                     h.close()
                 raise
