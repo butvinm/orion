@@ -246,20 +246,20 @@ Create the evaluator with key deserialization and graph walking dispatch loop �
 
 ### Task 6: Implement simple op handlers (flatten, quad, add, mult)
 
-- [ ] Implement `evalFlatten(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)` — return input unchanged (no-op, metadata only)
-- [ ] Implement `evalQuad(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
+- [x] Implement `evalFlatten(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)` — return input unchanged (no-op, metadata only)
+- [x] Implement `evalQuad(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
   1. `eval.MulRelinNew(ct, ct)` → result
   2. `eval.Rescale(result, result)` → rescaled
   3. Return rescaled
-- [ ] Implement `evalAdd(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
+- [x] Implement `evalAdd(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
   1. `eval.AddNew(ct0, ct1)`
-- [ ] Implement `evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
+- [x] Implement `evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
   1. `eval.MulRelinNew(ct0, ct1)` → result
   2. `eval.Rescale(result, result)`
   3. Return rescaled
-- [ ] Write unit tests for `evalQuad`: encrypt a vector, square it, decrypt, verify against element-wise expected
-- [ ] Write unit tests for `evalAdd`, `evalMult`: encrypt two vectors, combine, decrypt, verify
-- [ ] Run `go test ./evaluator/...` — must pass before task 7
+- [x] Write unit tests for `evalQuad`: encrypt a vector, square it, decrypt, verify against element-wise expected
+- [x] Write unit tests for `evalAdd`, `evalMult`: encrypt two vectors, combine, decrypt, verify
+- [x] Run `go test ./evaluator/...` — must pass before task 7
 
 ### Task 7: Implement evalLinearTransform
 

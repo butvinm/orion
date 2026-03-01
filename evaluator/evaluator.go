@@ -153,23 +153,45 @@ func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphert
 	return out, nil
 }
 
-// --- Stub op handlers (to be implemented in later tasks) ---
-
+// evalFlatten is a no-op — the input ciphertext already contains the flattened data.
 func (e *Evaluator) evalFlatten(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	return nil, fmt.Errorf("op flatten not yet implemented")
+	return ct, nil
 }
 
+// evalQuad computes ct^2 via MulRelin + Rescale.
 func (e *Evaluator) evalQuad(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	return nil, fmt.Errorf("op quad not yet implemented")
+	result, err := e.eval.MulRelinNew(ct, ct)
+	if err != nil {
+		return nil, fmt.Errorf("MulRelin: %w", err)
+	}
+	if err := e.eval.Rescale(result, result); err != nil {
+		return nil, fmt.Errorf("Rescale: %w", err)
+	}
+	return result, nil
 }
 
+// evalAdd adds two ciphertexts element-wise.
 func (e *Evaluator) evalAdd(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	return nil, fmt.Errorf("op add not yet implemented")
+	result, err := e.eval.AddNew(ct0, ct1)
+	if err != nil {
+		return nil, fmt.Errorf("Add: %w", err)
+	}
+	return result, nil
 }
 
+// evalMult multiplies two ciphertexts with relinearization and rescaling.
 func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	return nil, fmt.Errorf("op mult not yet implemented")
+	result, err := e.eval.MulRelinNew(ct0, ct1)
+	if err != nil {
+		return nil, fmt.Errorf("MulRelin: %w", err)
+	}
+	if err := e.eval.Rescale(result, result); err != nil {
+		return nil, fmt.Errorf("Rescale: %w", err)
+	}
+	return result, nil
 }
+
+// --- Stub op handlers (to be implemented in later tasks) ---
 
 func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
 	return nil, fmt.Errorf("op linear_transform not yet implemented")
