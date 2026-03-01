@@ -258,6 +258,10 @@ class BootstrapPlacer:
             boot_name = f"boot_{boot_idx}"
             btp_level = module.level - module.depth
 
+            # Set level/depth on the module object so the compiler can read it
+            bootstrapper.level = btp_level
+            bootstrapper.depth = 0
+
             # Insert bootstrap node into the DAG
             children = list(self.network_dag.successors(node))
             self.network_dag.add_node(

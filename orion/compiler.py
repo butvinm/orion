@@ -140,7 +140,6 @@ class Compiler:
 
         print("\n[1/5] Finding per-layer input/output ranges and shapes...",
               flush=True)
-        start = time.time()
         if isinstance(input_data, DataLoader):
             user_batch_size = input_data.batch_size
             if user_batch_size is not None and batch_size > user_batch_size:
@@ -440,6 +439,11 @@ class Compiler:
             galois_elements.update(lt_galois)
 
         elif isinstance(module, Chebyshev):
+            if module.coeffs is None:
+                raise ValueError(
+                    f"Chebyshev module '{node_name}' has no coefficients. "
+                    "Was fit() called?"
+                )
             config = {
                 "coeffs": list(module.coeffs),
                 "basis": "chebyshev",
