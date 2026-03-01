@@ -127,7 +127,7 @@ Create the Go module and generate test data from Python.
 
 Parse the `.orion` v2 binary container.
 
-- [ ] Create `evaluator/format.go` with Go structs for JSON header (all with `json:"..."` struct tags matching Python's lowercase JSON keys):
+- [x] Create `evaluator/format.go` with Go structs for JSON header (all with `json:"..."` struct tags matching Python's lowercase JSON keys):
   - `CompiledHeader` — `Version int`, `Params HeaderParams`, `Config HeaderConfig`, `Manifest HeaderManifest`, `InputLevel int`, `Cost HeaderCost`, `Graph HeaderGraph`, `BlobCount int`
   - `HeaderParams` — `LogN int`, `LogQ []int`, `LogP []int`, `LogScale int`, `H int`, `RingType string`, `BootLogP []int`
   - `HeaderConfig` — `Margin int`, `EmbeddingMethod string`, `FuseModules bool`
@@ -136,25 +136,25 @@ Parse the `.orion` v2 binary container.
   - `HeaderGraph` — `Input string`, `Output string`, `Nodes []HeaderNode`, `Edges []HeaderEdge`
   - `HeaderNode` — `Name string`, `Op string`, `Level int`, `Depth int`, `Shape map[string][]int` (nullable), `Config json.RawMessage` (kept raw for per-op parsing later), `BlobRefs map[string]int` (nullable)
   - `HeaderEdge` — `Src string`, `Dst string`
-- [ ] Implement `ParseContainer(data []byte) (*CompiledHeader, [][]byte, error)`:
+- [x] Implement `ParseContainer(data []byte) (*CompiledHeader, [][]byte, error)`:
   - Verify magic `ORION\x00\x02\x00`
   - Parse header length (uint32 LE), JSON header via `json.Unmarshal`, blob count (uint32 LE), blobs
-- [ ] Implement `ParseDiagonalBlob(data []byte, maxSlots int) (map[int][]float64, error)`:
+- [x] Implement `ParseDiagonalBlob(data []byte, maxSlots int) (map[int][]float64, error)`:
   - Read NUM_DIAGS (uint32 LE), DIAG_INDICES (int32 LE), VALUES (float64 LE via `math.Float64frombits`)
   - Return `diagIndex → []float64` map
-- [ ] Implement `ParseBiasBlob(data []byte, maxSlots int) ([]float64, error)`:
+- [x] Implement `ParseBiasBlob(data []byte, maxSlots int) ([]float64, error)`:
   - Read `maxSlots` float64 LE values
-- [ ] Add per-op config structs and parsing helpers:
+- [x] Add per-op config structs and parsing helpers:
   - `LinearTransformConfig` — `BSGSRatio float64`, `OutputRotations int`
   - `PolynomialConfig` — `Coeffs []float64`, `Basis string`, `Prescale float64`, `Postscale float64`, `Constant float64`
   - `BootstrapConfig` — `InputLevel int`, `InputMin float64`, `InputMax float64`, `Prescale float64`, `Postscale float64`, `Constant float64`, `Slots int`
   - `parseLinearTransformConfig(raw json.RawMessage) (*LinearTransformConfig, error)` etc.
-- [ ] Write tests: `ParseContainer` on `testdata/mlp.orion` — verify version=2, node count, edge count, blob count match expected
-- [ ] Write tests: `ParseContainer` with wrong magic returns error
-- [ ] Write tests: `ParseDiagonalBlob` — load a diagonal blob from parsed mlp.orion, verify indices sorted, each diagonal has `maxSlots` values
-- [ ] Write tests: `ParseBiasBlob` — verify length = maxSlots
-- [ ] Write tests: `parseLinearTransformConfig` — verify bsgs_ratio and output_rotations parsed correctly from a real node's config
-- [ ] Run `go test ./evaluator/...` — must pass before task 3
+- [x] Write tests: `ParseContainer` on `testdata/mlp.orion` — verify version=2, node count, edge count, blob count match expected
+- [x] Write tests: `ParseContainer` with wrong magic returns error
+- [x] Write tests: `ParseDiagonalBlob` — load a diagonal blob from parsed mlp.orion, verify indices sorted, each diagonal has `maxSlots` values
+- [x] Write tests: `ParseBiasBlob` — verify length = maxSlots
+- [x] Write tests: `parseLinearTransformConfig` — verify bsgs_ratio and output_rotations parsed correctly from a real node's config
+- [x] Run `go test ./evaluator/...` — must pass before task 3
 
 ### Task 3: Graph representation (graph.go)
 
