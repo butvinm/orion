@@ -15,12 +15,13 @@ import (
 // Model holds a parsed and CKKS-encoded compiled model.
 // It is immutable after LoadModel() and safe to share across goroutines.
 type Model struct {
-	header     *CompiledHeader
-	params     ckks.Parameters
-	graph      *Graph
-	transforms map[string]map[string]lintrans.LinearTransformation // node -> ref -> LT
-	biases     map[string]*rlwe.Plaintext                          // node -> bias
-	polys      map[string]bignum.Polynomial                        // node -> polynomial
+	header      *CompiledHeader
+	clientParam orionclient.Params // cached for ClientParams()
+	params      ckks.Parameters
+	graph       *Graph
+	transforms  map[string]map[string]lintrans.LinearTransformation // node -> ref -> LT
+	biases      map[string]*rlwe.Plaintext                          // node -> bias
+	polys       map[string]bignum.Polynomial                        // node -> polynomial
 }
 
 // LoadModel parses a .orion v2 file and CKKS-encodes diagonals, biases,
@@ -51,12 +52,13 @@ func LoadModel(data []byte) (*Model, error) {
 	maxSlots := ckksParams.MaxSlots()
 
 	m := &Model{
-		header:     header,
-		params:     ckksParams,
-		graph:      graph,
-		transforms: make(map[string]map[string]lintrans.LinearTransformation),
-		biases:     make(map[string]*rlwe.Plaintext),
-		polys:      make(map[string]bignum.Polynomial),
+		header:      header,
+		clientParam: p,
+		params:      ckksParams,
+		graph:       graph,
+		transforms:  make(map[string]map[string]lintrans.LinearTransformation),
+		biases:      make(map[string]*rlwe.Plaintext),
+		polys:       make(map[string]bignum.Polynomial),
 	}
 
 	// 5-6. Process each node based on op type.
@@ -89,6 +91,16 @@ func (m *Model) loadLinearTransform(node *Node, blobs [][]byte, ckksParams ckks.
 
 	nodeTransforms := make(map[string]lintrans.LinearTransformation)
 
+	// Validate node level is within the moduli chain.
+	if node.Level < 0 || node.Level > ckksParams.MaxLevel() {
+		return fmt.Errorf("node level %d out of range [0, %d]", node.Level, ckksParams.MaxLevel())
+	}
+
+	// Validate BSGS ratio is positive.
+	if cfg.BSGSRatio <= 0 {
+		return fmt.Errorf("bsgs_ratio must be positive, got %f", cfg.BSGSRatio)
+	}
+
 	for ref, blobIdx := range node.BlobRefs {
 		if ref == "bias" {
 			continue // handled separately below
@@ -103,11 +115,8 @@ func (m *Model) loadLinearTransform(node *Node, blobs [][]byte, ckksParams ckks.
 			return fmt.Errorf("parsing diagonal blob %q: %w", ref, err)
 		}
 
-		// Build Lattigo diagonals.
-		diagonals := make(lintrans.Diagonals[float64])
-		for idx, vals := range diagMap {
-			diagonals[idx] = vals
-		}
+		// Build Lattigo diagonals (cast — both are map[int][]float64).
+		diagonals := lintrans.Diagonals[float64](diagMap)
 
 		ltparams := lintrans.Parameters{
 			DiagonalsIndexList:        diagonals.DiagonalsIndexList(),
@@ -140,6 +149,9 @@ func (m *Model) loadLinearTransform(node *Node, blobs [][]byte, ckksParams ckks.
 		}
 
 		biasLevel := node.Level - node.Depth
+		if biasLevel < 0 {
+			return fmt.Errorf("bias level %d is negative (node level=%d, depth=%d)", biasLevel, node.Level, node.Depth)
+		}
 		pt := ckks.NewPlaintext(ckksParams, biasLevel)
 		pt.Scale = rlwe.NewScale(ckksParams.DefaultScale())
 
@@ -177,8 +189,6 @@ func (m *Model) loadPolynomial(node *Node) error {
 // ClientParams returns the CKKS parameters, key manifest, and input level
 // needed by a client to generate keys and encrypt input.
 func (m *Model) ClientParams() (orionclient.Params, orionclient.Manifest, int) {
-	p := headerToParams(m.header)
-
 	// Convert galois elements from []int to []uint64.
 	galoisElements := make([]uint64, len(m.header.Manifest.GaloisElements))
 	for i, ge := range m.header.Manifest.GaloisElements {
@@ -192,7 +202,7 @@ func (m *Model) ClientParams() (orionclient.Params, orionclient.Manifest, int) {
 		NeedsRLK:       m.header.Manifest.NeedsRLK,
 	}
 
-	return p, manifest, m.header.InputLevel
+	return m.clientParam, manifest, m.header.InputLevel
 }
 
 // headerToParams converts a CompiledHeader to orionclient.Params.

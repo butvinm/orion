@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/polynomial"
@@ -76,6 +77,12 @@ func (e *Evaluator) Close() {
 func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
 	if e.eval == nil {
 		return nil, fmt.Errorf("evaluator is closed")
+	}
+	if model == nil {
+		return nil, fmt.Errorf("model is nil")
+	}
+	if input == nil {
+		return nil, fmt.Errorf("input ciphertext is nil")
 	}
 
 	results := make(map[string]*rlwe.Ciphertext)
@@ -206,8 +213,16 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphe
 	}
 
 	// Evaluate each LT block and accumulate.
+	// Sort refs for deterministic accumulation order (Go map iteration is random).
+	refs := make([]string, 0, len(nodeTransforms))
+	for ref := range nodeTransforms {
+		refs = append(refs, ref)
+	}
+	sort.Strings(refs)
+
 	var result *rlwe.Ciphertext
-	for ref, lt := range nodeTransforms {
+	for _, ref := range refs {
+		lt := nodeTransforms[ref]
 		partial, err := e.linEval.EvaluateNew(ct, lt)
 		if err != nil {
 			return nil, fmt.Errorf("evaluating LT block %q: %w", ref, err)

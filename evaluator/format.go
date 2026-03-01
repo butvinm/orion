@@ -229,8 +229,13 @@ func parseLinearTransformConfig(raw json.RawMessage) (*LinearTransformConfig, er
 }
 
 // parsePolynomialConfig parses the config JSON for a polynomial node.
+// Prescale and Postscale default to 1.0 if omitted (Go zero-value 0.0 would
+// destroy ciphertext data via multiplication by zero).
 func parsePolynomialConfig(raw json.RawMessage) (*PolynomialConfig, error) {
-	var cfg PolynomialConfig
+	cfg := PolynomialConfig{
+		Prescale:  1.0,
+		Postscale: 1.0,
+	}
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse polynomial config: %w", err)
 	}

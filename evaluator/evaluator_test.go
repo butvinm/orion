@@ -56,18 +56,44 @@ func TestNewEvaluatorAndClose(t *testing.T) {
 	assert.Nil(t, eval.polyEval)
 }
 
-func TestForwardBootstrapStubReturnsError(t *testing.T) {
-	// Bootstrap op is not yet implemented — verify it returns an error.
-	// We test this by creating a model with a bootstrap node synthetically,
-	// but since we don't have a model with bootstrap, just verify the switch
-	// case exists by checking a manual call scenario.
-	// For now this test validates that unknown/unimplemented ops return errors.
+func TestForwardNilModel(t *testing.T) {
+	_, eval, client := newTestEvaluator(t)
+	defer client.Close()
+	defer eval.Close()
+
+	ct := &rlwe.Ciphertext{}
+	_, err := eval.Forward(nil, ct)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "model is nil")
+}
+
+func TestForwardNilInput(t *testing.T) {
 	model, eval, client := newTestEvaluator(t)
 	defer client.Close()
 	defer eval.Close()
 
-	// The MLP model has no bootstrap/polynomial nodes, so Forward should succeed.
-	// This test just verifies the evaluator works for the basic case.
+	_, err := eval.Forward(model, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "input ciphertext is nil")
+}
+
+func TestForwardBootstrapStubReturnsError(t *testing.T) {
+	// Build a synthetic model with a bootstrap node to verify the stub returns an error.
+	model, eval, client := newTestEvaluator(t)
+	defer client.Close()
+	defer eval.Close()
+
+	// Inject a bootstrap node into the graph to test the error path.
+	model.graph.Nodes["bootstrap_node"] = &Node{
+		Name: "bootstrap_node",
+		Op:   "bootstrap",
+	}
+	// Replace the graph order and input/output to route through the bootstrap node.
+	model.graph.Order = []string{"flatten", "bootstrap_node"}
+	model.graph.Input = "flatten"
+	model.graph.Output = "bootstrap_node"
+	model.graph.Inputs["bootstrap_node"] = []string{"flatten"}
+
 	maxSlots := model.params.MaxSlots()
 	zeros := make([]float64, maxSlots)
 	_, _, inputLevel := model.ClientParams()
@@ -78,9 +104,39 @@ func TestForwardBootstrapStubReturnsError(t *testing.T) {
 	ct, err := client.Encrypt(pt)
 	require.NoError(t, err)
 
-	// MLP model should succeed (flatten, LT, quad, LT — all implemented).
 	_, err = eval.Forward(model, ct.Raw()[0])
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not yet implemented")
+}
+
+func TestForwardUnknownOpReturnsError(t *testing.T) {
+	model, eval, client := newTestEvaluator(t)
+	defer client.Close()
+	defer eval.Close()
+
+	// Inject an unknown op node.
+	model.graph.Nodes["unknown_node"] = &Node{
+		Name: "unknown_node",
+		Op:   "nonexistent_op",
+	}
+	model.graph.Order = []string{"flatten", "unknown_node"}
+	model.graph.Input = "flatten"
+	model.graph.Output = "unknown_node"
+	model.graph.Inputs["unknown_node"] = []string{"flatten"}
+
+	maxSlots := model.params.MaxSlots()
+	zeros := make([]float64, maxSlots)
+	_, _, inputLevel := model.ClientParams()
+
+	pt, err := client.Encode(zeros, inputLevel, client.DefaultScale())
+	require.NoError(t, err)
+
+	ct, err := client.Encrypt(pt)
+	require.NoError(t, err)
+
+	_, err = eval.Forward(model, ct.Raw()[0])
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown op")
 }
 
 func TestForwardClosedEvaluatorReturnsError(t *testing.T) {

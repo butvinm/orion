@@ -346,7 +346,7 @@ Full E2E test suite with error handling validation.
 - [x] Verify multiple `Evaluator` instances sharing one `Model` work correctly
 - [x] Verify `Evaluator.Close()` releases resources
 - [x] Verify all methods return `(result, error)` — no panics on malformed input
-- [x] Run full test suite: `go test ./evaluator/...` — all pass (39 tests)
+- [x] Run full test suite: `go test ./evaluator/...` — all pass (42 tests)
 - [x] Run linter: `go vet ./evaluator/...` — all issues fixed
 
 ### Task 11: [Final] Update documentation

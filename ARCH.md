@@ -494,8 +494,8 @@ switch node.Op {
 case "linear_transform":
     var cfg LinearTransformConfig
     if err := json.Unmarshal(node.Config, &cfg); err != nil { ... }
-case "chebyshev":
-    var cfg ChebyshevConfig
+case "polynomial":
+    var cfg PolynomialConfig
     if err := json.Unmarshal(node.Config, &cfg); err != nil { ... }
 case "bootstrap":
     var cfg BootstrapConfig
@@ -1058,7 +1058,7 @@ Repeat for at least: MLP (linear-only), model with Chebyshev activations, model 
 - [x] Multiple `Evaluator` instances sharing one `Model` work correctly (concurrent reads)
 - [x] `Evaluator.Close()` releases resources (nils evaluator fields); calling `Forward()` on a closed evaluator returns an error
 - [x] All methods return `(result, error)` — no panics on malformed input
-- [x] `go test ./evaluator/...` passes (39 tests)
+- [x] `go test ./evaluator/...` passes (42 tests)
 - [x] E2E test: Python compile → Go keygen + encrypt → Go evaluate → Go decrypt → correct output (MLP + Sigmoid models)
 
 ---

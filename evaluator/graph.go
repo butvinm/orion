@@ -3,6 +3,7 @@ package evaluator
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 )
 
 // Node is a computation graph node with metadata needed for evaluation.
@@ -83,13 +84,21 @@ func buildGraph(header *CompiledHeader) (*Graph, error) {
 		return nil, fmt.Errorf("input node %q has %d incoming edges, expected 0", g.Input, inDegree[g.Input])
 	}
 
+	// Build forward adjacency list for efficient Kahn's algorithm.
+	forward := make(map[string][]string)
+	for _, edge := range header.Graph.Edges {
+		forward[edge.Src] = append(forward[edge.Src], edge.Dst)
+	}
+
 	// Kahn's algorithm for topological sort.
+	// Sort initial queue for deterministic order.
 	queue := make([]string, 0)
 	for name, deg := range inDegree {
 		if deg == 0 {
 			queue = append(queue, name)
 		}
 	}
+	sort.Strings(queue)
 
 	order := make([]string, 0, len(g.Nodes))
 	for len(queue) > 0 {
@@ -98,13 +107,13 @@ func buildGraph(header *CompiledHeader) (*Graph, error) {
 		queue = queue[1:]
 		order = append(order, curr)
 
-		// Decrease in-degree for all nodes that this node feeds into.
-		for _, edge := range header.Graph.Edges {
-			if edge.Src == curr {
-				inDegree[edge.Dst]--
-				if inDegree[edge.Dst] == 0 {
-					queue = append(queue, edge.Dst)
-				}
+		// Decrease in-degree for all successors of curr.
+		successors := forward[curr]
+		sort.Strings(successors)
+		for _, dst := range successors {
+			inDegree[dst]--
+			if inDegree[dst] == 0 {
+				queue = append(queue, dst)
 			}
 		}
 	}
