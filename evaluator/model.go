@@ -22,6 +22,8 @@ type Model struct {
 	transforms  map[string]map[string]lintrans.LinearTransformation // node -> ref -> LT
 	biases      map[string]*rlwe.Plaintext                          // node -> bias
 	polys       map[string]bignum.Polynomial                        // node -> polynomial
+	ltConfigs   map[string]*LinearTransformConfig                   // node -> parsed LT config
+	polyConfigs map[string]*PolynomialConfig                        // node -> parsed poly config
 }
 
 // LoadModel parses a .orion v2 file and CKKS-encodes diagonals, biases,
@@ -59,6 +61,8 @@ func LoadModel(data []byte) (*Model, error) {
 		transforms:  make(map[string]map[string]lintrans.LinearTransformation),
 		biases:      make(map[string]*rlwe.Plaintext),
 		polys:       make(map[string]bignum.Polynomial),
+		ltConfigs:   make(map[string]*LinearTransformConfig),
+		polyConfigs: make(map[string]*PolynomialConfig),
 	}
 
 	// 5-6. Process each node based on op type.
@@ -136,6 +140,7 @@ func (m *Model) loadLinearTransform(node *Node, blobs [][]byte, ckksParams ckks.
 	}
 
 	m.transforms[node.Name] = nodeTransforms
+	m.ltConfigs[node.Name] = cfg
 
 	// Encode bias if present.
 	if biasIdx, ok := node.BlobRefs["bias"]; ok {
@@ -172,6 +177,10 @@ func (m *Model) loadPolynomial(node *Node) error {
 		return fmt.Errorf("parsing config: %w", err)
 	}
 
+	if len(cfg.Coeffs) == 0 {
+		return fmt.Errorf("polynomial coefficients are empty")
+	}
+
 	var poly bignum.Polynomial
 	switch cfg.Basis {
 	case "chebyshev":
@@ -183,6 +192,7 @@ func (m *Model) loadPolynomial(node *Node) error {
 	}
 
 	m.polys[node.Name] = poly
+	m.polyConfigs[node.Name] = cfg
 	return nil
 }
 

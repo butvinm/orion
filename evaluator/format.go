@@ -243,8 +243,10 @@ func parsePolynomialConfig(raw json.RawMessage) (*PolynomialConfig, error) {
 }
 
 // parseBootstrapConfig parses the config JSON for a bootstrap node.
+// Prescale and Postscale default to 1.0 if omitted (Go zero-value 0.0 would
+// destroy ciphertext data via multiplication by zero).
 func parseBootstrapConfig(raw json.RawMessage) (*BootstrapConfig, error) {
-	var cfg BootstrapConfig
+	cfg := BootstrapConfig{Prescale: 1.0, Postscale: 1.0}
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse bootstrap config: %w", err)
 	}

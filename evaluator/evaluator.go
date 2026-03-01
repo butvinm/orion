@@ -201,9 +201,9 @@ func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error
 // evalLinearTransform evaluates a linear transform node: multi-block LT accumulation,
 // rescale, bias addition, and optional output rotations.
 func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	cfg, err := parseLinearTransformConfig(node.ConfigRaw)
-	if err != nil {
-		return nil, fmt.Errorf("parsing config: %w", err)
+	cfg, ok := model.ltConfigs[node.Name]
+	if !ok {
+		return nil, fmt.Errorf("no config found for linear_transform node %q", node.Name)
 	}
 
 	// Look up pre-encoded LTs for this node.
@@ -244,6 +244,7 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphe
 
 	// Add bias if present.
 	if bias, ok := model.biases[node.Name]; ok {
+		var err error
 		result, err = e.eval.AddNew(result, bias)
 		if err != nil {
 			return nil, fmt.Errorf("adding bias: %w", err)
@@ -276,9 +277,9 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphe
 // preceding linear layer's weights/bias. In that case, prescale/constant must NOT be applied here
 // (the Python Chebyshev.forward checks `if not self.fused:` before applying them).
 func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	cfg, err := parsePolynomialConfig(node.ConfigRaw)
-	if err != nil {
-		return nil, fmt.Errorf("parsing config: %w", err)
+	cfg, ok := model.polyConfigs[node.Name]
+	if !ok {
+		return nil, fmt.Errorf("no config found for polynomial node %q", node.Name)
 	}
 
 	poly, ok := model.polys[node.Name]
@@ -293,6 +294,7 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 	// Apply prescale/constant only if modules were NOT fused during compilation.
 	// When fused, prescale and constant are already absorbed into the preceding LT's weights/bias.
 	if !model.header.Config.FuseModules {
+		var err error
 		// Apply prescale (scalar multiply, no level consumed).
 		if cfg.Prescale != 1 {
 			work, err = e.eval.MulNew(work, cfg.Prescale)
