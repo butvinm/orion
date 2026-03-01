@@ -34,6 +34,12 @@ pytest tests/models/test_mlp.py
 
 The build process compiles Go code in `orionclient/bridge/` into a platform-specific shared library (`.so`/`.dylib`/`.dll`) that Python loads via ctypes.
 
+```bash
+# Go evaluator (pure Go, no Python dependency)
+cd evaluator && go test ./...
+cd evaluator && go vet ./...
+```
+
 ## Design Principles
 
 ### Don't Constrain Lattigo Usage
@@ -83,8 +89,12 @@ client = orion.Client(compiled.params)
 keys = client.generate_keys(compiled.manifest)
 ct = client.encrypt_tensor(input_tensor, level=compiled.input_level)
 
-# 3. Server — Go evaluator (Phase 2, not yet implemented)
-# The .orion v2 file is the input contract for the Go evaluator
+# 3. Server — Go evaluator (evaluator/ package)
+# Load model, create evaluator, run forward pass:
+#   model = evaluator.LoadModel(compiled_bytes)
+#   params, manifest, inputLevel = model.ClientParams()
+#   eval = evaluator.NewEvaluator(params, keys)
+#   result = eval.Forward(model, ciphertext)
 ```
 
 **Key files:**
@@ -126,6 +136,17 @@ Key modules: `Linear`, `Conv2d`, `AvgPool2d`, `Quad`, `Sigmoid`, `SiLU`, `GELU`,
 - **Python FFI:** `orion/backend/orionclient/ffi.py` — ctypes bindings. All Go objects wrapped in `GoHandle` (RAII). Error propagation via `errOut` pattern.
 - **Compile-time helpers:** `orion/core/compiler_backend.py` — `CompilerBackend`, `PolynomialGenerator`, `TransformEncoder`.
 
+### Go evaluator (`evaluator/`)
+
+Pure Go FHE inference engine. Reads `.orion` v2 files, CKKS-encodes diagonals at load time, walks the computation graph.
+
+- `evaluator/format.go` — Binary format parser: `ParseContainer`, `ParseDiagonalBlob`, `ParseBiasBlob`, per-op config structs
+- `evaluator/graph.go` — Computation graph with topological ordering: `Node`, `Graph`, `buildGraph`
+- `evaluator/model.go` — `Model` (immutable, shareable): `LoadModel` parses `.orion`, CKKS-encodes transforms/biases/polynomials. `ClientParams()` returns params for key generation.
+- `evaluator/evaluator.go` — `Evaluator` (per-client, NOT goroutine-safe): `NewEvaluator(params, keys)`, `Forward(model, ct)`. Op handlers: `evalFlatten`, `evalQuad`, `evalAdd`, `evalMult`, `evalLinearTransform`, `evalPolynomial`. Bootstrap deferred.
+
+Design: `Model` is loaded once and shared across `Evaluator` instances. Each `Evaluator` holds one client's eval keys. Constructs Lattigo evaluators directly (no `orionclient.Evaluator` wrapping). Imports `orionclient/` only for type definitions (`Params`, `EvalKeyBundle`, `Client`).
+
 ### GoHandle — Go object lifecycle management
 
 `GoHandle` (`orion/backend/orionclient/ffi.py`) is an RAII wrapper for `cgo.Handle` values (`uintptr_t`). Rules:
@@ -150,4 +171,5 @@ Pre-built architectures using Orion's custom layers: LoLA, LeNet, MLP, VGG, Alex
 
 ## Conventions
 
-- Top-level API re-exported from `orion/__init__.py`: `Compiler`, `Client`, `CompiledModel`, `CKKSParams`, etc. (Python `Evaluator` deleted — Go evaluator in Phase 2).
+- Top-level API re-exported from `orion/__init__.py`: `Compiler`, `Client`, `CompiledModel`, `CKKSParams`, etc. (Python `Evaluator` deleted — replaced by pure Go evaluator in `evaluator/` package).
+- Go evaluator: `evaluator/` package at repo root with its own `go.mod`. Build with `cd evaluator && go build ./...`, test with `cd evaluator && go test ./...`.

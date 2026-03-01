@@ -351,8 +351,8 @@ Full E2E test suite with error handling validation.
 
 ### Task 11: [Final] Update documentation
 
-- [ ] Update ARCH.md: mark Phase 2 acceptance checklist items as complete (those covered), note deferred items (bootstrap, add/mult E2E if no test model exercises them)
-- [ ] Update CLAUDE.md if new patterns discovered
+- [x] Update ARCH.md: mark Phase 2 acceptance checklist items as complete (those covered), note deferred items (bootstrap, add/mult E2E if no test model exercises them)
+- [x] Update CLAUDE.md if new patterns discovered
 
 _Note: ralphex automatically moves completed plans to `docs/plans/completed/`_
 
