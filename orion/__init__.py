@@ -4,7 +4,6 @@ from orion.client import Client as Client
 from orion.ciphertext import Ciphertext as Ciphertext, PlainText as PlainText
 # Backward compatibility alias
 CipherText = Ciphertext
-from orion.evaluator import Evaluator as Evaluator
 from orion.compiled_model import (
     CompiledModel as CompiledModel,
     KeyManifest as KeyManifest,

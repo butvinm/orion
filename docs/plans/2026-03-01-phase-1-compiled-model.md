@@ -187,17 +187,17 @@ This is the core task. Both `CompiledModel` and `Compiler.compile()` change toge
 
 ### Task 6: Delete Python evaluator
 
-- [ ] Move `test_compiled_model_serialization_roundtrip` from `TestEvaluator` to `TestCompiler` in `tests/test_v2_api.py` (this test only tests CompiledModel serialization, doesn't actually use Evaluator — would be wrongly skipped)
-- [ ] Delete `orion/evaluator.py`
-- [ ] Remove `from orion.evaluator import Evaluator as Evaluator` from `orion/__init__.py`
-- [ ] Remove `from orion.evaluator import Evaluator` imports from test files: `tests/test_v2_api.py`, `tests/test_gohandle.py`, `tests/models/test_chebyshev_model.py`, `tests/models/test_mlp.py`
-- [ ] Add `@pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")` to all test classes/functions that construct or use `Evaluator`:
+- [x] Move `test_compiled_model_serialization_roundtrip` from `TestEvaluator` to `TestCompiler` in `tests/test_v2_api.py` (this test only tests CompiledModel serialization, doesn't actually use Evaluator — would be wrongly skipped)
+- [x] Delete `orion/evaluator.py`
+- [x] Remove `from orion.evaluator import Evaluator as Evaluator` from `orion/__init__.py`
+- [x] Remove `from orion.evaluator import Evaluator` imports from test files: `tests/test_v2_api.py`, `tests/test_gohandle.py`, `tests/models/test_chebyshev_model.py`, `tests/models/test_mlp.py`
+- [x] Add `@pytest.mark.skip(reason="Python evaluator removed — Phase 2 provides Go evaluator")` to all test classes/functions that construct or use `Evaluator`:
   - `tests/test_v2_api.py`: `TestEvaluator` class (now only has `test_evaluator_modules_have_levels` after moving the serialization test out)
   - `tests/test_gohandle.py`: `TestEvaluatorLifecycle`, handle tracking tests, error cleanup tests
   - `tests/models/test_chebyshev_model.py`: `test_chebyshev_reconstruct`, `test_chebyshev_full_roundtrip`
   - `tests/models/test_mlp.py`: any test function using `orion.Evaluator`
-- [ ] Verify non-evaluator tests still pass: `TestCompiler`, `TestClient`, `TestClientSecretKey`
-- [ ] Run full test suite — must pass before task 7
+- [x] Verify non-evaluator tests still pass: `TestCompiler`, `TestClient`, `TestClientSecretKey`
+- [x] Run full test suite — must pass before task 7
 
 ### Task 7: Cleartext graph validator
 
