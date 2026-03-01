@@ -160,19 +160,19 @@ Parse the `.orion` v2 binary container.
 
 Build the computation graph with topological ordering.
 
-- [ ] Create `evaluator/graph.go` with types:
+- [x] Create `evaluator/graph.go` with types:
   - `Node` — `Name string`, `Op string`, `Level int`, `Depth int`, `Shape map[string][]int`, `ConfigRaw json.RawMessage`, `BlobRefs map[string]int`
   - `Graph` — `Input string`, `Output string`, `Nodes map[string]*Node`, `Order []string`, `Inputs map[string][]string`
-- [ ] Implement `buildGraph(header *CompiledHeader) (*Graph, error)`:
+- [x] Implement `buildGraph(header *CompiledHeader) (*Graph, error)`:
   - Index nodes by name into `Nodes` map
   - Build `Inputs` reverse adjacency: for each edge `{src, dst}`, append `src` to `Inputs[dst]`
   - Compute topological sort (Kahn's algorithm — count in-degrees, BFS from zero-in-degree nodes)
   - Validate: all nodes reached (else cycle exists), Input node has no incoming edges, Output node exists
-- [ ] Write tests: `buildGraph` on parsed `testdata/mlp.orion` header — verify topo order length, input name = `flatten`, output name = `fc2`, node count = 4
-- [ ] Write tests: `buildGraph` with synthetic cyclic edges returns error
-- [ ] Write tests: `buildGraph` with edge referencing nonexistent node returns error
-- [ ] Write tests: `Inputs` map — verify `fc1` has exactly one predecessor (`flatten`), `act1` has exactly one predecessor (`fc1`), etc.
-- [ ] Run `go test ./evaluator/...` — must pass before task 4
+- [x] Write tests: `buildGraph` on parsed `testdata/mlp.orion` header — verify topo order length, input name = `flatten`, output name = `fc2`, node count = 4
+- [x] Write tests: `buildGraph` with synthetic cyclic edges returns error
+- [x] Write tests: `buildGraph` with edge referencing nonexistent node returns error
+- [x] Write tests: `Inputs` map — verify `fc1` has exactly one predecessor (`flatten`), `act1` has exactly one predecessor (`fc1`), etc.
+- [x] Run `go test ./evaluator/...` — must pass before task 4
 
 ### Task 4: Model loader (model.go)
 
