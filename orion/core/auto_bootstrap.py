@@ -239,16 +239,43 @@ class BootstrapPlacer:
         self.context = context
 
     def place_bootstraps(self):
-        for node in self.network_dag.nodes:
-            if self.network_dag.nodes[node]["bootstrap"]:
-                module = self.network_dag.nodes[node]["module"]
-                self._apply_bootstrap_hook(module)
+        """Insert explicit bootstrap nodes into the DAG.
 
-    def _apply_bootstrap_hook(self, module):
-        bootstrapper = self._create_bootstrapper(module)
-        module.bootstrapper = bootstrapper
+        For each node marked with bootstrap=True, creates a boot_{idx} node
+        and inserts it between the node and all its children in the DAG.
+        """
+        boot_idx = 0
+        # Snapshot node list — we mutate the graph during iteration
+        nodes_to_bootstrap = [
+            node for node in self.network_dag.nodes
+            if self.network_dag.nodes[node].get("bootstrap", False)
+        ]
 
-        module.register_forward_hook(lambda mod, input, output: bootstrapper(output))
+        for node in nodes_to_bootstrap:
+            module = self.network_dag.nodes[node]["module"]
+            bootstrapper = self._create_bootstrapper(module)
+
+            boot_name = f"boot_{boot_idx}"
+            btp_level = module.level - module.depth
+
+            # Insert bootstrap node into the DAG
+            children = list(self.network_dag.successors(node))
+            self.network_dag.add_node(
+                boot_name,
+                op="bootstrap",
+                module=bootstrapper,
+                level=btp_level,
+                depth=0,
+                bootstrap=False,
+            )
+
+            # Re-link edges: node -> boot_name -> each child
+            for child in children:
+                self.network_dag.remove_edge(node, child)
+                self.network_dag.add_edge(boot_name, child)
+            self.network_dag.add_edge(node, boot_name)
+
+            boot_idx += 1
 
     def _create_bootstrapper(self, module):
         btp_input_level = module.level - module.depth
@@ -259,6 +286,6 @@ class BootstrapPlacer:
 
         bootstrapper.fhe_input_shape = module.fhe_output_shape
         bootstrapper.fit(self.context)
-        bootstrapper.compile(self.context)
+        # NOTE: compile() removed — v2 format reads attributes directly
 
         return bootstrapper

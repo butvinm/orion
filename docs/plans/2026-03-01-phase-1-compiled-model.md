@@ -123,15 +123,15 @@ Implement `pack_raw_diagonals()` and `unpack_raw_diagonals()` for the v2 blob fo
 
 Change bootstrap from forward hooks to explicit DAG nodes. This must happen before the compiler rewrite (Task 5) because the compiler needs bootstrap nodes in the DAG to emit them as graph nodes.
 
-- [ ] Modify `BootstrapPlacer.place_bootstraps()` to insert explicit bootstrap nodes into the `NetworkDAG`:
+- [x] Modify `BootstrapPlacer.place_bootstraps()` to insert explicit bootstrap nodes into the `NetworkDAG`:
   - For each node marked with `bootstrap=True`: create a `boot_{idx}` node, remove edges from that node to all its children, add edges `node -> boot_{idx}` and `boot_{idx} -> child` for each child
   - Set node attributes: `op="bootstrap"`, `module=bootstrapper_instance`
   - The bootstrapper instance is still created by `_create_bootstrapper()` (still calls `fit()` for prescale/postscale computation — but NOT `compile()`)
-- [ ] Set bootstrap node level: the input level to the bootstrap = `predecessor.level - predecessor.depth`
-- [ ] Verify that `network_dag.topological_sort()` still works correctly after insertion (new node sits strictly between parent and children — acyclicity preserved)
-- [ ] Write unit tests for bootstrap DAG insertion: create a small DAG manually, insert a bootstrap node, verify edges are correct
-- [ ] Write integration test: compile a model that requires bootstraps (need logq chain short enough to trigger bootstrap), verify bootstrap nodes appear in `network_dag`
-- [ ] Run tests — must pass before task 5
+- [x] Set bootstrap node level: the input level to the bootstrap = `predecessor.level - predecessor.depth`
+- [x] Verify that `network_dag.topological_sort()` still works correctly after insertion (new node sits strictly between parent and children — acyclicity preserved)
+- [x] Write unit tests for bootstrap DAG insertion: create a small DAG manually, insert a bootstrap node, verify edges are correct
+- [x] Write integration test: compile a model that requires bootstraps (need logq chain short enough to trigger bootstrap), verify bootstrap nodes appear in `network_dag`
+- [x] Run tests — must pass before task 5
 
 ### Task 5: Rewrite CompiledModel + compiler for v2 format
 
