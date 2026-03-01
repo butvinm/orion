@@ -218,7 +218,7 @@ Load a compiled model, CKKS-encode diagonals and biases at load time.
 
 Create the evaluator with key deserialization and graph walking dispatch loop — op handlers are stubs that return errors.
 
-- [ ] Create `evaluator/evaluator.go` with `Evaluator` struct:
+- [x] Create `evaluator/evaluator.go` with `Evaluator` struct:
   ```go
   type Evaluator struct {
       params   ckks.Parameters
@@ -228,21 +228,21 @@ Create the evaluator with key deserialization and graph walking dispatch loop �
       polyEval *polynomial.Evaluator
   }
   ```
-- [ ] Implement `NewEvaluator(p orionclient.Params, keys orionclient.EvalKeyBundle) (*Evaluator, error)`:
+- [x] Implement `NewEvaluator(p orionclient.Params, keys orionclient.EvalKeyBundle) (*Evaluator, error)`:
   - Build `ckks.Parameters` from `Params` via `p.NewCKKSParameters()`
   - Deserialize RLK, Galois keys into `rlwe.MemEvaluationKeySet` (same logic as `orionclient/evaluator.go:34-59`)
   - Create `ckks.Evaluator`, `ckks.Encoder`, `lintrans.Evaluator`, `polynomial.Evaluator`
-- [ ] Implement `(e *Evaluator) Close()` — nil out all fields
-- [ ] Implement `(e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
+- [x] Implement `(e *Evaluator) Close()` — nil out all fields
+- [x] Implement `(e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
   - Initialize `results map[string]*rlwe.Ciphertext`
   - Set `results[model.graph.Input] = input` (the graph's input node — for MLP this is `flatten`, the first node with no predecessors; the input ciphertext represents the already-flattened/padded data)
   - Walk `model.graph.Order`, skip input node
   - For each node: gather inputs from `model.graph.Inputs[name]`, switch on `node.Op`, dispatch to `evalXxx` method
   - Return `results[model.graph.Output]`
-- [ ] Add stub op handlers that return `fmt.Errorf("op %s not yet implemented", op)` for each op type
-- [ ] Write test: `NewEvaluator` + `Close` lifecycle (use `orionclient.Client` to generate minimal keys)
-- [ ] Write test: `Forward` with stub ops returns "not yet implemented" error
-- [ ] Run `go test ./evaluator/...` — must pass before task 6
+- [x] Add stub op handlers that return `fmt.Errorf("op %s not yet implemented", op)` for each op type
+- [x] Write test: `NewEvaluator` + `Close` lifecycle (use `orionclient.Client` to generate minimal keys)
+- [x] Write test: `Forward` with stub ops returns "not yet implemented" error
+- [x] Run `go test ./evaluator/...` — must pass before task 6
 
 ### Task 6: Implement simple op handlers (flatten, quad, add, mult)
 
