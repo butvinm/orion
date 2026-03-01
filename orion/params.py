@@ -89,6 +89,47 @@ class CKKSParams:
 
 
 @dataclass(frozen=True)
+class CostProfile:
+    """Cost profile for a compiled model.
+
+    Provides counts of expensive operations for capacity planning.
+    """
+
+    bootstrap_count: int
+    galois_key_count: int
+    bootstrap_key_count: int
+
+    def __post_init__(self):
+        if self.bootstrap_count < 0:
+            raise ValueError(
+                f"bootstrap_count must be non-negative, got {self.bootstrap_count}"
+            )
+        if self.galois_key_count < 0:
+            raise ValueError(
+                f"galois_key_count must be non-negative, got {self.galois_key_count}"
+            )
+        if self.bootstrap_key_count < 0:
+            raise ValueError(
+                f"bootstrap_key_count must be non-negative, got {self.bootstrap_key_count}"
+            )
+
+    def to_dict(self) -> dict:
+        return {
+            "bootstrap_count": self.bootstrap_count,
+            "galois_key_count": self.galois_key_count,
+            "bootstrap_key_count": self.bootstrap_key_count,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "CostProfile":
+        return cls(
+            bootstrap_count=d["bootstrap_count"],
+            galois_key_count=d["galois_key_count"],
+            bootstrap_key_count=d["bootstrap_key_count"],
+        )
+
+
+@dataclass(frozen=True)
 class CompilerConfig:
     """Compilation settings — immutable after construction."""
 

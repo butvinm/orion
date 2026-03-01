@@ -91,14 +91,14 @@ Move the validated pure Python BSGS algorithm from `experiments/07_galois_elemen
 
 Add the v2 data structures alongside the existing v1 code (don't break anything yet).
 
-- [ ] Add `CostProfile` frozen dataclass to `orion/params.py`: `bootstrap_count`, `galois_key_count`, `bootstrap_key_count`
-- [ ] Add `GraphNode` dataclass to `orion/compiled_model.py`: `name`, `op`, `level`, `depth`, `shape` (optional dict), `config` (dict), `blob_refs` (optional dict)
-- [ ] Add `GraphEdge` dataclass to `orion/compiled_model.py`: `src`, `dst`
-- [ ] Add `Graph` dataclass to `orion/compiled_model.py`: `input`, `output`, `nodes` (list of GraphNode), `edges` (list of GraphEdge)
-- [ ] Add `to_dict()` and `from_dict()` methods on each new type for JSON round-tripping
-- [ ] Write tests for `CostProfile` creation and `to_dict()`/`from_dict()` roundtrip
-- [ ] Write tests for `GraphNode`, `GraphEdge`, `Graph` creation and `to_dict()`/`from_dict()` roundtrip
-- [ ] Run tests — must pass before task 3
+- [x] Add `CostProfile` frozen dataclass to `orion/params.py`: `bootstrap_count`, `galois_key_count`, `bootstrap_key_count`
+- [x] Add `GraphNode` dataclass to `orion/compiled_model.py`: `name`, `op`, `level`, `depth`, `shape` (optional dict), `config` (dict), `blob_refs` (optional dict)
+- [x] Add `GraphEdge` dataclass to `orion/compiled_model.py`: `src`, `dst`
+- [x] Add `Graph` dataclass to `orion/compiled_model.py`: `input`, `output`, `nodes` (list of GraphNode), `edges` (list of GraphEdge)
+- [x] Add `to_dict()` and `from_dict()` methods on each new type for JSON round-tripping
+- [x] Write tests for `CostProfile` creation and `to_dict()`/`from_dict()` roundtrip
+- [x] Write tests for `GraphNode`, `GraphEdge`, `Graph` creation and `to_dict()`/`from_dict()` roundtrip
+- [x] Run tests — must pass before task 3
 
 ### Task 3: Add raw diagonal blob helpers
 

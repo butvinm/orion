@@ -140,6 +140,107 @@ class KeyManifest:
         )
 
 
+@dataclass(frozen=True)
+class GraphNode:
+    """A node in the computation graph.
+
+    Each node represents a single operation in the FHE evaluation pipeline.
+    """
+
+    name: str
+    op: str
+    level: int
+    depth: int
+    shape: dict | None = None
+    config: dict = field(default_factory=dict)
+    blob_refs: dict | None = None
+
+    def to_dict(self) -> dict:
+        d: dict = {
+            "name": self.name,
+            "op": self.op,
+            "level": self.level,
+            "depth": self.depth,
+        }
+        if self.shape is not None:
+            d["shape"] = self.shape
+        d["config"] = self.config
+        if self.blob_refs is not None:
+            d["blob_refs"] = self.blob_refs
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "GraphNode":
+        return cls(
+            name=d["name"],
+            op=d["op"],
+            level=d["level"],
+            depth=d["depth"],
+            shape=d.get("shape"),
+            config=d.get("config", {}),
+            blob_refs=d.get("blob_refs"),
+        )
+
+
+@dataclass(frozen=True)
+class GraphEdge:
+    """A directed edge in the computation graph."""
+
+    src: str
+    dst: str
+
+    def to_dict(self) -> dict:
+        return {"src": self.src, "dst": self.dst}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "GraphEdge":
+        return cls(src=d["src"], dst=d["dst"])
+
+
+@dataclass(frozen=True)
+class Graph:
+    """Computation graph: nodes, edges, and input/output identifiers."""
+
+    input: str
+    output: str
+    nodes: tuple[GraphNode, ...]
+    edges: tuple[GraphEdge, ...]
+
+    def __post_init__(self):
+        # Coerce lists to tuples for frozen dataclass
+        if isinstance(self.nodes, list):
+            object.__setattr__(self, "nodes", tuple(self.nodes))
+        if isinstance(self.edges, list):
+            object.__setattr__(self, "edges", tuple(self.edges))
+        # Validate input/output exist in nodes
+        node_names = {n.name for n in self.nodes}
+        if self.input not in node_names:
+            raise ValueError(
+                f"input '{self.input}' not found in graph nodes"
+            )
+        if self.output not in node_names:
+            raise ValueError(
+                f"output '{self.output}' not found in graph nodes"
+            )
+
+    def to_dict(self) -> dict:
+        return {
+            "input": self.input,
+            "output": self.output,
+            "nodes": [n.to_dict() for n in self.nodes],
+            "edges": [e.to_dict() for e in self.edges],
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Graph":
+        return cls(
+            input=d["input"],
+            output=d["output"],
+            nodes=[GraphNode.from_dict(n) for n in d["nodes"]],
+            edges=[GraphEdge.from_dict(e) for e in d["edges"]],
+        )
+
+
 @dataclass
 class CompiledModel:
     """Holds all compilation artifacts needed by Client and Evaluator.
