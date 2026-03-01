@@ -78,14 +78,14 @@ Key changes:
 
 Move the validated pure Python BSGS algorithm from `experiments/07_galois_elements_python/galois.py` into the main codebase.
 
-- [ ] Create `orion/core/galois.py` with functions from experiment: `galois_element()`, `galois_elements()`, `bsgs_index()`, `find_best_bsgs_ratio()`, `compute_galois_elements()`, `nth_root_for_ring()`, `compute_galois_elements_for_linear_transform()`
-- [ ] Write unit tests in `tests/test_galois.py`:
-  - [ ] `galois_element()` matches known values: `galois_element(1, 2^15) = 5`, `galois_element(0, ...) = 1`
-  - [ ] `nth_root_for_ring()`: standard = `2^(logn+1)`, conjugate_invariant = `2^(logn+2)`
-  - [ ] `bsgs_index()`: verify baby-step/giant-step decomposition for known inputs
-  - [ ] `compute_galois_elements()` with BSGS enabled vs disabled
-  - [ ] Integration test: compare against Lattigo via `TransformEncoder` for a real LinearTransform (same approach as `experiments/07_galois_elements_python/compare.py`)
-- [ ] Run tests — must pass before task 2
+- [x] Create `orion/core/galois.py` with functions from experiment: `galois_element()`, `galois_elements()`, `bsgs_index()`, `find_best_bsgs_ratio()`, `compute_galois_elements()`, `nth_root_for_ring()`, `compute_galois_elements_for_linear_transform()`
+- [x] Write unit tests in `tests/test_galois.py`:
+  - [x] `galois_element()` matches known values: `galois_element(1, 2^15) = 5`, `galois_element(0, ...) = 1`
+  - [x] `nth_root_for_ring()`: standard = `2^(logn+1)`, conjugate_invariant = `2^(logn+2)`
+  - [x] `bsgs_index()`: verify baby-step/giant-step decomposition for known inputs
+  - [x] `compute_galois_elements()` with BSGS enabled vs disabled
+  - [x] Integration test: compare against Lattigo via `TransformEncoder` for a real LinearTransform (same approach as `experiments/07_galois_elements_python/compare.py`)
+- [x] Run tests — must pass before task 2
 
 ### Task 2: Add new data types
 
