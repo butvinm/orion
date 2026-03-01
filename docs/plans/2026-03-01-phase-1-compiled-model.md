@@ -227,17 +227,17 @@ New test file that validates the `.orion` v2 format without any CKKS operations.
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] Verify `CompiledModel` uses magic `ORION\x00\x02\x00` and version 2
-- [ ] Verify JSON header contains `graph` with `nodes`, `edges`, `input`, `output` (no `topology` or `modules` keys)
-- [ ] Verify JSON header contains `cost` profile
-- [ ] Verify all `linear_transform` blobs contain raw float64 diagonals, not Lattigo-serialized data
-- [ ] Verify bias blobs are raw float64 arrays
-- [ ] Verify polynomial coefficients are inline in node `config` (no blobs)
-- [ ] Verify bootstrap nodes appear as explicit graph nodes with edges (not hook metadata)
-- [ ] Verify fused batch norms absent from graph
-- [ ] Verify `orion/evaluator.py` deleted, `Evaluator` removed from `orion/__init__.py`
-- [ ] Run full test suite — all non-skipped tests pass
-- [ ] Run linter — all issues must be fixed
+- [x] Verify `CompiledModel` uses magic `ORION\x00\x02\x00` and version 2
+- [x] Verify JSON header contains `graph` with `nodes`, `edges`, `input`, `output` (no `topology` or `modules` keys)
+- [x] Verify JSON header contains `cost` profile
+- [x] Verify all `linear_transform` blobs contain raw float64 diagonals, not Lattigo-serialized data
+- [x] Verify bias blobs are raw float64 arrays
+- [x] Verify polynomial coefficients are inline in node `config` (no blobs)
+- [x] Verify bootstrap nodes appear as explicit graph nodes with edges (not hook metadata)
+- [x] Verify fused batch norms absent from graph
+- [x] Verify `orion/evaluator.py` deleted, `Evaluator` removed from `orion/__init__.py`
+- [x] Run full test suite — all non-skipped tests pass
+- [x] Run linter — all issues must be fixed
 
 ### Task 9: [Final] Update documentation
 

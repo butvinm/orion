@@ -18,7 +18,7 @@ from orion.compiled_model import (
     unpack_raw_diagonals,
 )
 from orion.compiler import Compiler
-from orion.params import CKKSParams, CostProfile
+from orion.params import CKKSParams
 import orion.nn as on
 
 

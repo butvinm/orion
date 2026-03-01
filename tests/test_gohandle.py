@@ -7,13 +7,16 @@ import torch
 import pytest
 
 from orion.params import CKKSParams
-from orion.compiled_model import CompiledModel, KeyManifest, EvalKeys
+from orion.compiled_model import CompiledModel, EvalKeys
 from orion.compiler import Compiler
 from orion.client import Client
 from orion.ciphertext import Ciphertext, PlainText
 from orion.backend.orionclient import ffi
 from orion.backend.orionclient.ffi import GoHandle
 import orion.nn as on
+
+# Sentinel for skipped Evaluator tests (evaluator.py deleted in Phase 1)
+Evaluator = None
 
 
 MLP_PARAMS = CKKSParams(

@@ -3,16 +3,13 @@
 Task 4: Bootstrap operations become explicit DAG nodes instead of forward hooks.
 """
 
-import math
 import types
 from unittest.mock import MagicMock
 
 import networkx as nx
-import pytest
 import torch
 
 from orion.core.auto_bootstrap import BootstrapPlacer, BootstrapSolver
-from orion.core.network_dag import NetworkDAG
 from orion.nn.operations import Bootstrap
 
 

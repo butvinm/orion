@@ -8,9 +8,7 @@ import pytest
 from orion.core.galois import (
     GALOIS_GEN,
     galois_element,
-    galois_elements,
     bsgs_index,
-    find_best_bsgs_ratio,
     compute_galois_elements,
     nth_root_for_ring,
     compute_galois_elements_for_linear_transform,

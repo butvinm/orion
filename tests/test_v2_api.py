@@ -7,16 +7,13 @@ import struct
 import torch
 import pytest
 
-from orion.params import CKKSParams, CostProfile, CompilerConfig
+from orion.params import CKKSParams, CostProfile
 from orion.compiled_model import (
     CompiledModel,
     KeyManifest,
     EvalKeys,
     Graph,
-    GraphNode,
-    GraphEdge,
     unpack_raw_diagonals,
-    unpack_raw_bias,
 )
 from orion.compiler import Compiler
 from orion.client import Client

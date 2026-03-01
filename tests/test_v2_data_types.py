@@ -1,6 +1,5 @@
 """Tests for v2 data types: CostProfile, GraphNode, GraphEdge, Graph, blob helpers."""
 
-import math
 import struct
 
 import pytest

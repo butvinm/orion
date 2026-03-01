@@ -301,7 +301,6 @@ class Compiler:
         graph_edges = self._extract_edges(network_dag)
 
         # Determine graph input/output
-        node_names = {n.name for n in graph_nodes}
         dst_names = {e.dst for e in graph_edges}
         src_names = {e.src for e in graph_edges}
         # Input: first node with no incoming edges
@@ -387,7 +386,7 @@ class Compiler:
         blob_refs = None
 
         if isinstance(module, LinearTransform):
-            from orion.nn.linear import Linear, Conv2d
+            from orion.nn.linear import Conv2d
 
             # Raw diagonals -> blobs (no Go calls)
             blob_refs = {}
