@@ -24,7 +24,10 @@ from orion.compiled_model import (
     pack_raw_bias,
 )
 from orion.nn.module import Module
-from orion.nn.linear import LinearTransform
+from orion.nn.linear import LinearTransform, Conv2d
+from orion.nn.activation import Activation, Chebyshev, Quad
+from orion.nn.operations import Bootstrap, Add, Mult
+from orion.nn.reshape import Flatten
 from orion.core.compiler_backend import (
     CompilerBackend,
     NewParameters,
@@ -103,7 +106,7 @@ class Compiler:
         return self._margin
 
     def _build_context(self):
-        """Build a namespace object for module.compile(context) and module.fit(context)."""
+        """Build a namespace object for module.fit(context)."""
         ctx = types.SimpleNamespace()
         ctx.backend = self.backend
         ctx.params = self.params
@@ -316,6 +319,15 @@ class Compiler:
                 graph_output = n.name
                 break
 
+        if graph_input is None:
+            raise ValueError(
+                "Could not determine graph input: no node without incoming edges"
+            )
+        if graph_output is None:
+            raise ValueError(
+                "Could not determine graph output: no node without outgoing edges"
+            )
+
         graph = Graph(
             input=graph_input,
             output=graph_output,
@@ -371,9 +383,6 @@ class Compiler:
         galois_elements
     ):
         """Build a GraphNode from a DAG node + module."""
-        from orion.nn.activation import Activation, Chebyshev, Quad
-        from orion.nn.operations import Bootstrap, Add, Mult
-        from orion.nn.reshape import Flatten
 
         op = self._module_to_op(module)
         if op is None:
@@ -386,8 +395,6 @@ class Compiler:
         blob_refs = None
 
         if isinstance(module, LinearTransform):
-            from orion.nn.linear import Conv2d
-
             # Raw diagonals -> blobs (no Go calls)
             blob_refs = {}
             for (row, col), diag_dict in module.diagonals.items():
@@ -434,7 +441,7 @@ class Compiler:
 
         elif isinstance(module, Chebyshev):
             config = {
-                "coeffs": module.coeffs,
+                "coeffs": list(module.coeffs),
                 "basis": "chebyshev",
                 "prescale": module.prescale,
                 "postscale": getattr(module, "postscale", 1),
@@ -488,10 +495,6 @@ class Compiler:
     @staticmethod
     def _module_to_op(module):
         """Map module class to op string."""
-        from orion.nn.activation import Activation, Chebyshev, Quad
-        from orion.nn.operations import Bootstrap, Add, Mult
-        from orion.nn.reshape import Flatten
-
         if isinstance(module, LinearTransform):
             return "linear_transform"
         if isinstance(module, Quad):
@@ -519,20 +522,18 @@ class Compiler:
         For join nodes: A, B -> join -> C becomes A -> C and B -> C
         """
         edges = []
-        # Collect real (non-fork/join) node names
+        # Collect graph-emittable node names: non-fork/join with a known op
         real_nodes = set()
         for node in network_dag.nodes:
             op = network_dag.nodes[node].get("op")
             if op not in ("fork", "join"):
                 module = network_dag.nodes[node].get("module")
-                if module is not None:
+                if module is not None and Compiler._module_to_op(module) is not None:
                     real_nodes.add(node)
 
         def _resolve_successors(node):
             """Walk forward through fork/join to find real successors."""
-            op = network_dag.nodes[node].get("op")
-            module = network_dag.nodes[node].get("module")
-            if op not in ("fork", "join") and module is not None:
+            if node in real_nodes:
                 return [node]
             result = []
             for succ in network_dag.successors(node):
@@ -542,13 +543,11 @@ class Compiler:
         seen = set()
         for node in real_nodes:
             for succ in network_dag.successors(node):
-                real_succs = _resolve_successors(succ)
-                for rs in real_succs:
-                    if rs in real_nodes:
-                        edge = (node, rs)
-                        if edge not in seen:
-                            seen.add(edge)
-                            edges.append(GraphEdge(src=node, dst=rs))
+                for rs in _resolve_successors(succ):
+                    edge = (node, rs)
+                    if edge not in seen:
+                        seen.add(edge)
+                        edges.append(GraphEdge(src=node, dst=rs))
 
         return edges
 

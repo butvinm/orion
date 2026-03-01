@@ -15,26 +15,13 @@ import math
 GALOIS_GEN = 5
 
 
-def mod_exp(base: int, exp: int, mod: int) -> int:
-    """Modular exponentiation: base^exp mod mod."""
-    return pow(base, exp, mod)
-
-
 def galois_element(k: int, nth_root: int) -> int:
     """Compute GaloisGen^k mod NthRoot.
 
     Reimplements rlwe.Parameters.GaloisElement(k).
     """
     k_masked = k & (nth_root - 1)
-    return mod_exp(GALOIS_GEN, k_masked, nth_root)
-
-
-def galois_elements(rotations: list[int], nth_root: int) -> list[int]:
-    """Convert rotation indices to Galois elements.
-
-    Reimplements rlwe.Parameters.GaloisElements(k).
-    """
-    return [galois_element(k, nth_root) for k in rotations]
+    return pow(GALOIS_GEN, k_masked, nth_root)
 
 
 def bsgs_index(
@@ -171,6 +158,10 @@ def compute_galois_elements_for_linear_transform(
         Set of all required Galois elements across all blocks.
     """
     nth_root = nth_root_for_ring(logn, ring_type)
+    if bsgs_ratio > 0 and bsgs_ratio != 2 ** int(math.log2(bsgs_ratio)):
+        raise ValueError(
+            f"bsgs_ratio must be a power of 2, got {bsgs_ratio}"
+        )
     log_bsgs = int(math.log2(bsgs_ratio)) if bsgs_ratio > 0 else -1
 
     all_galois = set()

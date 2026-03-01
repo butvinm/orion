@@ -212,7 +212,7 @@ class BootstrapSolver:
 
         try:
             pos = nx.nx_agraph.graphviz_layout(shortest_graph, prog='dot')
-        except:
+        except Exception:
             print("Graphviz not installed. Defaulting to worse visualization.\n")
             pos = nx.kamada_kawai_layout(shortest_graph)
 

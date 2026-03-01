@@ -56,7 +56,7 @@ def _unpack_container(
     Returns (metadata_dict, list_of_blobs).
     Raises ValueError on corruption or format mismatch.
     """
-    if len(data) < 8:
+    if len(data) < 20:  # 8 magic + 4 meta_len + 4 blob_count + 4 CRC32
         raise ValueError("Data too short to contain a valid container")
     if data[:8] != expected_magic:
         raise ValueError(
@@ -293,6 +293,16 @@ class Graph:
             raise ValueError(
                 f"output '{self.output}' not found in graph nodes"
             )
+        # Validate all edge endpoints reference existing nodes
+        for edge in self.edges:
+            if edge.src not in node_names:
+                raise ValueError(
+                    f"edge src '{edge.src}' not found in graph nodes"
+                )
+            if edge.dst not in node_names:
+                raise ValueError(
+                    f"edge dst '{edge.dst}' not found in graph nodes"
+                )
 
     def to_dict(self) -> dict:
         return {
@@ -416,25 +426,21 @@ class EvalKeys:
 
     def to_bytes(self) -> bytes:
         blobs: list[bytes] = []
-        blob_idx = 0
 
         rlk_blob_index: int | None = None
         if self.rlk_data is not None:
-            rlk_blob_index = blob_idx
+            rlk_blob_index = len(blobs)
             blobs.append(self.rlk_data)
-            blob_idx += 1
 
         galois_index: dict[str, int] = {}
         for gal_el in sorted(self.galois_keys):
-            galois_index[str(gal_el)] = blob_idx
+            galois_index[str(gal_el)] = len(blobs)
             blobs.append(self.galois_keys[gal_el])
-            blob_idx += 1
 
         bootstrap_index: dict[str, int] = {}
         for slots in sorted(self.bootstrap_keys):
-            bootstrap_index[str(slots)] = blob_idx
+            bootstrap_index[str(slots)] = len(blobs)
             blobs.append(self.bootstrap_keys[slots])
-            blob_idx += 1
 
         metadata = {
             "version": 1,

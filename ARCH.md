@@ -18,7 +18,7 @@ Plus a client helper library (**orion-client**, Python/JS) that handles tensor-t
 
 **Dependencies:** PyTorch, numpy, Lattigo (via Go bridge).
 
-The compiler uses Lattigo for everything crypto-specific: polynomial approximation (Chebyshev fitting, minimax/Remez for ReLU), CKKS parameter construction and validation, depth/cost calculations, and key manifest computation. This avoids reimplementing Lattigo semantics in Python — the compiler asks Lattigo directly, so there is zero risk of drift between compiler assumptions and evaluator behavior.
+The compiler uses Lattigo for crypto-specific operations during `fit()`: polynomial approximation (Chebyshev fitting, minimax/Remez for ReLU) and CKKS parameter construction. Key manifest computation (Galois elements) is now pure Python — the `compile()` step has zero Go/Lattigo dependency.
 
 The compiler performs:
 
@@ -27,8 +27,8 @@ The compiler performs:
 - Polynomial approximation for activations (delegates to Lattigo)
 - Network DAG construction, level assignment, bootstrap placement
 - Diagonal extraction from weight matrices (packing)
-- Key manifest computation (delegates to Lattigo)
-- Cost profiling (rotation count, bootstrap count, multiplicative depth, estimated eval key size)
+- Key manifest computation (pure Python BSGS algorithm, no Lattigo dependency)
+- Cost profiling (bootstrap count, key counts; rotation count deferred)
 
 **Output:** A compiled model file (`.orion`) containing a JSON header with the computation graph (nodes, edges, metadata) and binary blobs with packed numerical data (raw float64 diagonal matrices, bias vectors, polynomial coefficients). No Lattigo binary formats — the compiled model is a pure mathematical description that any CKKS implementation can consume.
 
@@ -813,20 +813,20 @@ Tests that import or use `Evaluator` will fail. Mark them `@pytest.mark.skip(rea
 
 #### Phase 1 acceptance checklist
 
-- [ ] `CompiledModel` uses magic `ORION\x00\x02\x00` and version 2
-- [ ] JSON header contains `graph` with `nodes`, `edges`, `input`, `output` (no `topology` or `modules` keys)
-- [ ] JSON header contains `cost` profile
-- [ ] All `linear_transform` blobs contain raw float64 diagonals, not Lattigo-serialized data
-- [ ] Bias blobs are raw float64 arrays
-- [ ] Polynomial coefficients are inline in node `config` (no blobs)
-- [ ] ReLU decomposed into sub-nodes (`mult`, `polynomial` x N, `mult`) — no single `relu` op
-- [ ] Bootstrap nodes appear as explicit graph nodes with edges (not hook metadata)
-- [ ] Fused batch norms absent from graph (removed by `remove_fused_batchnorms()`, weights folded into preceding linear)
-- [ ] `orion/evaluator.py` deleted, `Evaluator` removed from `orion/__init__.py`
-- [ ] `CompiledModel.to_bytes()` → `from_bytes()` roundtrip passes
-- [ ] Cleartext graph validator passes for MLP (compile → read → numpy walk → compare to PyTorch)
-- [ ] All non-evaluator tests pass (`pytest tests/ -k "not evaluator"` or equivalent)
-- [ ] `.orion` file size is ~6× smaller than v1 for the same model (raw vs CKKS-encoded diagonals)
+- [x] `CompiledModel` uses magic `ORION\x00\x02\x00` and version 2
+- [x] JSON header contains `graph` with `nodes`, `edges`, `input`, `output` (no `topology` or `modules` keys)
+- [x] JSON header contains `cost` profile
+- [x] All `linear_transform` blobs contain raw float64 diagonals, not Lattigo-serialized data
+- [x] Bias blobs are raw float64 arrays
+- [x] Polynomial coefficients are inline in node `config` (no blobs)
+- [x] ReLU decomposed into sub-nodes (`mult`, `polynomial` x N, `mult`) — no single `relu` op
+- [x] Bootstrap nodes appear as explicit graph nodes with edges (not hook metadata)
+- [x] Fused batch norms absent from graph (removed by `remove_fused_batchnorms()`, weights folded into preceding linear)
+- [x] `orion/evaluator.py` deleted, `Evaluator` removed from `orion/__init__.py`
+- [x] `CompiledModel.to_bytes()` → `from_bytes()` roundtrip passes
+- [x] Cleartext graph validator passes for MLP (compile → read → numpy walk → compare to PyTorch)
+- [x] All non-evaluator tests pass (`pytest tests/ -k "not evaluator"` or equivalent)
+- [x] `.orion` file size is ~6× smaller than v1 for the same model (raw vs CKKS-encoded diagonals)
 
 ---
 
@@ -1095,7 +1095,7 @@ Create `python/lattigo/` with its own `pyproject.toml` (`pip install lattigo`).
 | `LinearTransformMarshal`, `LinearTransformUnmarshal`                                                                          |                                                                            |
 | `DeleteHandle`                                                                                                                |                                                                            |
 
-Note: `GenerateLinearTransformFromParams` stays because the compiler creates transient LinearTransforms to query Galois elements. `LinearTransformRequiredGaloisElements` stays for the same reason. Both can be deleted later if Galois element computation is decoupled from LinearTransform creation.
+Note: `GenerateLinearTransformFromParams` and `LinearTransformRequiredGaloisElements` were previously needed for Galois element computation during `compile()`. Phase 1 replaced this with pure Python BSGS in `orion.core.galois`. These can now be moved to the "Remove" column in Phase 3.
 
 The bridge Go code (`bridge/*.go`) is updated to remove the deleted exports. The shared library shrinks.
 

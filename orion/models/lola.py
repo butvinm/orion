@@ -1,4 +1,3 @@
-import torch.nn as nn
 import orion.nn as on
 
 class LoLA(on.Module):

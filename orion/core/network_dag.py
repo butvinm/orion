@@ -156,7 +156,7 @@ class NetworkDAG(nx.DiGraph):
 
         try:
             pos = nx.nx_agraph.graphviz_layout(self, prog='dot')
-        except:
+        except Exception:
             print("Graphviz not installed. Defaulting to worse visualization.\n")
             pos = nx.kamada_kawai_layout(self)
         

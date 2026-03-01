@@ -303,7 +303,7 @@ class LevelDAG(nx.DiGraph):
         """Plot the level digraph with edge colors based on 'weight'."""
         try:
             pos = nx.nx_agraph.graphviz_layout(self, prog='dot')
-        except:
+        except Exception:
             print("Graphviz not installed. Defaulting to worse visualization.")
             pos = nx.kamada_kawai_layout(self)
 
