@@ -90,7 +90,7 @@ func TestClientParams(t *testing.T) {
 	assert.Equal(t, 3, inputLevel)
 }
 
-func TestLoadModelTruncatedData(t *testing.T) {
+func TestLoadModelInvalidData(t *testing.T) {
 	// Empty data.
 	_, err := LoadModel([]byte{})
 	assert.Error(t, err)

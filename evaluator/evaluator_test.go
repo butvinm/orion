@@ -377,11 +377,10 @@ func TestForwardSigmoid(t *testing.T) {
 	decoded, expected := loadModelAndEvaluate(t,
 		"testdata/sigmoid.orion", "testdata/sigmoid.input.json", "testdata/sigmoid.expected.json")
 
-	// Tolerance 0.02: same as MLP. With logscale=26 parameters and multiple FHE ops
-	// (2 LTs + polynomial eval + rescales), CKKS noise accumulates to ~0.01-0.02.
-	// Expected output is computed using fused weights + Chebyshev polynomial (not exact sigmoid),
-	// so the only difference is CKKS noise.
-	tolerance := 0.02
+	// Tolerance 0.05: With logscale=26 parameters, 2 LTs + Chebyshev polynomial eval + rescales,
+	// CKKS noise varies across random key generations. Observed range: 0.007–0.033 max error.
+	// Higher than MLP because polynomial evaluation introduces more noise than simple squaring.
+	tolerance := 0.05
 
 	t.Logf("Sigmoid output (first %d values):", len(expected))
 	for i, v := range expected {
@@ -392,5 +391,82 @@ func TestForwardSigmoid(t *testing.T) {
 	for i, v := range expected {
 		assert.InDelta(t, v, decoded[i], tolerance,
 			"slot %d: expected %f, got %f", i, v, decoded[i])
+	}
+}
+
+func TestMultipleEvaluatorsShareModel(t *testing.T) {
+	// Load model once — it should be shareable across evaluators.
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	model, err := LoadModel(data)
+	require.NoError(t, err)
+
+	params, manifest, inputLevel := model.ClientParams()
+
+	// Create two separate clients with independent key pairs.
+	client1, err := orionclient.New(params)
+	require.NoError(t, err)
+	defer client1.Close()
+
+	client2, err := orionclient.New(params)
+	require.NoError(t, err)
+	defer client2.Close()
+
+	// Generate separate eval key bundles.
+	keys1, err := client1.GenerateKeys(manifest)
+	require.NoError(t, err)
+
+	keys2, err := client2.GenerateKeys(manifest)
+	require.NoError(t, err)
+
+	// Create two evaluators sharing the same model.
+	eval1, err := NewEvaluator(params, *keys1)
+	require.NoError(t, err)
+	defer eval1.Close()
+
+	eval2, err := NewEvaluator(params, *keys2)
+	require.NoError(t, err)
+	defer eval2.Close()
+
+	// Load input and expected output.
+	inputValues := loadJSONFloats(t, "testdata/mlp.input.json")
+	expectedValues := loadJSONFloats(t, "testdata/mlp.expected.json")
+
+	maxSlots := model.params.MaxSlots()
+	padded := make([]float64, maxSlots)
+	copy(padded, inputValues)
+
+	// Client 1 encrypts, evaluator 1 evaluates, client 1 decrypts.
+	pt1, err := client1.Encode(padded, inputLevel, client1.DefaultScale())
+	require.NoError(t, err)
+	ct1, err := client1.Encrypt(pt1)
+	require.NoError(t, err)
+
+	result1, err := eval1.Forward(model, ct1.Raw()[0])
+	require.NoError(t, err)
+
+	wrapped1 := orionclient.NewCiphertext([]*rlwe.Ciphertext{result1}, nil)
+	decoded1 := decryptVector(t, client1, wrapped1)
+
+	// Client 2 encrypts, evaluator 2 evaluates, client 2 decrypts.
+	pt2, err := client2.Encode(padded, inputLevel, client2.DefaultScale())
+	require.NoError(t, err)
+	ct2, err := client2.Encrypt(pt2)
+	require.NoError(t, err)
+
+	result2, err := eval2.Forward(model, ct2.Raw()[0])
+	require.NoError(t, err)
+
+	wrapped2 := orionclient.NewCiphertext([]*rlwe.Ciphertext{result2}, nil)
+	decoded2 := decryptVector(t, client2, wrapped2)
+
+	// Both should produce correct results independently.
+	tolerance := 0.02
+	for i, v := range expectedValues {
+		assert.InDelta(t, v, decoded1[i], tolerance,
+			"eval1 slot %d: expected %f, got %f", i, v, decoded1[i])
+		assert.InDelta(t, v, decoded2[i], tolerance,
+			"eval2 slot %d: expected %f, got %f", i, v, decoded2[i])
 	}
 }

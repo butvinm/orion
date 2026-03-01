@@ -306,7 +306,7 @@ This is the most complex op — handles multi-block LTs, rescaling, bias additio
 
 Full E2E test suite with error handling validation.
 
-- [ ] Create shared test helper `loadModelAndEvaluate(t, modelPath, inputPath, expectedPath)` to reduce duplication between MLP and sigmoid tests:
+- [x] Create shared test helper `loadModelAndEvaluate(t, modelPath, inputPath, expectedPath)` to reduce duplication between MLP and sigmoid tests:
   1. `LoadModel(os.ReadFile(modelPath))`
   2. `model.ClientParams()` → params, manifest, inputLevel
   3. `orionclient.New(params)` → client (fresh key pair)
@@ -320,20 +320,20 @@ Full E2E test suite with error handling validation.
   11. `client.Decode(plaintext)` → float64 slice
   12. Load expected output from expectedPath JSON
   13. Compare first N values with `assert.InDelta` tolerance ≤ 1e-3
-- [ ] Write `TestForwardMLP` using the helper with MLP testdata
-- [ ] Write `TestForwardSigmoid` using the helper with sigmoid testdata (replace or extend Task 8's test)
-- [ ] Write `TestMultipleEvaluatorsShareModel`:
+- [x] Write `TestForwardMLP` using the helper with MLP testdata
+- [x] Write `TestForwardSigmoid` using the helper with sigmoid testdata (replace or extend Task 8's test)
+- [x] Write `TestMultipleEvaluatorsShareModel`:
   - Load model once
   - Create two separate clients with separate keys
   - Generate eval keys from each client
   - Create two evaluators
   - Both evaluate the same model with differently encrypted inputs
   - Both produce correct results independently
-- [ ] Write `TestForwardClosedEvaluatorErrors`:
+- [x] Write `TestForwardClosedEvaluatorErrors`:
   - Close evaluator, call Forward, expect error (not panic)
-- [ ] Write `TestLoadModelInvalidData`:
+- [x] Write `TestLoadModelInvalidData`:
   - Empty data, wrong magic, truncated header — all return errors
-- [ ] Run `go test ./evaluator/...` — all tests must pass
+- [x] Run `go test ./evaluator/...` — all tests must pass
 
 ### Task 10: Verify acceptance criteria
 
