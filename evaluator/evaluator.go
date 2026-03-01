@@ -191,10 +191,67 @@ func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error
 	return result, nil
 }
 
-// --- Stub op handlers (to be implemented in later tasks) ---
-
+// evalLinearTransform evaluates a linear transform node: multi-block LT accumulation,
+// rescale, bias addition, and optional output rotations.
 func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
-	return nil, fmt.Errorf("op linear_transform not yet implemented")
+	cfg, err := parseLinearTransformConfig(node.ConfigRaw)
+	if err != nil {
+		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
+	// Look up pre-encoded LTs for this node.
+	nodeTransforms, ok := model.transforms[node.Name]
+	if !ok || len(nodeTransforms) == 0 {
+		return nil, fmt.Errorf("no linear transforms found for node %q", node.Name)
+	}
+
+	// Evaluate each LT block and accumulate.
+	var result *rlwe.Ciphertext
+	for ref, lt := range nodeTransforms {
+		partial, err := e.linEval.EvaluateNew(ct, lt)
+		if err != nil {
+			return nil, fmt.Errorf("evaluating LT block %q: %w", ref, err)
+		}
+		if result == nil {
+			result = partial
+		} else {
+			result, err = e.eval.AddNew(result, partial)
+			if err != nil {
+				return nil, fmt.Errorf("accumulating LT block %q: %w", ref, err)
+			}
+		}
+	}
+
+	// Rescale after LT evaluation.
+	if err := e.eval.Rescale(result, result); err != nil {
+		return nil, fmt.Errorf("rescale after LT: %w", err)
+	}
+
+	// Add bias if present.
+	if bias, ok := model.biases[node.Name]; ok {
+		result, err = e.eval.AddNew(result, bias)
+		if err != nil {
+			return nil, fmt.Errorf("adding bias: %w", err)
+		}
+	}
+
+	// Apply output rotations (hybrid embedding fold-down).
+	if cfg.OutputRotations > 0 {
+		maxSlots := model.params.MaxSlots()
+		for i := 0; i < cfg.OutputRotations; i++ {
+			rotation := maxSlots / (1 << (i + 1))
+			rotated, err := e.eval.RotateNew(result, rotation)
+			if err != nil {
+				return nil, fmt.Errorf("output rotation step %d (rot=%d): %w", i, rotation, err)
+			}
+			result, err = e.eval.AddNew(result, rotated)
+			if err != nil {
+				return nil, fmt.Errorf("accumulating output rotation step %d: %w", i, err)
+			}
+		}
+	}
+
+	return result, nil
 }
 
 func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {

@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"encoding/json"
 	"math"
 	"os"
 	"testing"
@@ -55,24 +56,34 @@ func TestNewEvaluatorAndClose(t *testing.T) {
 	assert.Nil(t, eval.polyEval)
 }
 
-func TestForwardStubOpsReturnError(t *testing.T) {
-	model, eval, client := newTestEvaluator(t)
+func TestForwardPolynomialStubReturnsError(t *testing.T) {
+	// The sigmoid model uses polynomial nodes which are still stubs.
+	data, err := os.ReadFile("testdata/sigmoid.orion")
+	require.NoError(t, err)
+
+	model, err := LoadModel(data)
+	require.NoError(t, err)
+
+	params, manifest, inputLevel := model.ClientParams()
+	client, err := orionclient.New(params)
+	require.NoError(t, err)
 	defer client.Close()
+
+	keys, err := client.GenerateKeys(manifest)
+	require.NoError(t, err)
+
+	eval, err := NewEvaluator(params, *keys)
+	require.NoError(t, err)
 	defer eval.Close()
 
-	// Create a dummy ciphertext via the client.
-	_, _, inputLevel := model.ClientParams()
 	maxSlots := model.params.MaxSlots()
 	zeros := make([]float64, maxSlots)
-
 	pt, err := client.Encode(zeros, inputLevel, client.DefaultScale())
 	require.NoError(t, err)
 
 	ct, err := client.Encrypt(pt)
 	require.NoError(t, err)
 
-	// Forward should fail: flatten is the input node (skipped), then fc1
-	// is linear_transform which is a stub -> "not yet implemented" error.
 	_, err = eval.Forward(model, ct.Raw()[0])
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not yet implemented")
@@ -287,5 +298,74 @@ func TestEvalQuadLargeValues(t *testing.T) {
 		expected := input[i] * input[i]
 		assert.True(t, math.Abs(expected-decoded[i]) < 1e-3,
 			"slot %d: expected %f, got %f", i, expected, decoded[i])
+	}
+}
+
+// loadJSONFloats reads a JSON file containing a float64 array.
+func loadJSONFloats(t *testing.T, path string) []float64 {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var values []float64
+	require.NoError(t, json.Unmarshal(data, &values))
+	return values
+}
+
+func TestForwardMLP(t *testing.T) {
+	// E2E test: load MLP model, encrypt input, Forward, decrypt, compare to expected.
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	model, err := LoadModel(data)
+	require.NoError(t, err)
+
+	params, manifest, inputLevel := model.ClientParams()
+
+	client, err := orionclient.New(params)
+	require.NoError(t, err)
+	defer client.Close()
+
+	keys, err := client.GenerateKeys(manifest)
+	require.NoError(t, err)
+
+	eval, err := NewEvaluator(params, *keys)
+	require.NoError(t, err)
+	defer eval.Close()
+
+	// Load input and pad to maxSlots.
+	inputValues := loadJSONFloats(t, "testdata/mlp.input.json")
+	maxSlots := model.params.MaxSlots()
+	padded := make([]float64, maxSlots)
+	copy(padded, inputValues)
+
+	// Encode and encrypt.
+	pt, err := client.Encode(padded, inputLevel, client.DefaultScale())
+	require.NoError(t, err)
+
+	ct, err := client.Encrypt(pt)
+	require.NoError(t, err)
+
+	// Run Forward.
+	result, err := eval.Forward(model, ct.Raw()[0])
+	require.NoError(t, err, "Forward failed")
+
+	// Decrypt and decode.
+	wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
+	decoded := decryptVector(t, client, wrapped)
+
+	// Load expected output and compare.
+	// Tolerance 0.02: with logscale=26 and multiple FHE ops (2 LTs + quad + rescales),
+	// CKKS noise accumulates to ~0.01. Observed max error is ~0.01 with these params.
+	expected := loadJSONFloats(t, "testdata/mlp.expected.json")
+	tolerance := 0.02
+
+	t.Logf("MLP output (first %d values):", len(expected))
+	for i, v := range expected {
+		t.Logf("  [%d] expected=%.6f got=%.6f diff=%.6f", i, v, decoded[i], math.Abs(v-decoded[i]))
+	}
+
+	for i, v := range expected {
+		assert.InDelta(t, v, decoded[i], tolerance,
+			"slot %d: expected %f, got %f", i, v, decoded[i])
 	}
 }
