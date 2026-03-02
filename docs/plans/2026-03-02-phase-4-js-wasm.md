@@ -126,13 +126,13 @@ Expose Lattigo's bootstrap API as thin bindings. No orchestration logic — the 
 
 Set up the npm package structure and TypeScript foundation.
 
-- [ ] Create `js/lattigo/package.json` — name `@orion/lattigo`, entry point `dist/index.js`, types `dist/index.d.ts`, scripts for build/test
-- [ ] Create `js/lattigo/tsconfig.json` — target ES2020, strict mode, declaration output
-- [ ] Create `js/lattigo/src/types.ts` — `Handle` type (number), `WasmBridge` interface (typed function signatures for all `globalThis.lattigo.*` functions)
-- [ ] Create `js/lattigo/src/loader.ts` — `loadLattigo(wasmPath?: string): Promise<WasmBridge>` — loads WASM binary, instantiates Go runtime via `wasm_exec.js`'s `Go` class, calls `go.run(instance)`, polls for `globalThis.lattigo.__ready === true` (set by Go's `main()` as last registration), returns typed bridge object. Works in both Node.js (reads `.wasm` file from disk) and browser (fetches URL).
-- [ ] `npm install` dev deps: `typescript`, `esbuild`
-- [ ] Verify `npx tsc --noEmit` passes
-- [ ] Run tests — must pass before next task
+- [x] Create `js/lattigo/package.json` — name `@orion/lattigo`, entry point `dist/index.js`, types `dist/index.d.ts`, scripts for build/test
+- [x] Create `js/lattigo/tsconfig.json` — target ES2020, strict mode, declaration output
+- [x] Create `js/lattigo/src/types.ts` — `Handle` type (number), `WasmBridge` interface (typed function signatures for all `globalThis.lattigo.*` functions)
+- [x] Create `js/lattigo/src/loader.ts` — `loadLattigo(wasmPath?: string): Promise<WasmBridge>` — loads WASM binary, instantiates Go runtime via `wasm_exec.js`'s `Go` class, calls `go.run(instance)`, polls for `globalThis.lattigo.__ready === true` (set by Go's `main()` as last registration), returns typed bridge object. Works in both Node.js (reads `.wasm` file from disk) and browser (fetches URL).
+- [x] `npm install` dev deps: `typescript`, `esbuild`
+- [x] Verify `npx tsc --noEmit` passes
+- [x] Run tests — must pass before next task
 
 ### Task 7: TypeScript wrappers — core classes
 

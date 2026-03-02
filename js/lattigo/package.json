@@ -1,0 +1,24 @@
+{
+  "name": "@orion/lattigo",
+  "version": "0.1.0",
+  "description": "TypeScript bindings for Lattigo CKKS via Go WASM",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "wasm/"
+  ],
+  "scripts": {
+    "build:wasm": "bash bridge/build.sh",
+    "build:ts": "esbuild src/index.ts --bundle --platform=neutral --format=esm --outfile=dist/index.js && tsc --emitDeclarationOnly",
+    "build": "npm run build:wasm && npm run build:ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-vm-modules node_modules/.bin/vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}
