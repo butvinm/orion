@@ -10,7 +10,7 @@ Three core components:
 2. **Evaluator** — Pure Go. Loads the compiled model, CKKS-encodes the packed data into Lattigo format at load time, and runs FHE inference on ciphertexts.
 3. **Lattigo Bindings** — Go core with Python and JS wrappers. Thin bindings for Lattigo's key generation, encryption, decryption, encoding, and decoding. Not Orion-specific.
 
-Plus a client helper library (**orion-client**, Python/JS) that handles tensor-to-CKKS-slot mapping on top of lattigo bindings, and Python evaluator bindings (**orion-evaluator**) for self-contained Python workflows.
+Plus Python evaluator bindings (**orion-evaluator**) for self-contained Python workflows. No client helper library — users interact with Lattigo directly for all cryptographic operations.
 
 ## Components
 
@@ -71,14 +71,16 @@ Anyone doing FHE with Lattigo from Python or JS can use these bindings, regardle
 
 ### orion-evaluator (Python bindings to Go evaluator)
 
-**Dependencies:** `lattigo` (Python), `orion-client` (for `CompiledModel`, `CKKSParams`).
+**Dependencies:** `lattigo` (Python).
 
 Thin Python bindings over the Go `evaluator/` package, following the same CGO bridge pattern as `python/lattigo/`. Ships a separate `.so` that wraps the evaluator-specific Go code. The bridge exposes:
 
 - `LoadModel(data []byte) → Model` — parses `.orion` v2, CKKS-encodes diagonals at load time
-- `Model.ClientParams() → ClientParams` — returns CKKS params, key manifest, input level
-- `NewEvaluator(model, eval_keys) → Evaluator` — creates per-client evaluator from eval keys
-- `Evaluator.Forward(ciphertexts) → ciphertexts` — runs FHE inference on the loaded model
+- `Model.ClientParams() → json` — returns CKKS params, key manifest, input level as JSON
+- `NewEvaluator(model, keys_bytes) → Evaluator` — creates per-client evaluator from Lattigo-serialized eval keys
+- `Evaluator.Forward(ct_bytes) → ct_bytes` — runs FHE inference, accepts and returns Lattigo-serialized ciphertexts
+
+The evaluator accepts raw Lattigo `MarshalBinary` bytes for both keys and ciphertexts. No Orion-specific serialization formats — keys are `MemEvaluationKeySet.MarshalBinary()` output, ciphertexts are Lattigo `rlwe.Ciphertext.MarshalBinary()` output. This keeps the evaluator independent of how keys were generated (standard keygen, threshold encryption, any Lattigo-compatible protocol).
 
 Python API:
 
@@ -89,11 +91,11 @@ from orion_evaluator import Model, Evaluator
 model = Model.load(open("model.orion", "rb").read())
 params = model.client_params()  # CKKSParams, KeyManifest, input_level
 
-# Create evaluator with client's eval keys
-evaluator = Evaluator(model, eval_keys)
+# Create evaluator with Lattigo-serialized eval keys
+evaluator = Evaluator(model, keys_bytes)
 
-# Run inference
-result_cts = evaluator.forward(input_cts)
+# Run inference (Lattigo ciphertext bytes in, Lattigo ciphertext bytes out)
+result_bytes = evaluator.forward(ct_bytes)
 
 # Cleanup
 evaluator.close()
@@ -106,14 +108,13 @@ The `Model` object is immutable and safe to share across multiple `Evaluator` in
 
 This package exists purely for convenience — it enables self-contained Python examples and testing without a separate Go server. Production deployments should use the Go evaluator directly for performance and to avoid CGO overhead.
 
-### orion-client (Python/JS helper)
+### No orion-client package
 
-A published package (pip/npm) on top of lattigo bindings. Handles the Orion-specific tensor-to-CKKS-slot mapping:
+There is no `orion-client` package. Encryption, decryption, key generation, and encoding/decoding are the user's domain — Orion must not constrain access to Lattigo primitives (see Design Principles). Users interact with Lattigo directly via the `lattigo` Python/JS bindings for all cryptographic operations. This enables threshold encryption, custom key management, or any protocol Lattigo supports without Orion getting in the way.
 
-- `encode_tensor(tensor, level, lattigo_encoder) → list[PlainText]` — flatten, pad to slot count, split into chunks, call `lattigo.encode` per chunk
-- `decode_tensor(list[PlainText], shape, lattigo_encoder) → tensor` — call `lattigo.decode` per plaintext, concatenate, reshape
+Tensor-to-CKKS-slot mapping (flatten, pad to slot count, split into chunks) is trivial and left to the user. Example code is provided in `examples/` but not packaged as a library.
 
-The tensor-to-slot mapping logic (flatten, pad, split, reshape) is pure Python/JS — no Go, no FFI. The per-chunk CKKS encoding/decoding is delegated to lattigo bindings (which are Go, or Go→WASM for JS).
+`CKKSParams` and `CompiledModel` live in `orion-compiler` — they are compiler output types.
 
 ## End-to-End Example
 
@@ -123,9 +124,8 @@ Three actors, three languages, three machines.
 
 ```python
 import torch
-from orion_compiler import Compiler
+from orion_compiler import Compiler, CKKSParams
 from orion_compiler.nn import Linear, BatchNorm1d, Quad, Flatten, Module
-from orion_client import CKKSParams
 
 # Define the model using Orion's FHE-compatible layers
 class MLP(Module):
@@ -166,7 +166,7 @@ compiler.compile("model.orion")
 
 The compiler produces `model.orion` — a JSON header describing the computation graph plus binary blobs with raw packed numerical data (float64 diagonals, bias vectors, polynomial coefficients). Lattigo is used during compilation (via Go bridge) for polynomial approximation, parameter validation, and key manifest computation, but the output contains no Lattigo binary formats. The compiled model is a portable mathematical description.
 
-Note: `CKKSParams` lives in `orion_client` because the client needs it for keygen and encoding. The compiler imports it from there via its `orion-client` dependency.
+Note: `CKKSParams` and `CompiledModel` live in `orion_compiler`. The Go evaluator parses `.orion` files directly and returns client params as JSON — it does not depend on Python types.
 
 ### 2. Serve inference (Go, server)
 
@@ -224,7 +224,6 @@ Pure Go. No Python, no PyTorch, no skeleton network. The model is loaded once an
 
 ```javascript
 import { KeyGenerator, Encryptor, Decryptor, Encoder } from "lattigo";
-import { encodeTensor, decodeTensor } from "orion-client";
 
 // Fetch params from server — CKKS params, key manifest, input level
 const params = await fetch("/params").then((r) => r.json());
@@ -240,34 +239,38 @@ const { id: sessionId } = await fetch("/session", {
   body: evalKeys.marshal(),
 }).then((r) => r.json());
 
-// Encode + encrypt the input tensor
+// Encode + encrypt the input (flatten, pad to slots, encode, encrypt)
 const encoder = new Encoder(params.ckks);
-const plaintexts = encodeTensor(inputData, params.inputLevel, encoder);
+const slots = params.ckks.maxSlots;
+const padded = new Float64Array(slots);
+padded.set(inputData.flat());
+const pt = encoder.encode(padded, params.inputLevel);
 const encryptor = new Encryptor(params.ckks, secretKey);
-const ciphertexts = plaintexts.map((pt) => encryptor.encrypt(pt));
+const ct = encryptor.encrypt(pt);
 
 // Run inference — only ciphertext sent, keys are already on server
 const response = await fetch(`/session/${sessionId}/infer`, {
   method: "POST",
-  body: marshalCiphertexts(ciphertexts),
+  body: ct.marshal(),
 });
 
-// Decrypt the result and decode back to a tensor
-const resultCts = unmarshalCiphertexts(await response.arrayBuffer());
+// Decrypt the result and decode
+const resultCt = unmarshalCiphertext(await response.arrayBuffer());
 const decryptor = new Decryptor(params.ckks, secretKey);
-const resultPts = resultCts.map((ct) => decryptor.decrypt(ct));
-const output = decodeTensor(resultPts, outputShape, encoder);
+const resultPt = decryptor.decrypt(resultCt);
+const output = encoder.decode(resultPt).slice(0, 10);
 ```
 
-The secret key is generated in the browser and never leaves it. Lattigo bindings (Go compiled to WASM, ~8 MB uncompressed / ~3 MB gzipped) handle all cryptographic operations and serialization. `encodeTensor`/`decodeTensor` from orion-client are pure JS helpers for tensor-to-slot mapping. `marshalCiphertexts`/`unmarshalCiphertexts` are Lattigo serialization — the wire format is application-specific, not mandated by Orion.
+The secret key is generated in the browser and never leaves it. Lattigo bindings (Go compiled to WASM, ~8 MB uncompressed / ~3 MB gzipped) handle all cryptographic operations and serialization. Tensor-to-slot mapping (flatten, pad) is trivial user code — no library needed.
 
 ### 4. Self-contained Python (single machine, prototyping)
 
 ```python
+import numpy as np
 import torch
-from orion_compiler import Compiler
+from lattigo import ckks, rlwe
+from orion_compiler import Compiler, CKKSParams
 from orion_compiler.nn import Linear, BatchNorm1d, Quad, Flatten, Module
-from orion_client import Client, CKKSParams, CompiledModel
 from orion_evaluator import Model, Evaluator
 
 # --- Define model (see examples/ for full architectures) ---
@@ -301,24 +304,39 @@ compiler.fit(train_loader)
 compiled = compiler.compile()
 model_bytes = compiled.to_bytes()
 
-# --- Client: generate keys and encrypt ---
-client = Client(compiled.params)
-keys = client.generate_keys(compiled.manifest)
-ct = client.encrypt_tensor(input_tensor, level=compiled.input_level)
+# --- Client: generate keys and encrypt (using Lattigo directly) ---
+ckks_params = ckks.new_parameters(compiled.params.to_lattigo_json())
+keygen = rlwe.new_keygenerator(ckks_params)
+sk = keygen.gen_secret_key()
+rlk = keygen.gen_relinearization_key(sk)
+gks = [keygen.gen_galois_key(sk, el) for el in compiled.manifest.galois_elements]
+key_set = rlwe.new_mem_evaluation_key_set(rlk, gks)
+keys_bytes = key_set.marshal_binary()
+
+encoder = ckks.new_encoder(ckks_params)
+encryptor = rlwe.new_encryptor(ckks_params, sk)
+input_vals = np.zeros(ckks_params.max_slots(), dtype=np.float64)
+input_vals[:784] = input_tensor.flatten().numpy().astype(np.float64)
+pt = encoder.encode(input_vals, compiled.input_level)
+ct = encryptor.encrypt(pt)
+ct_bytes = ct.marshal_binary()
 
 # --- Evaluate (Go evaluator via Python bindings) ---
 model = Model.load(model_bytes)
-evaluator = Evaluator(model, keys)
-result_ct = evaluator.forward(ct)
+evaluator = Evaluator(model, keys_bytes)
+result_bytes = evaluator.forward(ct_bytes)
 
-# --- Decrypt ---
-result = client.decrypt_tensor(result_ct)
+# --- Decrypt (using Lattigo directly) ---
+decryptor = rlwe.new_decryptor(ckks_params, sk)
+result_ct = rlwe.unmarshal_ciphertext(result_bytes)
+result_pt = decryptor.decrypt(result_ct)
+result = encoder.decode(result_pt)[:10]  # first 10 values = model output
 
 evaluator.close()
 model.close()
 ```
 
-All four stages in one Python script. Useful for prototyping, testing, and research notebooks. The Go evaluator runs natively under the hood via CGO — same code path as a production Go server, just accessed through Python bindings.
+All four stages in one Python script. Useful for prototyping, testing, and research notebooks. The Go evaluator runs natively under the hood via CGO — same code path as a production Go server, just accessed through Python bindings. All crypto operations use Lattigo directly — no Orion wrapper constrains how keys are generated or ciphertexts are handled.
 
 ## Compiled Model Format
 
@@ -508,11 +526,12 @@ default:
 
 ## Repo Structure
 
-Monorepo. Go module at root (`github.com/baahl-nyu/orion`). One Go package — `evaluator`. Three Python packages — `lattigo` (Go bridge `.so` + Python FFI), `orion-client` (pure Python: tensor-to-slot mapping + client API), and `orion-compiler` (torch + compilation). The evaluator, Python bridge, and JS bridge each import Lattigo directly — no shared Go wrapper package.
+Monorepo. Go module at root (`github.com/baahl-nyu/orion`). One Go package — `evaluator`, plus shared types at root. Three Python packages — `lattigo` (Go bridge `.so` + Python FFI), `orion-compiler` (torch + compilation), and `orion-evaluator` (Go evaluator bridge `.so`). No `orion-client` — users use Lattigo directly. The evaluator, Python bridge, and JS bridge each import Lattigo directly — no shared Go wrapper package.
 
 ```
 orion/
 ├── go.mod                          # module github.com/baahl-nyu/orion
+├── params.go, client/ ...          # Shared types + client logic (used by evaluator + bridges)
 │
 ├── evaluator/                      # Go pkg: Orion FHE inference engine
 │                                   #   imports Lattigo directly
@@ -523,12 +542,8 @@ orion/
 │   │   │                           #   imports Lattigo directly
 │   │   └── lattigo/                #   Python pkg: ctypes bindings, GoHandle RAII
 │   │
-│   ├── orion-client/               # pip install orion-client (pure Python, no Go)
-│   │   └── orion_client/           #   Client, CKKSParams, CompiledModel, Ciphertext,
-│   │                               #   tensor-to-slot mapping
-│   │
-│   ├── orion-compiler/             # pip install orion-compiler (pure Python, no Go)
-│   │   └── orion_compiler/         #   Compiler, nn/, core/
+│   ├── orion-compiler/             # pip install orion-compiler (depends on lattigo)
+│   │   └── orion_compiler/         #   Compiler, nn/, core/, CKKSParams, CompiledModel
 │   │
 │   ├── orion-evaluator/            # pip install orion-evaluator (ships bridge .so)
 │   │   ├── bridge/                 #   Go CGO bridge wrapping evaluator/ pkg
@@ -542,8 +557,7 @@ orion/
 │   │   ├── bridge/                 #   Go WASM bridge (builds .wasm), imports Lattigo directly
 │   │   └── src/                    #   TypeScript wrappers over WASM
 │   │
-│   └── orion-client/               # npm package: pure TS, tensor-to-slot mapping
-│       └── src/
+│   └── examples/                   # JS example code (tensor-to-slot mapping is user code)
 │
 ├── examples/
 │   ├── mlp/                        # MNIST, simplest: Flatten → Linear → Quad → Linear
@@ -560,31 +574,25 @@ orion/
 
 **`evaluator/`** (`github.com/baahl-nyu/orion/evaluator`) — the only Orion-specific Go package. Reads `.orion` files, CKKS-encodes diagonals at load time, walks the computation graph. Imports Lattigo directly.
 
-**`lattigo`** (`pip install lattigo`) — Python package shipping the Go bridge `.so`. Contains all ctypes bindings (`ffi.py`, `GoHandle`). Not Orion-specific — exposes Lattigo's keygen, encrypt, decrypt, encode, decode, polynomial generation, parameter construction. The only Python package requiring Go/CGO to build from source (pre-built wheels eliminate this).
+**`lattigo`** (`pip install lattigo`) — Python package shipping the Go bridge `.so`. Contains all ctypes bindings (`ffi.py`, `GoHandle`). Not Orion-specific — exposes Lattigo's keygen, encrypt, decrypt, encode, decode, marshal/unmarshal, polynomial generation, parameter construction. The only Python package requiring Go/CGO to build from source (pre-built wheels eliminate this).
 
-**`orion-client`** (`pip install orion-client`) — pure Python. Client, CKKSParams, CompiledModel, Ciphertext, PlainText, tensor-to-slot mapping. No Go, no FFI, no `.so`. Calls `lattigo` for all cryptographic operations.
+**`orion-compiler`** (`pip install orion-compiler`) — Python + Go bridge dependency. Compiler, nn modules, core algorithms, `CKKSParams`, `CompiledModel`. Calls `lattigo` for polynomial generation and parameter validation.
 
-**`orion-compiler`** (`pip install orion-compiler`) — pure Python. Compiler, nn modules, core algorithms. No Go, no pre-built model architectures (see `examples/`). Calls `lattigo` for polynomial generation and parameter validation.
-
-**`orion-evaluator`** (`pip install orion-evaluator`) — Python package shipping a Go bridge `.so` that wraps the `evaluator/` package. Exposes `Model` (load `.orion`, CKKS-encode at load time) and `Evaluator` (forward pass with eval keys). Requires Go/CGO to build from source (like `lattigo`). Enables self-contained Python examples without a separate Go server.
+**`orion-evaluator`** (`pip install orion-evaluator`) — Python package shipping a Go bridge `.so` that wraps the `evaluator/` package. Exposes `Model` (load `.orion`, CKKS-encode at load time) and `Evaluator` (forward pass with Lattigo-serialized eval keys and ciphertexts). Requires Go/CGO to build from source (like `lattigo`). Enables self-contained Python examples without a separate Go server.
 
 **`js/lattigo/`** — npm package shipping the WASM bridge. Same pattern as Python: Go bridge builds `.wasm`, TypeScript wrappers expose Lattigo ops. Imports Lattigo directly.
 
-**`js/orion-client/`** — npm package, pure TypeScript. Tensor-to-slot mapping. Mirrors the Python `orion-client` split.
-
 ## Dependencies
 
-| Component          | Go import                              | `pip install`     | Depends on                                 | Does NOT depend on        |
-| ------------------ | -------------------------------------- | ----------------- | ------------------------------------------ | ------------------------- |
-| `evaluator/`       | `github.com/baahl-nyu/orion/evaluator` | —                 | Lattigo                                    | Python, compiler, bridges |
-| `lattigo`          | (CGO, builds .so)                      | `lattigo`         | Lattigo (Go)                               | Anything Orion            |
-| `orion-client`     | —                                      | `orion-client`    | `lattigo`, numpy                           | torch, `evaluator/`       |
-| `orion-compiler`   | —                                      | `orion-compiler`  | `orion-client`, `lattigo`, torch, networkx | `evaluator/`              |
-| `orion-evaluator`  | (CGO, builds .so)                      | `orion-evaluator` | `evaluator/`, Lattigo, `orion-client`      | torch, compiler           |
-| `js/lattigo/`      | (WASM, builds .wasm)                   | —                 | Lattigo                                    | `evaluator/`              |
-| `js/orion-client/` | —                                      | —                 | `js/lattigo/` .wasm                        | Go (pure TS)              |
+| Component         | Go import                              | `pip install`     | Depends on                 | Does NOT depend on        |
+| ----------------- | -------------------------------------- | ----------------- | -------------------------- | ------------------------- |
+| `evaluator/`      | `github.com/baahl-nyu/orion/evaluator` | —                 | Lattigo                    | Python, compiler, bridges |
+| `lattigo`         | (CGO, builds .so)                      | `lattigo`         | Lattigo (Go)               | Anything Orion            |
+| `orion-compiler`  | —                                      | `orion-compiler`  | `lattigo`, torch, networkx | `evaluator/`              |
+| `orion-evaluator` | (CGO, builds .so)                      | `orion-evaluator` | `evaluator/`, Lattigo      | torch, compiler           |
+| `js/lattigo/`     | (WASM, builds .wasm)                   | —                 | Lattigo                    | `evaluator/`              |
 
-No circular dependencies. No shared Go packages. `lattigo` and `orion-evaluator` are the packages with Go code. `orion-client` and `orion-compiler` are pure Python.
+No circular dependencies. No shared Go packages. `lattigo` and `orion-evaluator` are the packages with Go code. `orion-compiler` depends on `lattigo` for compile-time operations. `orion-evaluator` has no Python package dependencies.
 
 ## Build and Install
 
@@ -592,9 +600,7 @@ Source-only builds for now. Pre-built wheels with bundled Go shared library are 
 
 **Lattigo bindings:** `cd python/lattigo && pip install -e .` — triggers Go compilation of `bridge/` into a shared library, bundled into the package.
 
-**Orion client:** `cd python/orion-client && pip install -e .` — pure Python, pulls in `lattigo`.
-
-**Orion compiler:** `cd python/orion-compiler && pip install -e .` — pure Python, pulls in `orion-client` + torch.
+**Orion compiler:** `cd python/orion-compiler && pip install -e .` — pulls in `lattigo` + torch.
 
 **JS:** Build script in `js/` compiles `js/lattigo/` to WASM (~8 MB uncompressed, ~3 MB gzipped). This single .wasm provides all lattigo bindings.
 
@@ -1032,7 +1038,7 @@ Note: `batch_norm` is never emitted as a graph node. The compiler fuses batch no
 1. Compile MLP → write `testdata/mlp.orion`
 2. Generate random input, compute cleartext expected output → write `testdata/mlp.input.json` (float64 array), `testdata/mlp.expected.json` (float64 array)
 
-Only `.orion` files and cleartext JSON cross the Python→Go boundary. Python's `EvalKeys` and `Ciphertext` serialization formats have no Go parser — keys and ciphertexts must be generated in Go.
+Only `.orion` files and cleartext JSON cross the Python→Go boundary. Keys and ciphertexts use Lattigo's native `MarshalBinary`/`UnmarshalBinary` — no custom Orion serialization formats. Phase 3 deletes the Python `EvalKeys`/`ORKEY` format and `Ciphertext` shape header in favor of direct Lattigo serialization.
 
 **Go test** (`evaluator/evaluator_test.go`):
 
@@ -1064,7 +1070,7 @@ Repeat for at least: MLP (linear-only), model with Chebyshev activations, model 
 
 ### Phase 3: Package restructuring
 
-Split the monolith into three Python packages. Can start after Phase 1, parallelizable with Phase 2 (except moving the Go evaluator).
+Split the monolith into three packages: `lattigo` (Python Lattigo bindings), `orion-compiler` (Python), and `orion-evaluator` (Python bindings to Go evaluator). No `orion-client` package — users interact with Lattigo directly for keygen, encrypt, decrypt. Can start after Phase 1, parallelizable with Phase 2 (except moving the Go evaluator).
 
 #### 3.1 Extract `python/lattigo/`
 
@@ -1078,82 +1084,78 @@ Create `python/lattigo/` with its own `pyproject.toml` (`pip install lattigo`).
 | `orion/backend/orionclient/ffi.py`       | `python/lattigo/lattigo/ffi.py` |
 | `GoHandle` class and all ctypes bindings | `python/lattigo/lattigo/`       |
 
-**Bridge API surface after cleanup.** With no Python evaluator, remove all evaluation-only bridge functions:
+**Bridge API surface after cleanup.** With no Python evaluator and no `Client` class (users use Lattigo directly), the bridge retains only Lattigo primitives and compile-time helpers:
 
-| Keep (client + compile-time)                                                                                                  | Remove (evaluation-only)                                                   |
-| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `NewClient`, `ClientClose`                                                                                                    | `NewEvaluator`, `EvalClose`                                                |
-| `ClientEncode`, `ClientDecode`                                                                                                | `EvalEncode`                                                               |
-| `ClientEncrypt`, `ClientDecrypt`                                                                                              | `EvalAdd`, `EvalSub`, `EvalMul`                                            |
-| `ClientGenerateRLK`, `ClientGenerateGaloisKey`, `ClientGenerateBootstrapKeys`, `ClientGenerateKeys`                           | `EvalAddPlaintext`, `EvalSubPlaintext`, `EvalMulPlaintext`                 |
-| `ClientSecretKey`, `ClientMaxSlots`, `ClientGaloisElement`, `ClientModuliChain`, `ClientAuxModuliChain`, `ClientDefaultScale` | `EvalAddScalar`, `EvalMulScalar`, `EvalNegate`                             |
-| `GenerateLinearTransformFromParams` (compile-time: Galois element computation)                                                | `EvalRotate`, `EvalRescale`                                                |
-| `LinearTransformRequiredGaloisElements`                                                                                       | `EvalPoly`, `EvalLinearTransform`, `EvalBootstrap`                         |
-| `GeneratePolynomialMonomial`, `GeneratePolynomialChebyshev`                                                                   | `EvalModuliChain`, `EvalDefaultScale`, `EvalMaxSlots`, `EvalGaloisElement` |
-| `GenerateMinimaxSignCoeffs`                                                                                                   | `NewEvalKeyBundle` and all `EvalKeyBundle*` setters                        |
-| `CiphertextMarshal`, `CiphertextUnmarshal`                                                                                    |                                                                            |
-| `LinearTransformMarshal`, `LinearTransformUnmarshal`                                                                          |                                                                            |
-| `DeleteHandle`                                                                                                                |                                                                            |
+| Keep (Lattigo primitives + compile-time)                                                       | Remove                                                                                   |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `NewKeyGenerator`, `GenSecretKey`, `GenRelinearizationKey`, `GenGaloisKey`, `GenBootstrapKeys` | All `Eval*` functions (`EvalAdd`, `EvalSub`, `EvalMul`, `EvalPoly`, etc.)                |
+| `NewEncoder`, `Encode`, `Decode`                                                               | `NewEvaluator`, `EvalClose`                                                              |
+| `NewEncryptor`, `Encrypt`, `NewDecryptor`, `Decrypt`                                           | `NewEvalKeyBundle` and all `EvalKeyBundle*` setters                                      |
+| `NewParameters` (from JSON)                                                                    | `NewClient`, `ClientClose`, `ClientEncode`, `ClientDecode`, `ClientEncrypt`, etc.        |
+| `MarshalBinary`, `UnmarshalBinary` (for all Lattigo types)                                     | `GenerateLinearTransformFromParams`, `LinearTransformRequiredGaloisElements` (dead code) |
+| `NewMemEvaluationKeySet`                                                                       | `LinearTransformMarshal`, `LinearTransformUnmarshal`                                     |
+| `GeneratePolynomialMonomial`, `GeneratePolynomialChebyshev`, `GenerateMinimaxSignCoeffs`       | `CombineSingleCiphertexts` and multi-ciphertext wrappers                                 |
+| `DeleteHandle`                                                                                 |                                                                                          |
 
-Note: `GenerateLinearTransformFromParams` and `LinearTransformRequiredGaloisElements` were previously needed for Galois element computation during `compile()`. Phase 1 replaced this with pure Python BSGS in `orion.core.galois`. These can now be moved to the "Remove" column in Phase 3.
+Note: `GenerateLinearTransformFromParams` and `LinearTransformRequiredGaloisElements` are confirmed dead code — `fit()` and `compile()` never call them (verified experimentally in Phase 3 planning). `Client*` functions are removed because users use Lattigo primitives directly, enabling threshold encryption and custom key management.
 
-The bridge Go code (`bridge/*.go`) is updated to remove the deleted exports. The shared library shrinks.
+The bridge Go code (`bridge/*.go`) is updated to remove the deleted exports and to expose Lattigo primitives directly (KeyGenerator, Encoder, Encryptor, Decryptor) instead of the old `Client` abstraction. The shared library shrinks significantly.
 
-#### 3.2 Extract `python/orion-client/`
+#### 3.2 Extract `python/orion-compiler/`
 
-Create `python/orion-client/` with its own `pyproject.toml` (`pip install orion-client`, depends on `lattigo`).
-
-**Move into `python/orion-client/orion_client/`:**
-
-| From                      | To                               |
-| ------------------------- | -------------------------------- |
-| `orion/client.py`         | `orion_client/client.py`         |
-| `orion/params.py`         | `orion_client/params.py`         |
-| `orion/compiled_model.py` | `orion_client/compiled_model.py` |
-| `orion/ciphertext.py`     | `orion_client/ciphertext.py`     |
-
-Pure Python. No torch dependency. `numpy` for tensor-to-slot mapping (flatten, pad, split, reshape).
-
-The `Client` class imports `lattigo` for FFI calls (keygen, encrypt, decrypt, encode, decode). `CompiledModel`, `CKKSParams`, `KeyManifest`, `EvalKeys` are pure dataclasses with no FFI dependency.
-
-#### 3.3 Rename remaining to `python/orion-compiler/`
-
-Create `python/orion-compiler/` with its own `pyproject.toml` (`pip install orion-compiler`, depends on `orion-client`, `lattigo`, `torch`, `networkx`).
+Create `python/orion-compiler/` with its own `pyproject.toml` (`pip install orion-compiler`, depends on `lattigo`, `torch`, `networkx`).
 
 **Move into `python/orion-compiler/orion_compiler/`:**
 
-| From                | To                           |
-| ------------------- | ---------------------------- |
-| `orion/compiler.py` | `orion_compiler/compiler.py` |
-| `orion/nn/`         | `orion_compiler/nn/`         |
-| `orion/core/`       | `orion_compiler/core/`       |
+| From                      | To                                 |
+| ------------------------- | ---------------------------------- |
+| `orion/compiler.py`       | `orion_compiler/compiler.py`       |
+| `orion/nn/`               | `orion_compiler/nn/`               |
+| `orion/core/`             | `orion_compiler/core/`             |
+| `orion/params.py`         | `orion_compiler/params.py`         |
+| `orion/compiled_model.py` | `orion_compiler/compiled_model.py` |
 
-The compiler imports `CKKSParams`, `CompilerConfig`, `CompiledModel` from `orion_client`. It imports `lattigo` for compile-time Go bridge operations (polynomial generation, linear transform Galois element queries, parameter validation).
+`CKKSParams`, `CompiledModel`, `KeyManifest`, and `CompilerConfig` live in `orion_compiler` — they are compiler output types. The compiler imports `lattigo` for compile-time Go bridge operations (polynomial generation, parameter validation).
 
-#### 3.4 Clean up dead code
+**Deleted (not moved):**
 
-With the Python evaluator gone (Phase 1) and packages split:
+- `orion/client.py` — replaced by direct Lattigo usage
+- `orion/ciphertext.py` — replaced by direct Lattigo usage (after dead code removal in 3.3)
+- `orion/backend/` — FFI code moves to `python/lattigo/`
 
-1. **Strip FHE forward paths from nn modules.** Remove the `if self.he_mode` branches in `forward()` methods of `Linear`, `Conv2d`, `Quad`, `Activation`, `Chebyshev`, `Bootstrap`, `Add`, `Mult`, `Flatten`, `BatchNorm`. These modules become compile-only: they have `compile(context)`, `fit(context)`, and cleartext `forward()`.
+#### 3.3 Clean up dead code
+
+With the Python evaluator gone (Phase 1), `Client` class deleted, and packages split:
+
+1. **Strip FHE forward paths from nn modules.** Remove the `if self.he_mode` branches in `forward()` methods of `Linear`, `Conv2d`, `Quad`, `Activation`, `Chebyshev`, `Bootstrap`, `Add`, `Mult`, `Flatten`, `BatchNorm`. These modules become compile-only: they have `fit(context)` and cleartext `forward()`.
 
 2. **Remove `he()` toggle from `Module`.** The `he_mode` flag, `he()` method, and `eval()`/`train()` overrides are dead. Modules always run in cleartext mode (for tracing and fitting).
 
-3. **Remove context propagation from `Ciphertext`.** The `context` attribute on `Ciphertext` was used to carry the evaluator handle during FHE forward passes. With no Python evaluation, `Ciphertext` becomes a simpler wrapper: shape + serialized Go handle (for client-side encrypt/decrypt only).
+3. **Delete `orion/client.py` entirely.** Users use Lattigo bindings directly for keygen, encode, encrypt, decrypt, decode.
 
-4. **Remove `_EvalContext` and `Evaluator._reconstruct_*` code.** Already deleted in Phase 1 (evaluator.py), but verify no remnants in other files.
+4. **Delete `orion/ciphertext.py` entirely.** The `Ciphertext` and `PlainText` Python wrapper classes (with `context`, dead arithmetic methods, custom serialization with redundant shape header) are replaced by direct Lattigo usage. Users work with Lattigo's native ciphertext/plaintext types via the `lattigo` Python bindings.
 
-#### 3.5 Move Go evaluator
+5. **Delete `EvalKeys` class and `ORKEY` container format.** Users serialize keys using Lattigo's native `MemEvaluationKeySet.MarshalBinary()`. No custom key serialization format.
+
+6. **Remove `_EvalContext` and `Evaluator._reconstruct_*` code.** Already deleted in Phase 1 (evaluator.py), but verify no remnants in other files.
+
+7. **Remove dead `LinearTransform.compile()` and `LinearTransform.evaluate_transforms()` methods.** Confirmed never called in the standard pipeline (see Phase 3 investigation).
+
+8. **Delete `TransformEncoder` class** from `compiler_backend.py` and `Compiler._lt_evaluator` / `ctx.lt_evaluator`. Confirmed dead code — pure Python BSGS replaced these.
+
+#### 3.4 Restructure Go modules
 
 After Phase 2 delivers the `evaluator/` package:
 
-- Place `evaluator/` at repo root
-- Root `go.mod`: `module github.com/baahl-nyu/orion`
+- Root `go.mod`: `module github.com/baahl-nyu/orion` (single module for evaluator + shared types)
+- `evaluator/` becomes a package under the root module
 - `python/lattigo/bridge/` retains its own `go.mod` (CGO shared library, separate build)
-- Delete `orionclient/` (its functionality split between `python/lattigo/bridge/` and `evaluator/`)
+- Move shared types (`Params`, `Manifest`, etc.) from `orionclient/` to root-level or `client/` subpackage
+- Delete `orionclient/` (its client logic moves to root module packages, bridge moves to `python/lattigo/bridge/`)
 
-#### 3.6 Create `python/orion-evaluator/`
+#### 3.5 Create `python/orion-evaluator/`
 
-After Phase 2 (Go evaluator exists) and 3.5 (Go evaluator at repo root).
+After Phase 2 (Go evaluator exists) and 3.4 (Go modules restructured).
 
 **New directory:** `python/orion-evaluator/`
 
@@ -1161,14 +1163,16 @@ After Phase 2 (Go evaluator exists) and 3.5 (Go evaluator at repo root).
 
 A separate CGO shared library that wraps the `evaluator/` Go package. Exports:
 
-| C export                                                 | Go implementation                      |
-| -------------------------------------------------------- | -------------------------------------- |
-| `LoadModel(data, len) → handle`                          | `evaluator.LoadModel(data) → *Model`   |
-| `ModelClientParams(h) → json`                            | `model.ClientParams() → ClientParams`  |
-| `ModelClose(h)`                                          | release handle                         |
-| `NewEvaluator(modelH, keysData, keysLen) → handle`       | `evaluator.NewEvaluator(params, keys)` |
-| `EvaluatorForward(evalH, modelH, ctData, ctLen) → ctOut` | `eval.Forward(model, cts)`             |
-| `EvaluatorClose(h)`                                      | release handle                         |
+| C export                                                 | Go implementation                                                          |
+| -------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `LoadModel(data, len) → handle`                          | `evaluator.LoadModel(data) → *Model`                                       |
+| `ModelClientParams(h) → json`                            | `model.ClientParams()` → JSON with CKKSParams, KeyManifest, inputLevel     |
+| `ModelClose(h)`                                          | release handle                                                             |
+| `NewEvaluator(modelH, keysData, keysLen) → handle`       | `MemEvaluationKeySet.UnmarshalBinary(keys)` → `NewEvaluator()`             |
+| `EvaluatorForward(evalH, modelH, ctData, ctLen) → ctOut` | `rlwe.Ciphertext.UnmarshalBinary()` → `eval.Forward()` → `MarshalBinary()` |
+| `EvaluatorClose(h)`                                      | release handle                                                             |
+
+The evaluator bridge accepts raw Lattigo `MarshalBinary` bytes for both keys and ciphertexts. Keys are `MemEvaluationKeySet.MarshalBinary()` output. Ciphertexts are Lattigo `rlwe.Ciphertext.MarshalBinary()` output. No Orion-specific serialization formats.
 
 All handles are `cgo.Handle` values, same pattern as `python/lattigo/bridge/`. Error propagation via `errOut` parameter.
 
@@ -1184,42 +1188,44 @@ class Model:
     def load(data: bytes) -> "Model":
         """Parse .orion v2 and CKKS-encode diagonals (one-time cost)."""
 
-    def client_params(self) -> ClientParams:
-        """Returns CKKSParams, KeyManifest, input_level."""
+    def client_params(self) -> dict:
+        """Returns dict with ckks_params, manifest, input_level."""
 
     def close(self) -> None: ...
 
 class Evaluator:
     """Per-client evaluator. Holds eval keys. Not thread-safe."""
 
-    def __init__(self, model: Model, eval_keys: EvalKeys) -> None: ...
+    def __init__(self, model: Model, keys_bytes: bytes) -> None:
+        """Create evaluator from Lattigo MemEvaluationKeySet.MarshalBinary() bytes."""
 
-    def forward(self, ciphertexts: list[Ciphertext]) -> list[Ciphertext]:
-        """Run FHE inference."""
+    def forward(self, ct_bytes: bytes) -> bytes:
+        """Run FHE inference. Accepts and returns Lattigo ciphertext MarshalBinary bytes."""
 
     def close(self) -> None: ...
 ```
 
 Both classes wrap `GoHandle` with the standard RAII pattern (idempotent `close()`, `__del__` fallback).
 
-**`pyproject.toml`:** `pip install orion-evaluator`, depends on `orion-client` (for `CKKSParams`, `EvalKeys`, `Ciphertext` types). Build system triggers Go compilation of `bridge/`.
+**`pyproject.toml`:** `pip install orion-evaluator`. No Python package dependencies (uses its own CGO bridge). Build system triggers Go compilation of `bridge/`.
 
 #### Phase 3 acceptance checklist
 
 - [ ] `cd python/lattigo && pip install -e .` succeeds, builds `.so`
-- [ ] `cd python/orion-client && pip install -e .` succeeds (pure Python)
-- [ ] `cd python/orion-compiler && pip install -e .` succeeds (pure Python + torch)
+- [ ] `cd python/orion-compiler && pip install -e .` succeeds (depends on lattigo, torch, networkx)
 - [ ] `cd python/orion-evaluator && pip install -e .` succeeds, builds `.so`
-- [ ] `from lattigo import ffi, GoHandle` works
-- [ ] `from orion_client import Client, CKKSParams, CompiledModel, EvalKeys` works
-- [ ] `from orion_compiler import Compiler` works
+- [ ] `from lattigo import ckks, rlwe` works (Lattigo primitives directly accessible)
+- [ ] `from orion_compiler import Compiler, CKKSParams, CompiledModel` works
 - [ ] `from orion_evaluator import Model, Evaluator` works
 - [ ] Compiler E2E: compile MLP → produces valid `.orion` v2
-- [ ] Client E2E: load compiled model → generate keys → encrypt/decrypt roundtrip
-- [ ] Python E2E: compile → encrypt → evaluate (via `orion-evaluator`) → decrypt → correct output
-- [ ] Bridge `.so` does not export evaluation functions (`EvalAdd`, `EvalMul`, etc.)
+- [ ] Lattigo E2E: keygen + encode + encrypt/decrypt roundtrip using Lattigo bindings directly
+- [ ] Python E2E: compile → encrypt (Lattigo) → evaluate (orion-evaluator) → decrypt (Lattigo) → correct output
+- [ ] Evaluator accepts `MemEvaluationKeySet.MarshalBinary()` bytes for keys
+- [ ] Evaluator accepts/returns `rlwe.Ciphertext.MarshalBinary()` bytes for ciphertexts
+- [ ] Lattigo bridge `.so` does not export `Client*` or `Eval*` functions
 - [ ] No `he_mode`, `he()`, or FHE forward branches in nn modules
-- [ ] `Ciphertext` has no `context` attribute
+- [ ] `orion/client.py`, `orion/ciphertext.py` deleted (no `Client`, `Ciphertext`, `PlainText` classes)
+- [ ] `EvalKeys` class and `ORKEY` format deleted
 - [ ] `orionclient/` directory deleted
 - [ ] `go.mod` at repo root, `go test ./evaluator/...` passes
 - [ ] No circular imports between packages
@@ -1245,15 +1251,9 @@ TypeScript wrappers in `js/lattigo/src/` provide ergonomic API over the raw WASM
 
 Expected binary size: ~8 MB uncompressed, ~3 MB gzipped.
 
-#### 4.2 `js/orion-client/` — TypeScript tensor mapping
+#### 4.2 JS examples
 
-Pure TypeScript package (`npm install orion-client`). Mirrors Python `orion_client`:
-
-- `encodeTensor(data: Float64Array, level: number, encoder: Encoder): Plaintext[]` — flatten, pad to slot count, split into chunks, encode each
-- `decodeTensor(plaintexts: Plaintext[], shape: number[], encoder: Encoder): Float64Array` — decode each, concatenate, reshape
-- `CKKSParams`, `KeyManifest` as TypeScript interfaces (parsed from server JSON)
-
-No CKKS operations — delegates to `js/lattigo/` for all crypto.
+Tensor-to-slot mapping (flatten, pad, split) is trivial user code — no JS library needed. `CKKSParams` and `KeyManifest` are TypeScript interfaces parsed from the server's JSON response. Example code in `js/examples/` demonstrates the full flow.
 
 #### 4.3 Browser demo
 
@@ -1268,7 +1268,7 @@ No CKKS operations — delegates to `js/lattigo/` for all crypto.
 - [ ] `js/lattigo/` builds to `.wasm` (< 10 MB uncompressed)
 - [ ] TypeScript wrappers compile without errors
 - [ ] `genSecretKey()` → `genEvalKeys(manifest)` → `encrypt()` → `decrypt()` roundtrip works in Node.js
-- [ ] `encodeTensor()` → `decodeTensor()` roundtrip matches Python `orion_client` output
+- [ ] JS example: keygen → encode → encrypt → decrypt → decode roundtrip works in Node.js
 - [ ] Browser demo: compile MLP (Python) → serve (Go) → query (browser) → correct decrypted result
 - [ ] WASM loads and initializes in < 3 seconds on modern browser
 - [ ] No Go objects leaked after `.free()` calls
@@ -1314,9 +1314,10 @@ examples/<model>/
 **`run.py`** — the FHE pipeline:
 
 ```python
+import numpy as np
 import torch
-from orion_compiler import Compiler
-from orion_client import Client, CKKSParams
+from lattigo import ckks, rlwe
+from orion_compiler import Compiler, CKKSParams
 from orion_evaluator import Model, Evaluator
 from model import Net  # import from local model.py
 
@@ -1336,21 +1337,32 @@ compiler = Compiler(net, params)
 compiler.fit(train_loader)
 compiled = compiler.compile()
 
-# Client: keys + encryption
-client = Client(compiled.params)
-keys = client.generate_keys(compiled.manifest)
-ct = client.encrypt_tensor(inp, level=compiled.input_level)
+# Keygen + encrypt (using Lattigo directly)
+ckks_params = ckks.new_parameters(compiled.params.to_lattigo_json())
+keygen = rlwe.new_keygenerator(ckks_params)
+sk = keygen.gen_secret_key()
+rlk = keygen.gen_relinearization_key(sk)
+gks = [keygen.gen_galois_key(sk, el) for el in compiled.manifest.galois_elements]
+keys_bytes = rlwe.new_mem_evaluation_key_set(rlk, gks).marshal_binary()
+
+encoder = ckks.new_encoder(ckks_params)
+encryptor = rlwe.new_encryptor(ckks_params, sk)
+input_vals = np.zeros(ckks_params.max_slots(), dtype=np.float64)
+input_vals[:inp.numel()] = inp.flatten().numpy().astype(np.float64)
+ct_bytes = encryptor.encrypt(encoder.encode(input_vals, compiled.input_level)).marshal_binary()
 
 # Evaluate (Go evaluator via Python bindings)
 model = Model.load(compiled.to_bytes())
-evaluator = Evaluator(model, keys)
-ct_out = evaluator.forward(ct)
+evaluator = Evaluator(model, keys_bytes)
+result_bytes = evaluator.forward(ct_bytes)
 
-# Decrypt and compare
-out_fhe = client.decrypt_tensor(ct_out)
+# Decrypt and compare (using Lattigo directly)
+decryptor = rlwe.new_decryptor(ckks_params, sk)
+result_pt = decryptor.decrypt(rlwe.unmarshal_ciphertext(result_bytes))
+out_fhe = encoder.decode(result_pt)[:out_clear.numel()]
 print(f"Cleartext: {out_clear}")
 print(f"FHE:       {out_fhe}")
-print(f"MAE:       {mae(out_clear, out_fhe):.6f}")
+print(f"MAE:       {np.mean(np.abs(out_clear.detach().numpy().flatten() - out_fhe)):.6f}")
 
 evaluator.close()
 model.close()
