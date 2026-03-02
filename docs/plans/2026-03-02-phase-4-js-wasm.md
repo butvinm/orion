@@ -64,15 +64,15 @@ Three deliverables:
 
 Set up the bridge scaffolding: module structure, handle management, and the two foundational functions (create params, delete handle).
 
-- [ ] Create `js/lattigo/bridge/go.mod` importing `github.com/baahl-nyu/lattigo/v6` only. No root module dependency — the bridge is a thin binding to Lattigo with zero Orion-specific logic.
-- [ ] Create `js/lattigo/bridge/handles.go` — handle map (`map[uint32]any`, counter, `Store(obj) → id`, `Load(id) → obj`, `Delete(id)`). No mutex needed — Go WASM is single-threaded (goroutines are cooperative). Keep it simple.
-- [ ] Create `js/lattigo/bridge/main.go` — `//go:build js && wasm` tag, `func main()` with `select{}` keepalive, register `deleteHandle` under `globalThis.lattigo` namespace, set `globalThis.lattigo.__ready = true` as LAST registration (readiness signal for JS loader)
-- [ ] Create `js/lattigo/bridge/helpers.go` — JS↔Go conversion helpers: `jsToFloat64Slice(js.Value) → []float64`, `float64SliceToJS([]float64) → js.Value`, `bytesToJS([]byte) → js.Value (Uint8Array)`, `jsToBytes(js.Value) → []byte`
-- [ ] Create `js/lattigo/bridge/build.sh` — `GOOS=js GOARCH=wasm go build -o ../wasm/lattigo.wasm .`
-- [ ] Copy `wasm_exec.js` from Go distribution (`$(go env GOROOT)/misc/wasm/wasm_exec.js`) into `js/lattigo/wasm/`
-- [ ] Build WASM, verify it compiles and binary size < 10MB
-- [ ] Write Go tests for handle map (`handles_test.go` — store, load, delete, double-delete). Run via `GOOS=js GOARCH=wasm go test` with `GOWASMRUNTIME=node`.
-- [ ] Run tests — must pass before next task
+- [x] Create `js/lattigo/bridge/go.mod` importing `github.com/baahl-nyu/lattigo/v6` only. No root module dependency — the bridge is a thin binding to Lattigo with zero Orion-specific logic.
+- [x] Create `js/lattigo/bridge/handles.go` — handle map (`map[uint32]any`, counter, `Store(obj) → id`, `Load(id) → obj`, `Delete(id)`). No mutex needed — Go WASM is single-threaded (goroutines are cooperative). Keep it simple.
+- [x] Create `js/lattigo/bridge/main.go` — `//go:build js && wasm` tag, `func main()` with `select{}` keepalive, register `deleteHandle` under `globalThis.lattigo` namespace, set `globalThis.lattigo.__ready = true` as LAST registration (readiness signal for JS loader)
+- [x] Create `js/lattigo/bridge/helpers.go` — JS↔Go conversion helpers: `jsToFloat64Slice(js.Value) → []float64`, `float64SliceToJS([]float64) → js.Value`, `bytesToJS([]byte) → js.Value (Uint8Array)`, `jsToBytes(js.Value) → []byte`
+- [x] Create `js/lattigo/bridge/build.sh` — `GOOS=js GOARCH=wasm go build -o ../wasm/lattigo.wasm .`
+- [x] Copy `wasm_exec.js` from Go distribution (`$(go env GOROOT)/misc/wasm/wasm_exec.js`) into `js/lattigo/wasm/`
+- [x] Build WASM, verify it compiles and binary size < 10MB
+- [x] Write Go tests for handle map (`handles_test.go` — store, load, delete, double-delete). Run via `GOOS=js GOARCH=wasm go test` with `GOWASMRUNTIME=node`.
+- [x] Run tests — must pass before next task
 
 ### Task 2: Go WASM bridge — CKKS parameters and key generation
 
