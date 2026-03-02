@@ -1,17 +1,22 @@
-import sys
+"""Build script for the lattigo Python package.
+
+Builds the Go bridge shared library into the lattigo/ package directory.
+"""
+
 import os
 import platform
 import subprocess
+import sys
 from pathlib import Path
 
-def build(setup_kwargs=None):
-    """Build the Go shared library for lattigo bridge."""
-    print("=== Building Go shared library ===")
 
-    # Determine the output filename based on platform
+def build(setup_kwargs=None):
+    """Build the Go shared library for the lattigo bridge."""
+    print("=== Building lattigo bridge shared library ===")
+
     if platform.system() == "Windows":
         output_file = "orionclient-windows.dll"
-    elif platform.system() == "Darwin":  # macOS
+    elif platform.system() == "Darwin":
         if platform.machine().lower() in ("arm64", "aarch64"):
             output_file = "orionclient-mac-arm64.dylib"
         else:
@@ -21,37 +26,28 @@ def build(setup_kwargs=None):
     else:
         raise RuntimeError("Unsupported platform")
 
-    # Set up paths
-    root_dir = Path(__file__).parent.parent
-    bridge_dir = root_dir / "python" / "lattigo" / "bridge"
-    # Primary output: old location for backward compat
-    output_dir = root_dir / "orion" / "backend" / "orionclient"
+    root_dir = Path(__file__).parent
+    bridge_dir = root_dir / "bridge"
+    output_dir = root_dir / "lattigo"
     output_path = output_dir / output_file
-    # Secondary output: new lattigo package location
-    lattigo_output_dir = root_dir / "python" / "lattigo" / "lattigo"
-    lattigo_output_path = lattigo_output_dir / output_file
 
-    # Set up CGO for Go build
     env = os.environ.copy()
     env["CGO_ENABLED"] = "1"
 
-    # Set architecture for macOS
     if platform.system() == "Darwin":
         if platform.machine().lower() in ("arm64", "aarch64"):
             env["GOARCH"] = "arm64"
         else:
             env["GOARCH"] = "amd64"
 
-    # Build command
     build_cmd = [
         "go", "build",
         "-buildmode=c-shared",
         "-buildvcs=false",
         "-o", str(output_path),
-        str(bridge_dir)
+        str(bridge_dir),
     ]
 
-    # Run the build command with the configured environment
     try:
         print(f"Running: {' '.join(build_cmd)}")
         subprocess.run(build_cmd, cwd=str(bridge_dir), env=env, check=True)
@@ -60,15 +56,8 @@ def build(setup_kwargs=None):
         print(f"Go build failed with exit code {e.returncode}")
         sys.exit(1)
 
-    # Copy to lattigo package directory
-    import shutil
-    lattigo_output_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(str(output_path), str(lattigo_output_path))
-    print(f"Copied to {lattigo_output_path}")
-
-    # Return setup_kwargs for Poetry
     return setup_kwargs or {}
 
+
 if __name__ == "__main__":
-    success = build()
-    sys.exit(0 if success else 1)
+    build()

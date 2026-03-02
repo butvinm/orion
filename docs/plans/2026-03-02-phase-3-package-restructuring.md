@@ -164,19 +164,19 @@ Create root `go.mod`, move shared types and client logic out of `orionclient/`. 
 
 Create standalone `lattigo` Python package. Exposes Lattigo primitives directly (KeyGenerator, Encoder, Encryptor, Decryptor) alongside the existing `Client*` bridge functions during transition.
 
-- [ ] Create directory structure: `python/lattigo/lattigo/`
-- [ ] Bridge already in `python/lattigo/bridge/` from Task 5
-- [ ] Add new bridge Go exports for Lattigo primitives: `NewKeyGenerator`, `GenSecretKey`, `GenRelinearizationKey`, `GenGaloisKey`, `NewEncoder`, `Encode`, `Decode`, `NewEncryptor`, `Encrypt`, `NewDecryptor`, `Decrypt`, `NewMemEvaluationKeySet`, `MarshalBinary`, `UnmarshalBinary` (for keys, ciphertexts, plaintexts)
-- [ ] Keep old `Client*` bridge exports temporarily (still used by old tests)
-- [ ] Move `GoHandle` class to `python/lattigo/lattigo/gohandle.py`
-- [ ] Write Python FFI bindings for new exports: `python/lattigo/lattigo/ckks.py`, `python/lattigo/lattigo/rlwe.py`
-- [ ] Keep old FFI wrappers accessible (in `python/lattigo/lattigo/ffi.py` or similar) for backward compat during transition
-- [ ] Create `python/lattigo/lattigo/__init__.py` — export `ckks`, `rlwe`
-- [ ] Create `python/lattigo/pyproject.toml` with build system
-- [ ] Verify: `cd python/lattigo && pip install -e .` succeeds and builds `.so`
-- [ ] Verify: `from lattigo import ckks, rlwe` works
-- [ ] Write tests for keygen, encode/decode roundtrip, encrypt/decrypt roundtrip using new Lattigo-primitive API
-- [ ] Write test for `MemEvaluationKeySet` marshal/unmarshal roundtrip
+- [x] Create directory structure: `python/lattigo/lattigo/`
+- [x] Bridge already in `python/lattigo/bridge/` from Task 5
+- [x] Add new bridge Go exports for Lattigo primitives: `NewKeyGenerator`, `GenSecretKey`, `GenRelinearizationKey`, `GenGaloisKey`, `NewEncoder`, `Encode`, `Decode`, `NewEncryptor`, `Encrypt`, `NewDecryptor`, `Decrypt`, `NewMemEvaluationKeySet`, `MarshalBinary`, `UnmarshalBinary` (for keys, ciphertexts, plaintexts)
+- [x] Keep old `Client*` bridge exports temporarily (still used by old tests)
+- [x] Move `GoHandle` class to `python/lattigo/lattigo/gohandle.py`
+- [x] Write Python FFI bindings for new exports: `python/lattigo/lattigo/ckks.py`, `python/lattigo/lattigo/rlwe.py`
+- [x] Keep old FFI wrappers accessible (in `python/lattigo/lattigo/ffi.py` or similar) for backward compat during transition
+- [x] Create `python/lattigo/lattigo/__init__.py` — export `ckks`, `rlwe`
+- [x] Create `python/lattigo/pyproject.toml` with build system
+- [x] Verify: `cd python/lattigo && pip install -e .` succeeds and builds `.so`
+- [x] Verify: `from lattigo import ckks, rlwe` works
+- [x] Write tests for keygen, encode/decode roundtrip, encrypt/decrypt roundtrip using new Lattigo-primitive API
+- [x] Write test for `MemEvaluationKeySet` marshal/unmarshal roundtrip
 
 ### Task 7: Migrate tests to Lattigo primitives
 
