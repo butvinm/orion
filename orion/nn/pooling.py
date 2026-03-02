@@ -30,10 +30,7 @@ class AvgPool2d(Conv2d):
         self.on_bias = torch.zeros(self.out_channels)
 
     def forward(self, x):
-        if not self.he_mode:
-            return F.avg_pool2d(x, self.kernel_size, self.stride, self.padding)
-
-        return super().forward(x)
+        return F.avg_pool2d(x, self.kernel_size, self.stride, self.padding)
 
 
 class AdaptiveAvgPool2d(AvgPool2d):
@@ -90,13 +87,10 @@ class AdaptiveAvgPool2d(AvgPool2d):
         return torch.Size((No, on_Co, on_Ho, on_Wo))
 
     def forward(self, x):
-        if not self.he_mode:
-            Ho, Wo = self.output_size
-            if x.shape[2] % Ho != 0 or x.shape[3] % Wo != 0:
-                raise ValueError(
-                    f"Output spatial dimensions {self.output_size} are not " +
-                    f"a multiple of the input spatial dimensions {x.shape[2:]}."
-                )
-            return F.adaptive_avg_pool2d(x, self.output_size)
-
-        return super().forward(x)
+        Ho, Wo = self.output_size
+        if x.shape[2] % Ho != 0 or x.shape[3] % Wo != 0:
+            raise ValueError(
+                f"Output spatial dimensions {self.output_size} are not " +
+                f"a multiple of the input spatial dimensions {x.shape[2:]}."
+            )
+        return F.adaptive_avg_pool2d(x, self.output_size)

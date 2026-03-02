@@ -1,7 +1,7 @@
 import math
 import torch
 
-from .module import Module, timer
+from .module import Module
 
 class Add(Module):
     def __init__(self):
@@ -58,20 +58,5 @@ class Bootstrap(Module):
         self.prescale_ptxt = context.encoder.encode(
             prescale_vec, level=self.input_level, scale=ql)
 
-    @timer
     def forward(self, x):
-        if not self.he_mode:
-            return x
-
-        if self.constant != 0:
-            x += self.constant
-        x *= self.prescale_ptxt
-
-        x = x.bootstrap()
-
-        if self.postscale != 1:
-            x *= self.postscale
-        if self.constant != 0:
-            x -= self.constant
-
         return x

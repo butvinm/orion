@@ -4,7 +4,7 @@ from abc import abstractmethod
 import torch
 import torch.nn as nn
 
-from .module import Module, timer
+from .module import Module
 from ..core import packing
 
 
@@ -16,8 +16,6 @@ class LinearTransform(Module):
         self.set_level(level)
 
         self.diagonals = {}
-        self.transform_ids = {}
-        self.transform_handles = {}
         self.output_rotations = 0
 
     def extra_repr(self):
@@ -39,22 +37,6 @@ class LinearTransform(Module):
     @abstractmethod
     def generate_diagonals(self, last: bool):
         pass
-
-    def compile(self, context):
-        self._lt_evaluator = context.lt_evaluator
-        self.transform_ids = context.lt_evaluator.generate_transforms(self)
-
-    @timer
-    def evaluate_transforms(self, x):
-        ctx = x.context
-        out = ctx.evaluate_transforms(self, x)
-
-        slots = ctx.get_slots()
-        for i in range(1, self.output_rotations+1):
-            out += out.roll(slots // (2**i))
-
-        out += self.on_bias_ptxt
-        return out
 
 
 class Linear(LinearTransform):
@@ -95,23 +77,15 @@ class Linear(LinearTransform):
     def generate_diagonals(self, last):
         self.diagonals, self.output_rotations = packing.pack_linear(self, last)
 
-    def compile(self, context):
-        bias = packing.construct_linear_bias(self)
-        self.on_bias_ptxt = context.encoder.encode(bias, self.level-self.depth)
-        super().compile(context)
-
     def forward(self, x):
-        if not self.he_mode:
-            if x.dim() != 2:
-                extra = " Forgot to call on.Flatten() first?" if x.dim() == 4 else ""
-                raise ValueError(
-                    f"Expected input to {self.__class__.__name__} to have "
-                    f"2 dimensions (N, in_features), but got {x.dim()} "
-                    f"dimension(s): {x.shape}." + extra
-                )
-            return torch.nn.functional.linear(x, self.weight, self.bias)
-
-        return self.evaluate_transforms(x)
+        if x.dim() != 2:
+            extra = " Forgot to call on.Flatten() first?" if x.dim() == 4 else ""
+            raise ValueError(
+                f"Expected input to {self.__class__.__name__} to have "
+                f"2 dimensions (N, in_features), but got {x.dim()} "
+                f"dimension(s): {x.shape}." + extra
+            )
+        return torch.nn.functional.linear(x, self.weight, self.bias)
 
 
 class Conv2d(LinearTransform):
@@ -183,22 +157,14 @@ class Conv2d(LinearTransform):
     def generate_diagonals(self, last):
         self.diagonals, self.output_rotations = packing.pack_conv2d(self, last)
 
-    def compile(self, context):
-        bias = packing.construct_conv2d_bias(self)
-        self.on_bias_ptxt = context.encoder.encode(bias, self.level-self.depth)
-        super().compile(context)
-
     def forward(self, x):
-        if not self.he_mode:
-            if x.dim() != 4:
-                raise ValueError(
-                    f"Expected input to {self.__class__.__name__} to have "
-                    f" 4 dimensions (N, C, H, W), but got {x.dim()} "
-                    f"dimension(s): {x.shape}."
-                )
-            return torch.nn.functional.conv2d(
-                x, self.weight, self.bias, self.stride,
-                self.padding, self.dilation, self.groups
+        if x.dim() != 4:
+            raise ValueError(
+                f"Expected input to {self.__class__.__name__} to have "
+                f" 4 dimensions (N, C, H, W), but got {x.dim()} "
+                f"dimension(s): {x.shape}."
             )
-
-        return self.evaluate_transforms(x)
+        return torch.nn.functional.conv2d(
+            x, self.weight, self.bias, self.stride,
+            self.padding, self.dilation, self.groups
+        )

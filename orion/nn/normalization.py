@@ -3,7 +3,7 @@ from abc import abstractmethod
 import torch
 import torch.nn as nn
 
-from .module import Module, timer
+from .module import Module
 from ..core import packing
 
 class BatchNormNd(Module):
@@ -59,10 +59,8 @@ class BatchNormNd(Module):
             self.on_weight_ptxt = encoder.encode(c, level=level-1, scale=q2)
             self.on_bias_ptxt = encoder.encode(d, level=level-1, scale=q2)
 
-    @timer
     def forward(self, x):
-        if not self.he_mode:
-            self._check_input_dim(x)
+        self._check_input_dim(x)
 
         if self.training:
             exponential_average_factor = 0.0
@@ -75,27 +73,16 @@ class BatchNormNd(Module):
         else:
             exponential_average_factor = 0.0
 
-        if not self.he_mode:
-            return torch.nn.functional.batch_norm(
-                x,
-                self.running_mean,
-                self.running_var,
-                self.weight,
-                self.bias,
-                self.training,
-                exponential_average_factor,
-                self.eps
-            )
-
-        if not self.fused:
-            x -= self.on_running_mean_ptxt
-            x *= self.on_inv_running_std_ptxt
-
-            if self.affine:
-                x *= self.on_weight_ptxt
-                x += self.on_bias_ptxt
-
-        return x
+        return torch.nn.functional.batch_norm(
+            x,
+            self.running_mean,
+            self.running_var,
+            self.weight,
+            self.bias,
+            self.training,
+            exponential_average_factor,
+            self.eps
+        )
 
 
 class BatchNorm1d(BatchNormNd):

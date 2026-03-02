@@ -325,6 +325,7 @@ class TestBootstrapIntegration:
         # We need to replicate the compile() steps up to bootstrap placement.
         from orion.core.network_dag import NetworkDAG
         from orion.core.fuser import Fuser
+        from orion.nn.module import Module
 
         network_dag = NetworkDAG(compiler._traced)
         network_dag.build_dag()
@@ -342,7 +343,7 @@ class TestBootstrapIntegration:
                 module.update_params()
 
         for module in net.modules():
-            if hasattr(module, "he_mode"):
+            if isinstance(module, Module):
                 module.scheme = compiler
 
         if compiler.config.fuse_modules:

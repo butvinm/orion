@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from orion.nn.module import Module, timer
+from orion.nn.module import Module
 from orion.nn.operations import Mult
 
 
@@ -28,12 +28,7 @@ class Activation(Module):
     def compile(self, context):
         self.poly = context.poly_evaluator.generate_monomial(self.coeffs)
 
-    @timer
     def forward(self, x):
-        if self.he_mode:
-            return x.context.poly_evaluator.evaluate_polynomial(
-                x, self.poly, self.output_scale)
-
         # Horner's method
         out = 0
         for coeff in self.coeffs:
@@ -48,10 +43,7 @@ class Quad(Module):
         self.set_depth(1)
 
     def forward(self, x):
-        out = x * x
-        if self.he_mode:
-            out.set_scale(x.scale())
-        return out
+        return x * x
 
 
 class Chebyshev(Module):
@@ -107,19 +99,8 @@ class Chebyshev(Module):
     def compile(self, context):
         self.poly = context.poly_evaluator.generate_chebyshev(self.coeffs)
 
-    @timer
     def forward(self, x):
-        if not self.he_mode:
-            return self.fn(x)
-
-        if not self.fused:
-            if self.prescale != 1:
-                x *= self.prescale
-            if self.constant != 0:
-                x += self.constant
-
-        return x.context.poly_evaluator.evaluate_polynomial(
-            x, self.poly, self.output_scale)
+        return self.fn(x)
 
 
 class ELU(Chebyshev):
@@ -233,14 +214,6 @@ class _Sign(Module):
         return torch.where(x <= 0, torch.tensor(0.0), torch.tensor(1.0))
 
     def forward(self, x):
-        if self.he_mode:
-            l1 = x.level()
-            l2 = self.acts[-1].level - self.acts[-1].depth
-
-            output_level = min(l1, l2)
-            ql = x.context.encoder.get_moduli_chain()[output_level]
-            self.acts[-1].set_output_scale(ql)
-
         for act in self.acts:
             x = act(x)
         return x
@@ -278,7 +251,6 @@ class ReLU(Module):
             self.postscale = int(math.ceil(absmax))
             self.prescale = 1 / self.postscale
 
-    @timer
     def forward(self, x):
         x = self.mult1(x, self.prescale)
         x = self.mult2(x, self.sign(x))

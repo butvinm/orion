@@ -60,18 +60,18 @@ Plus:
 
 Dead code removal. The Python evaluator was deleted in Phase 1, so all `if self.he_mode` branches are unreachable.
 
-- [ ] Remove `he_mode` flag, `he()` method, `_set_mode_for_all()`, and `train()`/`eval()` overrides from `orion/nn/module.py`
-- [ ] Remove `timer` decorator from `orion/nn/module.py` — its only purpose is FHE timing (`if not self.he_mode: return`; else measure). Without `he_mode` it's a no-op. Remove `@timer` from all decorated methods in `linear.py`, `activation.py`, `normalization.py`, `operations.py`
-- [ ] Strip `if self.he_mode` / `if not self.he_mode` branches from `orion/nn/linear.py` — keep only cleartext path
-- [ ] Remove dead `LinearTransform.compile()` and `LinearTransform.evaluate_transforms()` methods from `orion/nn/linear.py` (never called — see Task 3). Also remove dead attributes: `self.transform_ids = {}`, `self.transform_handles = {}`
-- [ ] Strip FHE branches from `orion/nn/activation.py`
-- [ ] Strip FHE branches from `orion/nn/normalization.py`
-- [ ] Strip FHE branches from `orion/nn/pooling.py`
-- [ ] Strip FHE branches from `orion/nn/operations.py`
-- [ ] Strip FHE branch from `orion/nn/reshape.py`
-- [ ] Remove dead imports (`Ciphertext`, `PlainText`, etc.) from nn modules
-- [ ] Fix `compiler.py` line 216: `if hasattr(module, "he_mode")` guard for `module.scheme = self` — replace with `if isinstance(module, Module)` (import from `orion.nn.module`). This is needed because `packing.py` and `level_dag.py` read `module.scheme.params`
-- [ ] Run `pytest tests/` — all tests must pass
+- [x] Remove `he_mode` flag, `he()` method, `_set_mode_for_all()`, and `train()`/`eval()` overrides from `orion/nn/module.py`
+- [x] Remove `timer` decorator from `orion/nn/module.py` — its only purpose is FHE timing (`if not self.he_mode: return`; else measure). Without `he_mode` it's a no-op. Remove `@timer` from all decorated methods in `linear.py`, `activation.py`, `normalization.py`, `operations.py`
+- [x] Strip `if self.he_mode` / `if not self.he_mode` branches from `orion/nn/linear.py` — keep only cleartext path
+- [x] Remove dead `LinearTransform.compile()` and `LinearTransform.evaluate_transforms()` methods from `orion/nn/linear.py` (never called — see Task 3). Also remove dead attributes: `self.transform_ids = {}`, `self.transform_handles = {}`
+- [x] Strip FHE branches from `orion/nn/activation.py`
+- [x] Strip FHE branches from `orion/nn/normalization.py`
+- [x] Strip FHE branches from `orion/nn/pooling.py`
+- [x] Strip FHE branches from `orion/nn/operations.py`
+- [x] Strip FHE branch from `orion/nn/reshape.py`
+- [x] Remove dead imports (`Ciphertext`, `PlainText`, etc.) from nn modules
+- [x] Fix `compiler.py` line 216: `if hasattr(module, "he_mode")` guard for `module.scheme = self` — replace with `if isinstance(module, Module)` (import from `orion.nn.module`). This is needed because `packing.py` and `level_dag.py` read `module.scheme.params`
+- [x] Run `pytest tests/` — all tests must pass
 
 ### Task 2: Clean up Ciphertext/PlainText dead code (ARCH.md 3.3)
 

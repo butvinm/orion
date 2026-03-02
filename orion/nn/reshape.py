@@ -11,6 +11,4 @@ class Flatten(Module):
         return super().extra_repr() + ", start_dim=1"
 
     def forward(self, x):
-        if self.he_mode:
-            return x
         return torch.flatten(x, start_dim=1)

@@ -213,7 +213,7 @@ class Compiler:
 
         # Set scheme ref on modules for backward compat with packing.py
         for module in net.modules():
-            if hasattr(module, "he_mode"):
+            if isinstance(module, Module):
                 module.scheme = self
 
         # Fuse modules

@@ -229,6 +229,7 @@ class TestGaloisVsLattigo:
         import orion.nn as on
         from orion.params import CKKSParams
         from orion.compiler import Compiler
+        from orion.nn.module import Module
         from orion.nn.linear import LinearTransform
         from orion.core.network_dag import NetworkDAG
         from orion.core.fuser import Fuser
@@ -274,7 +275,7 @@ class TestGaloisVsLattigo:
             if hasattr(module, "update_params") and callable(module.update_params):
                 module.update_params()
         for module in net.modules():
-            if hasattr(module, "he_mode"):
+            if isinstance(module, Module):
                 module.scheme = compiler
 
         if compiler.config.fuse_modules:
