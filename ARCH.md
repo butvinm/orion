@@ -225,15 +225,29 @@ Pure Go. No Python, no PyTorch, no skeleton network. The model is loaded once an
 ### 3. Encrypt and query (JavaScript, browser)
 
 ```javascript
-import { KeyGenerator, Encryptor, Decryptor, Encoder } from "lattigo";
+import {
+  CKKSParameters,
+  KeyGenerator,
+  Encryptor,
+  Decryptor,
+  Encoder,
+  MemEvaluationKeySet,
+  unmarshalCiphertext,
+} from "lattigo";
 
 // Fetch params from server — CKKS params, key manifest, input level
 const params = await fetch("/params").then((r) => r.json());
 
 // Generate keys in the browser (runs in WASM, secret key never leaves the client)
-const keygen = new KeyGenerator(params.ckks);
-const secretKey = keygen.genSecretKey();
-const evalKeys = keygen.genEvalKeys(params.manifest);
+const ckks = CKKSParameters.fromJSON(params.ckks);
+const keygen = new KeyGenerator(ckks);
+const sk = keygen.genSecretKey();
+const pk = keygen.genPublicKey(sk);
+const rlk = keygen.genRelinearizationKey(sk);
+const gks = params.manifest.galois_elements.map((el) =>
+  keygen.genGaloisKey(sk, el),
+);
+const evalKeys = new MemEvaluationKeySet(rlk, gks);
 
 // Upload eval keys once — server caches them in a session
 const { id: sessionId } = await fetch("/session", {
@@ -242,12 +256,12 @@ const { id: sessionId } = await fetch("/session", {
 }).then((r) => r.json());
 
 // Encode + encrypt the input (flatten, pad to slots, encode, encrypt)
-const encoder = new Encoder(params.ckks);
-const slots = params.ckks.maxSlots;
+const encoder = new Encoder(ckks);
+const slots = ckks.maxSlots();
 const padded = new Float64Array(slots);
 padded.set(inputData.flat());
 const pt = encoder.encode(padded, params.inputLevel);
-const encryptor = new Encryptor(params.ckks, secretKey);
+const encryptor = new Encryptor(ckks, pk);
 const ct = encryptor.encrypt(pt);
 
 // Run inference — only ciphertext sent, keys are already on server
@@ -258,12 +272,12 @@ const response = await fetch(`/session/${sessionId}/infer`, {
 
 // Decrypt the result and decode
 const resultCt = unmarshalCiphertext(await response.arrayBuffer());
-const decryptor = new Decryptor(params.ckks, secretKey);
+const decryptor = new Decryptor(ckks, sk);
 const resultPt = decryptor.decrypt(resultCt);
 const output = encoder.decode(resultPt).slice(0, 10);
 ```
 
-The secret key is generated in the browser and never leaves it. Lattigo bindings (Go compiled to WASM, ~8 MB uncompressed / ~3 MB gzipped) handle all cryptographic operations and serialization. Tensor-to-slot mapping (flatten, pad) is trivial user code — no library needed.
+The secret key is generated in the browser and never leaves it. Lattigo bindings (Go compiled to WASM, ~8 MB uncompressed / ~3 MB gzipped) handle all cryptographic operations and serialization. Tensor-to-slot mapping (flatten, pad) is trivial user code — no library needed. For models requiring bootstrap keys, see `examples/wasm-demo/client/client.ts` for the full flow including `BootstrapParameters` construction.
 
 ### 4. Self-contained Python (single machine, prototyping)
 
@@ -1244,7 +1258,8 @@ Starts after Phases 1–3 are stable.
 
 Build the Go bridge code to WASM target (`GOOS=js GOARCH=wasm`). The WASM binary exposes the same client operations as the Python bridge:
 
-- `KeyGenerator`: `genSecretKey()`, `genPublicKey()`, `genRLK()`, `genGaloisKey(element)`, `genBootstrapKeys(slots, logP)`, `genEvalKeys(manifest)`
+- `KeyGenerator`: `genSecretKey()`, `genPublicKey(sk)`, `genRelinearizationKey(sk)`, `genGaloisKey(sk, element)`
+- `BootstrapParameters`: `fromLiteral(params, literalJSON)`, `genEvaluationKeys(sk)`
 - `Encoder`: `encode(values, level, scale)`, `decode(plaintext)`
 - `Encryptor`: `encrypt(plaintext)`
 - `Decryptor`: `decrypt(ciphertext)`
@@ -1270,7 +1285,7 @@ Tensor-to-slot mapping (flatten, pad, split) is trivial user code — no JS libr
 
 - [ ] `js/lattigo/` builds to `.wasm` (< 10 MB uncompressed)
 - [ ] TypeScript wrappers compile without errors
-- [ ] `genSecretKey()` → `genEvalKeys(manifest)` → `encrypt()` → `decrypt()` roundtrip works in Node.js
+- [ ] Full key generation flow (SK → PK → RLK → Galois keys → MemEvaluationKeySet) → `encrypt()` → `decrypt()` roundtrip works in Node.js
 - [ ] JS example: keygen → encode → encrypt → decrypt → decode roundtrip works in Node.js
 - [ ] Browser demo: compile MLP (Python) → serve (Go) → query (browser) → correct decrypted result
 - [ ] WASM loads and initializes in < 3 seconds on modern browser
