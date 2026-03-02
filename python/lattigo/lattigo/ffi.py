@@ -55,6 +55,12 @@ def _setup_prototypes(lib):
     lib.CKKSParamsGaloisElement.argtypes = [_uintptr, ctypes.c_int]
     lib.CKKSParamsGaloisElement.restype = ctypes.c_ulonglong
 
+    lib.CKKSParamsModuliChain.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_int), _errout]
+    lib.CKKSParamsModuliChain.restype = ctypes.POINTER(ctypes.c_ulonglong)
+
+    lib.CKKSParamsAuxModuliChain.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_int), _errout]
+    lib.CKKSParamsAuxModuliChain.restype = ctypes.POINTER(ctypes.c_ulonglong)
+
     # --- KeyGenerator ---
     lib.NewKeyGenerator.argtypes = [_uintptr, _errout]
     lib.NewKeyGenerator.restype = _uintptr
@@ -162,6 +168,25 @@ def _setup_prototypes(lib):
     lib.MemEvalKeySetUnmarshal.argtypes = [ctypes.c_void_p, ctypes.c_ulong, _errout]
     lib.MemEvalKeySetUnmarshal.restype = _uintptr
 
+    # --- Polynomial generation ---
+    lib.GeneratePolynomialMonomial.argtypes = [
+        ctypes.POINTER(ctypes.c_double), ctypes.c_int, _errout,
+    ]
+    lib.GeneratePolynomialMonomial.restype = _uintptr
+
+    lib.GeneratePolynomialChebyshev.argtypes = [
+        ctypes.POINTER(ctypes.c_double), ctypes.c_int, _errout,
+    ]
+    lib.GeneratePolynomialChebyshev.restype = _uintptr
+
+    # --- Minimax sign coefficients ---
+    lib.GenerateMinimaxSignCoeffs.argtypes = [
+        ctypes.POINTER(ctypes.c_int), ctypes.c_int,
+        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int), _errout,
+    ]
+    lib.GenerateMinimaxSignCoeffs.restype = ctypes.POINTER(ctypes.c_double)
+
 
 def _ensure_prototypes():
     """Ensure prototypes are set up (call once on first FFI use)."""
@@ -206,6 +231,34 @@ def ckks_params_galois_element(h: GoHandle, rotation: int) -> int:
     return int(_lib_call().CKKSParamsGaloisElement(
         _uintptr(h.raw), ctypes.c_int(rotation),
     ))
+
+
+def ckks_params_moduli_chain(h: GoHandle) -> list[int]:
+    lib = _lib_call()
+    err = _make_errout()
+    out_len = ctypes.c_int(0)
+    ptr = lib.CKKSParamsModuliChain(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
+    _check_err(err)
+    n = out_len.value
+    if n == 0:
+        return []
+    result = [int(ptr[i]) for i in range(n)]
+    lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
+    return result
+
+
+def ckks_params_aux_moduli_chain(h: GoHandle) -> list[int]:
+    lib = _lib_call()
+    err = _make_errout()
+    out_len = ctypes.c_int(0)
+    ptr = lib.CKKSParamsAuxModuliChain(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
+    _check_err(err)
+    n = out_len.value
+    if n == 0:
+        return []
+    result = [int(ptr[i]) for i in range(n)]
+    lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
+    return result
 
 
 # =========================================================================
@@ -475,3 +528,53 @@ def mem_eval_key_set_marshal(h: GoHandle) -> bytes:
 
 def mem_eval_key_set_unmarshal(data: bytes) -> GoHandle:
     return _unmarshal("MemEvalKeySetUnmarshal", data, "MemEvaluationKeySet")
+
+
+# =========================================================================
+# Polynomial generation
+# =========================================================================
+
+
+def generate_polynomial_monomial(coeffs: list[float]) -> GoHandle:
+    arr, n = _doubles_ptr(coeffs)
+    err = _make_errout()
+    r = _lib_call().GeneratePolynomialMonomial(arr, n, ctypes.byref(err))
+    _check_err(err)
+    return GoHandle(r, tag="Polynomial")
+
+
+def generate_polynomial_chebyshev(coeffs: list[float]) -> GoHandle:
+    arr, n = _doubles_ptr(coeffs)
+    err = _make_errout()
+    r = _lib_call().GeneratePolynomialChebyshev(arr, n, ctypes.byref(err))
+    _check_err(err)
+    return GoHandle(r, tag="Polynomial")
+
+
+# =========================================================================
+# Minimax sign coefficients
+# =========================================================================
+
+
+def generate_minimax_sign_coeffs(
+    degrees: list[int], prec: int, log_alpha: int, log_err: int, debug: int,
+) -> list[float]:
+    lib = _lib_call()
+    err = _make_errout()
+    out_len = ctypes.c_int(0)
+    n = len(degrees)
+    deg_arr = (ctypes.c_int * n)(*degrees)
+    ptr = lib.GenerateMinimaxSignCoeffs(
+        deg_arr, ctypes.c_int(n),
+        ctypes.c_int(prec),
+        ctypes.c_int(log_alpha),
+        ctypes.c_int(log_err),
+        ctypes.c_int(debug),
+        ctypes.byref(out_len),
+        ctypes.byref(err),
+    )
+    _check_err(err)
+    n_out = out_len.value
+    result = [float(ptr[i]) for i in range(n_out)]
+    lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
+    return result

@@ -21,7 +21,7 @@ from lattigo.rlwe import (
 )
 
 # Path to pre-compiled test models
-TESTDATA_DIR = os.path.join(os.path.dirname(__file__), "..", "evaluator", "testdata")
+TESTDATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "evaluator", "testdata")
 MLP_ORION = os.path.join(TESTDATA_DIR, "mlp.orion")
 MLP_INPUT = os.path.join(TESTDATA_DIR, "mlp.input.json")
 MLP_EXPECTED = os.path.join(TESTDATA_DIR, "mlp.expected.json")

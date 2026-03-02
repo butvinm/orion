@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, List, Literal
 import torch
 import numpy as np
 
-from lattigo import legacy_ffi as ffi
+from lattigo import ffi as lattigo_ffi
 from lattigo.gohandle import GoHandle
 
 if TYPE_CHECKING:
@@ -172,28 +172,27 @@ class NewParameters:
 
 
 # =========================================================================
-# CompilerBackend - wraps orionclient FFI for compile-time operations
+# CompilerBackend - wraps Lattigo FFI for compile-time operations
 # =========================================================================
 
 class CompilerBackend:
-    """Adapter providing the LattigoLibrary interface via orionclient FFI.
+    """Adapter providing the LattigoLibrary interface via Lattigo FFI.
 
     The compiler and its helpers (NewEncoder, PolynomialGenerator)
     call self.backend.XXX(). This class provides those methods by
-    delegating to the orionclient FFI.
+    delegating to the lattigo bridge FFI using CKKS Parameters and Encoder.
     """
 
     def __init__(self):
-        self._client_h = None
-        self._params_json_str = None
+        self._params_h = None
+        self._encoder_h = None
+        self._max_slots = None
 
     def setup_bindings(self, params: NewParameters):
         """Initialize Go backend with the given parameters.
 
-        Creates a Client internally (generates a throwaway key pair, but
-        the compiler only uses the encoder and parameter queries).
+        Creates CKKS Parameters and Encoder for compile-time encode/decode.
         """
-        # Build the JSON that orionclient expects
         p = params.ckks_params
         ring_map = {"standard": "standard", "conjugateinvariant": "conjugate_invariant"}
         ring_type = ring_map.get(p.ringtype.lower(), "conjugate_invariant")
@@ -209,24 +208,30 @@ class CompilerBackend:
         if p.boot_logp:
             params_dict["boot_logp"] = list(p.boot_logp)
 
-        self._params_json_str = json.dumps(params_dict)
-        self._client_h = ffi.new_client(self._params_json_str)
+        params_json = json.dumps(params_dict)
+        self._params_h = lattigo_ffi.new_ckks_params(params_json)
+        self._encoder_h = lattigo_ffi.new_ckks_encoder(self._params_h)
+        self._max_slots = lattigo_ffi.ckks_params_max_slots(self._params_h)
 
     # -- Encoder operations --
 
     def NewEncoder(self):
-        """No-op. The encoder is part of the Client."""
+        """No-op. Encoder created in setup_bindings."""
         pass
 
     def Encode(self, values, level, scale):
-        """Encode values into a plaintext. Returns a handle (int)."""
+        """Encode values into a plaintext. Returns a GoHandle."""
         if not isinstance(values, list):
             values = list(values)
-        return ffi.client_encode(self._client_h, values, level, scale)
+        return lattigo_ffi.ckks_encoder_encode(
+            self._encoder_h, self._params_h, values, level, scale,
+        )
 
     def Decode(self, pt_h):
         """Decode a plaintext handle to float values."""
-        return ffi.client_decode(self._client_h, pt_h)
+        return lattigo_ffi.ckks_encoder_decode(
+            self._encoder_h, pt_h, self._max_slots,
+        )
 
     def DeletePlaintext(self, pt_h):
         """Delete a plaintext handle."""
@@ -235,43 +240,47 @@ class CompilerBackend:
     # -- Parameter queries --
 
     def GetMaxSlots(self):
-        return ffi.client_max_slots(self._client_h)
+        return self._max_slots
 
     def GetGaloisElement(self, rotation):
-        return ffi.client_galois_element(self._client_h, rotation)
+        return lattigo_ffi.ckks_params_galois_element(self._params_h, rotation)
 
     def GetModuliChain(self):
-        return ffi.client_moduli_chain(self._client_h)
+        return lattigo_ffi.ckks_params_moduli_chain(self._params_h)
 
     def GetAuxModuliChain(self):
-        return ffi.client_aux_moduli_chain(self._client_h)
+        return lattigo_ffi.ckks_params_aux_moduli_chain(self._params_h)
 
     # -- Polynomial operations --
 
     def GenerateMonomial(self, coeffs):
-        """Generate a monomial polynomial. Returns a handle (int)."""
+        """Generate a monomial polynomial. Returns a GoHandle."""
         if not isinstance(coeffs, list):
             coeffs = list(coeffs)
-        return ffi.generate_polynomial_monomial(coeffs)
+        return lattigo_ffi.generate_polynomial_monomial(coeffs)
 
     def GenerateChebyshev(self, coeffs):
-        """Generate a Chebyshev polynomial. Returns a handle (int)."""
+        """Generate a Chebyshev polynomial. Returns a GoHandle."""
         if not isinstance(coeffs, list):
             coeffs = list(coeffs)
-        return ffi.generate_polynomial_chebyshev(coeffs)
+        return lattigo_ffi.generate_polynomial_chebyshev(coeffs)
 
     def GenerateMinimaxSignCoeffs(self, degrees, prec, logalpha, logerr, debug):
         """Generate minimax sign polynomial coefficients."""
-        return ffi.generate_minimax_sign_coeffs(degrees, prec, logalpha, logerr, debug)
+        return lattigo_ffi.generate_minimax_sign_coeffs(
+            degrees, prec, logalpha, logerr, debug,
+        )
 
     # -- Lifecycle --
 
     def DeleteScheme(self):
-        """Release the Go client."""
-        if self._client_h:
-            ffi.client_close(self._client_h)   # step 1: zeros SK in Go
-            self._client_h.close()              # step 2: DeleteHandle (frees cgo slot)
-            self._client_h = None
+        """Release Go resources."""
+        if self._encoder_h:
+            self._encoder_h.close()
+            self._encoder_h = None
+        if self._params_h:
+            self._params_h.close()
+            self._params_h = None
 
     def close(self):
         """Release the Go backend. Idempotent."""
@@ -383,7 +392,7 @@ class NewEncoder:
 # =========================================================================
 
 class PolynomialGenerator:
-    """Compile-time polynomial generation via orionclient FFI."""
+    """Compile-time polynomial generation via Lattigo FFI."""
 
     def __init__(self, backend):
         self.backend = backend

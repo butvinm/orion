@@ -24,12 +24,8 @@ def build(setup_kwargs=None):
     # Set up paths
     root_dir = Path(__file__).parent.parent
     bridge_dir = root_dir / "python" / "lattigo" / "bridge"
-    # Primary output: old location for backward compat
-    output_dir = root_dir / "orion" / "backend" / "orionclient"
+    output_dir = root_dir / "python" / "lattigo" / "lattigo"
     output_path = output_dir / output_file
-    # Secondary output: new lattigo package location
-    lattigo_output_dir = root_dir / "python" / "lattigo" / "lattigo"
-    lattigo_output_path = lattigo_output_dir / output_file
 
     # Set up CGO for Go build
     env = os.environ.copy()
@@ -59,12 +55,6 @@ def build(setup_kwargs=None):
     except subprocess.CalledProcessError as e:
         print(f"Go build failed with exit code {e.returncode}")
         sys.exit(1)
-
-    # Copy to lattigo package directory
-    import shutil
-    lattigo_output_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(str(output_path), str(lattigo_output_path))
-    print(f"Copied to {lattigo_output_path}")
 
     # Return setup_kwargs for Poetry
     return setup_kwargs or {}

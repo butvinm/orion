@@ -232,18 +232,18 @@ New CGO bridge wrapping Go evaluator. Accepts raw Lattigo bytes.
 
 ### Task 10: Final cleanup and acceptance verification
 
-- [ ] Delete old `orion/` directory (includes `client.py`, `ciphertext.py` — not moved)
-- [ ] Delete old `orion/backend/` directory
-- [ ] Remove old `Client*` bridge exports from `python/lattigo/bridge/` (no longer needed — Task 7 migrated all tests)
-- [ ] Remove old `Client*` FFI wrappers from `python/lattigo/lattigo/ffi.py`
-- [ ] Update root `pyproject.toml` or remove
-- [ ] Move tests to `python/tests/` or per-package test dirs
-- [ ] Update all test imports to new package names
-- [ ] Run full test suite — all must pass
-- [ ] Verify no circular imports between packages
-- [ ] Verify ARCH.md Phase 3 acceptance checklist (all items)
-- [ ] Run `go vet ./...` — no issues
-- [ ] Update CLAUDE.md with new project structure and build commands
+- [x] Delete old `orion/` directory (includes `client.py`, `ciphertext.py` — not moved)
+- [x] Delete old `orion/backend/` directory
+- [x] Remove old `Client*` bridge exports from `python/lattigo/bridge/` (no longer needed — Task 7 migrated all tests)
+- [x] Remove old `Client*` FFI wrappers from `python/lattigo/lattigo/ffi.py`
+- [x] Update root `pyproject.toml` or remove
+- [x] Move tests to `python/tests/` or per-package test dirs
+- [x] Update all test imports to new package names
+- [x] Run full test suite — all must pass
+- [x] Verify no circular imports between packages
+- [x] Verify ARCH.md Phase 3 acceptance checklist (all items)
+- [x] Run `go vet ./...` — no issues
+- [x] Update CLAUDE.md with new project structure and build commands
 
 ## Technical Details
 

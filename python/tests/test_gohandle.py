@@ -25,8 +25,7 @@ from lattigo.rlwe import (
 )
 from lattigo.gohandle import GoHandle
 
-# Old FFI imports — still needed for TestClientModuliChain and TestGoErrorPropagation
-from lattigo import legacy_ffi as old_ffi
+from lattigo import ffi as lattigo_ffi
 
 
 MLP_PARAMS = CKKSParams(
@@ -437,49 +436,42 @@ class TestCiphertextClose:
         _cleanup()
 
 
-# --- F8: client_moduli_chain / client_aux_moduli_chain with errOut ---
-# These tests use the old Client* bridge FFI directly (not the Client class).
-# They test bridge functions that will be removed in Task 10.
+# --- Moduli chain tests using new lattigo API ---
 
 
-class TestClientModuliChain:
-    """F8: ClientModuliChain and ClientAuxModuliChain now use errOut for error propagation."""
+class TestModuliChain:
+    """Test CKKSParams moduli chain via new lattigo API."""
 
-    def test_client_moduli_chain_returns_list(self):
-        """client_moduli_chain returns a non-empty list of uint64 moduli."""
-        client_h = old_ffi.new_client(MLP_PARAMS.to_bridge_json())
-        chain = old_ffi.client_moduli_chain(client_h)
+    def test_moduli_chain_returns_list(self):
+        """moduli_chain() returns a non-empty list of uint64 moduli."""
+        params = _make_params()
+        chain = params.moduli_chain()
         assert isinstance(chain, list)
         assert len(chain) > 0
         assert all(isinstance(v, int) and v > 0 for v in chain)
-        old_ffi.client_close(client_h)
-        client_h.close()
+        params.close()
         _cleanup()
 
-    def test_client_aux_moduli_chain_returns_list(self):
-        """client_aux_moduli_chain returns a list of uint64 moduli (may be empty for some params)."""
-        client_h = old_ffi.new_client(MLP_PARAMS.to_bridge_json())
-        chain = old_ffi.client_aux_moduli_chain(client_h)
+    def test_aux_moduli_chain_returns_list(self):
+        """aux_moduli_chain() returns a list of uint64 moduli."""
+        params = _make_params()
+        chain = params.aux_moduli_chain()
         assert isinstance(chain, list)
-        # Aux chain may be empty for some parameter sets, but all values should be positive ints
         assert all(isinstance(v, int) and v > 0 for v in chain)
-        old_ffi.client_close(client_h)
-        client_h.close()
+        params.close()
         _cleanup()
 
     def test_moduli_chain_matches_params(self):
         """Moduli chain length should correspond to the number of Q primes in params."""
-        client_h = old_ffi.new_client(MLP_PARAMS.to_bridge_json())
-        chain = old_ffi.client_moduli_chain(client_h)
-        # logq has len(MLP_PARAMS.logq) primes
+        params = _make_params()
+        chain = params.moduli_chain()
         assert len(chain) == len(MLP_PARAMS.logq)
-        old_ffi.client_close(client_h)
-        client_h.close()
+        params.close()
         _cleanup()
 
     def test_moduli_chain_different_params(self):
         """Moduli chain length matches logq for different parameter sets."""
-        params2 = CKKSParams(
+        params = Parameters.from_logn(
             logn=13,
             logq=[29, 26, 26, 26],
             logp=[29, 29],
@@ -487,41 +479,19 @@ class TestClientModuliChain:
             h=8192,
             ring_type="conjugate_invariant",
         )
-        client_h = old_ffi.new_client(params2.to_bridge_json())
-        chain = old_ffi.client_moduli_chain(client_h)
-        assert len(chain) == len(params2.logq)
-        old_ffi.client_close(client_h)
-        client_h.close()
-        _cleanup()
-
-    def test_moduli_chain_closed_handle_raises(self):
-        """Calling client_moduli_chain on a closed handle raises RuntimeError."""
-        client_h = old_ffi.new_client(MLP_PARAMS.to_bridge_json())
-        old_ffi.client_close(client_h)
-        client_h.close()
-        with pytest.raises(RuntimeError):
-            old_ffi.client_moduli_chain(client_h)
-        _cleanup()
-
-    def test_aux_moduli_chain_closed_handle_raises(self):
-        """Calling client_aux_moduli_chain on a closed handle raises RuntimeError."""
-        client_h = old_ffi.new_client(MLP_PARAMS.to_bridge_json())
-        old_ffi.client_close(client_h)
-        client_h.close()
-        with pytest.raises(RuntimeError):
-            old_ffi.client_aux_moduli_chain(client_h)
+        chain = params.moduli_chain()
+        assert len(chain) == 4
+        params.close()
         _cleanup()
 
 
 class TestGoErrorPropagation:
     def test_error_propagation(self):
         """Trigger a Go error, verify Python gets RuntimeError, not process crash."""
-        # Invalid params should raise RuntimeError via errOut pattern
         bad_json = '{"logn": 3, "logq": [10], "logp": [10], "logscale": 5, "h": 64, "ring_type": "standard"}'
         with pytest.raises(RuntimeError) as exc_info:
-            old_ffi.new_client(bad_json)
+            Parameters.from_json(bad_json)
 
-        # Error message should be non-empty and meaningful
         assert len(str(exc_info.value)) > 0
 
         # Process should still be alive and functional after the error

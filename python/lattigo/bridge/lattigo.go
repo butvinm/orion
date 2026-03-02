@@ -68,6 +68,46 @@ func CKKSParamsGaloisElement(paramsH C.uintptr_t, rotation C.int) C.ulonglong {
 	return C.ulonglong(p.GaloisElement(int(rotation)))
 }
 
+//export CKKSParamsModuliChain
+func CKKSParamsModuliChain(paramsH C.uintptr_t, outLen *C.int, errOut **C.char) *C.ulonglong {
+	defer catchPanic(errOut)
+	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
+	qi := p.Q()
+	n := len(qi)
+	if n == 0 {
+		*outLen = 0
+		return nil
+	}
+	size := C.size_t(n) * C.size_t(unsafe.Sizeof(C.ulonglong(0)))
+	ptr := (*C.ulonglong)(C.malloc(size))
+	slice := unsafe.Slice(ptr, n)
+	for i, v := range qi {
+		slice[i] = C.ulonglong(v)
+	}
+	*outLen = C.int(n)
+	return ptr
+}
+
+//export CKKSParamsAuxModuliChain
+func CKKSParamsAuxModuliChain(paramsH C.uintptr_t, outLen *C.int, errOut **C.char) *C.ulonglong {
+	defer catchPanic(errOut)
+	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
+	pi := p.P()
+	n := len(pi)
+	if n == 0 {
+		*outLen = 0
+		return nil
+	}
+	size := C.size_t(n) * C.size_t(unsafe.Sizeof(C.ulonglong(0)))
+	ptr := (*C.ulonglong)(C.malloc(size))
+	slice := unsafe.Slice(ptr, n)
+	for i, v := range pi {
+		slice[i] = C.ulonglong(v)
+	}
+	*outLen = C.int(n)
+	return ptr
+}
+
 // =====================================================================
 // KeyGenerator
 // =====================================================================

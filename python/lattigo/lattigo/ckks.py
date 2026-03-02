@@ -65,6 +65,14 @@ class Parameters:
         """Galois element for a given rotation step."""
         return ffi.ckks_params_galois_element(self._handle, rotation)
 
+    def moduli_chain(self) -> list[int]:
+        """Q primes (ciphertext moduli chain)."""
+        return ffi.ckks_params_moduli_chain(self._handle)
+
+    def aux_moduli_chain(self) -> list[int]:
+        """P primes (auxiliary moduli chain for key switching)."""
+        return ffi.ckks_params_aux_moduli_chain(self._handle)
+
     def close(self):
         self._handle.close()
 

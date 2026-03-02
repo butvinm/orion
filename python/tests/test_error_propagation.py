@@ -1,8 +1,9 @@
-"""Phase 7 validation: Go errors surface as Python exceptions with messages."""
+"""Verify Go errors surface as Python exceptions with messages."""
 
 import pytest
 
-from lattigo import legacy_ffi as ffi
+from lattigo import ffi as lattigo_ffi
+from lattigo.ckks import Parameters
 
 
 class TestErrorPropagation:
@@ -12,25 +13,24 @@ class TestErrorPropagation:
         """Invalid CKKS parameters should raise RuntimeError, not crash."""
         bad_json = '{"logn": 3, "logq": [10], "logp": [10], "logscale": 5, "h": 64, "ring_type": "standard"}'
         with pytest.raises(RuntimeError):
-            ffi.new_client(bad_json)
+            Parameters.from_json(bad_json)
 
     def test_malformed_json_raises_runtime_error(self):
         """Malformed JSON should raise RuntimeError with a message."""
         with pytest.raises(RuntimeError):
-            ffi.new_client("{not valid json}")
+            Parameters.from_json("{not valid json}")
 
     def test_bad_ciphertext_unmarshal_raises(self):
         """Invalid ciphertext bytes should raise RuntimeError."""
         with pytest.raises(RuntimeError):
-            ffi.ciphertext_unmarshal(b"not a valid ciphertext at all!!")
+            lattigo_ffi.rlwe_ciphertext_unmarshal(b"not a valid ciphertext at all!!")
 
     def test_error_message_is_meaningful(self):
         """Error messages should contain useful diagnostic info."""
         try:
-            ffi.new_client("{}")
+            Parameters.from_json("{}")
         except RuntimeError as e:
             msg = str(e)
             assert len(msg) > 0, "Error message should not be empty"
         else:
             pytest.fail("Expected RuntimeError")
-
