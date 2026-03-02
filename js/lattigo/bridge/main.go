@@ -17,6 +17,22 @@ func main() {
 		return nil
 	}))
 
+	// CKKS Parameters
+	ns.Set("newCKKSParams", js.FuncOf(newCKKSParams))
+	ns.Set("ckksMaxSlots", js.FuncOf(ckksMaxSlots))
+	ns.Set("ckksMaxLevel", js.FuncOf(ckksMaxLevel))
+	ns.Set("ckksDefaultScale", js.FuncOf(ckksDefaultScale))
+	ns.Set("ckksGaloisElement", js.FuncOf(ckksGaloisElement))
+	ns.Set("ckksModuliChain", js.FuncOf(ckksModuliChain))
+	ns.Set("ckksAuxModuliChain", js.FuncOf(ckksAuxModuliChain))
+
+	// Key Generation
+	ns.Set("newKeyGenerator", js.FuncOf(newKeyGenerator))
+	ns.Set("keyGenGenSecretKey", js.FuncOf(keyGenGenSecretKey))
+	ns.Set("keyGenGenPublicKey", js.FuncOf(keyGenGenPublicKey))
+	ns.Set("keyGenGenRelinKey", js.FuncOf(keyGenGenRelinKey))
+	ns.Set("keyGenGenGaloisKey", js.FuncOf(keyGenGenGaloisKey))
+
 	// Readiness signal — MUST be last registration.
 	ns.Set("__ready", true)
 

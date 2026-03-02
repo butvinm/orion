@@ -78,12 +78,12 @@ Set up the bridge scaffolding: module structure, handle management, and the two 
 
 Port parameter construction and key generation from `python/lattigo/bridge/lattigo.go`.
 
-- [ ] Add `params.go` — `newCKKSParams(paramsJSON) → handleID` (mirrors `NewCKKSParams` in Python bridge). Parse JSON with `LogN`, `LogQ`, `LogP`, `LogDefaultScale`, `H`, `RingType`.
-- [ ] Add param accessors: `ckksMaxSlots(hID)`, `ckksMaxLevel(hID)`, `ckksDefaultScale(hID)`, `ckksGaloisElement(hID, rotation)`, `ckksModuliChain(hID)`, `ckksAuxModuliChain(hID)`
-- [ ] Add `keygen.go` — `newKeyGenerator(paramsHID) → hID`, `keyGenGenSecretKey(kgHID) → hID`, `keyGenGenPublicKey(kgHID, skHID) → hID`, `keyGenGenRelinKey(kgHID, skHID) → hID`, `keyGenGenGaloisKey(kgHID, skHID, galoisElement) → hID`
-- [ ] Register all functions in `main.go` via `js.Global().Get("lattigo").Set(name, js.FuncOf(...))` — namespace under `globalThis.lattigo.*`
-- [ ] Create minimal Node.js test: load WASM → create params → keygen → verify handles are valid numbers
-- [ ] Run tests — must pass before next task
+- [x] Add `params.go` — `newCKKSParams(paramsJSON) → handleID` (mirrors `NewCKKSParams` in Python bridge). Parse JSON with `LogN`, `LogQ`, `LogP`, `LogDefaultScale`, `H`, `RingType`.
+- [x] Add param accessors: `ckksMaxSlots(hID)`, `ckksMaxLevel(hID)`, `ckksDefaultScale(hID)`, `ckksGaloisElement(hID, rotation)`, `ckksModuliChain(hID)`, `ckksAuxModuliChain(hID)`
+- [x] Add `keygen.go` — `newKeyGenerator(paramsHID) → hID`, `keyGenGenSecretKey(kgHID) → hID`, `keyGenGenPublicKey(kgHID, skHID) → hID`, `keyGenGenRelinKey(kgHID, skHID) → hID`, `keyGenGenGaloisKey(kgHID, skHID, galoisElement) → hID`
+- [x] Register all functions in `main.go` via `js.Global().Get("lattigo").Set(name, js.FuncOf(...))` — namespace under `globalThis.lattigo.*`
+- [x] Create minimal Node.js test: load WASM → create params → keygen → verify handles are valid numbers
+- [x] Run tests — must pass before next task
 
 ### Task 3: Go WASM bridge — encoder, encryptor, decryptor
 
