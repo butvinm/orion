@@ -164,12 +164,12 @@ Comprehensive Node.js tests exercising the TypeScript API.
 
 Create self-contained example scripts in `js/examples/`.
 
-- [ ] Create `js/examples/node/package.json` — depends on `@orion/lattigo` (local path)
-- [ ] Create `js/examples/node/roundtrip.ts` — full keygen → encode → encrypt → decrypt → decode flow with console output showing values and timing
-- [ ] Create `js/examples/node/eval-keys.ts` — reference implementation showing full manual key generation from a `KeyManifest` JSON: parse manifest, generate RLK (if `needs_rlk`), generate each Galois key (from `galois_elements`), construct bootstrap `ParametersLiteral` (handling ConjugateInvariant `LogN+1`, `Xs` propagation, `LogSlots` from `bootstrap_slots`), call `btpParamsGenEvaluationKeys`, assemble final `MemEvaluationKeySet`. Print timing for each step and total key sizes. This is the example users copy from.
-- [ ] Run `npx tsx js/examples/node/roundtrip.ts` — verify it prints decoded values matching input within CKKS tolerance
-- [ ] Run `npx tsx js/examples/node/eval-keys.ts` — verify it prints key sizes and completes without error
-- [ ] Run tests — must pass before next task
+- [x] Create `js/examples/node/package.json` — depends on `@orion/lattigo` (local path)
+- [x] Create `js/examples/node/roundtrip.ts` — full keygen → encode → encrypt → decrypt → decode flow with console output showing values and timing
+- [x] Create `js/examples/node/eval-keys.ts` — reference implementation showing full manual key generation from a `KeyManifest` JSON: parse manifest, generate RLK (if `needs_rlk`), generate each Galois key (from `galois_elements`), construct bootstrap `ParametersLiteral` (handling ConjugateInvariant `LogN+1`, `Xs` propagation, `LogSlots` from `bootstrap_slots`), call `btpParamsGenEvaluationKeys`, assemble final `MemEvaluationKeySet`. Print timing for each step and total key sizes. This is the example users copy from.
+- [x] Run `npx tsx js/examples/node/roundtrip.ts` — verify it prints decoded values matching input within CKKS tolerance
+- [x] Run `npx tsx js/examples/node/eval-keys.ts` — verify it prints key sizes and completes without error
+- [x] Run tests — must pass before next task
 
 ### Task 10: Browser demo — Go HTTP server
 
