@@ -13,7 +13,6 @@ import (
 	"runtime/cgo"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 
 	orion "github.com/baahl-nyu/orion"
 	"github.com/baahl-nyu/orion/evaluator"
@@ -162,45 +161,3 @@ func EvalClose(evalH C.uintptr_t) {
 	eval.Close()
 }
 
-// =====================================================================
-// CKKS Parameters helper (for creating params from JSON on Python side)
-// =====================================================================
-
-// EvalNewCKKSParams creates CKKS parameters from JSON. Returns a handle.
-// Used by Python to create params for Lattigo operations.
-//
-//export EvalNewCKKSParams
-func EvalNewCKKSParams(paramsJSON *C.char, errOut **C.char) C.uintptr_t {
-	defer catchPanic(errOut)
-	var p orion.Params
-	if err := json.Unmarshal([]byte(C.GoString(paramsJSON)), &p); err != nil {
-		setErr(errOut, "parsing params: "+err.Error())
-		return 0
-	}
-	ckksParams, err := p.NewCKKSParameters()
-	if err != nil {
-		setErr(errOut, err.Error())
-		return 0
-	}
-	return C.uintptr_t(cgo.NewHandle(&ckksParams))
-}
-
-// EvalCKKSParamsMaxSlots returns the maximum number of plaintext slots.
-//
-//export EvalCKKSParamsMaxSlots
-func EvalCKKSParamsMaxSlots(paramsH C.uintptr_t) C.int {
-	defer logPanic()
-	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
-	return C.int(p.MaxSlots())
-}
-
-// EvalCKKSParamsDefaultScale returns 2^LogScale as uint64.
-//
-//export EvalCKKSParamsDefaultScale
-func EvalCKKSParamsDefaultScale(paramsH C.uintptr_t) C.ulonglong {
-	defer logPanic()
-	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
-	scale := p.DefaultScale()
-	val, _ := (&scale.Value).Uint64()
-	return C.ulonglong(val)
-}
