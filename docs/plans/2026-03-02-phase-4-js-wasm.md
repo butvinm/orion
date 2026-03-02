@@ -216,15 +216,15 @@ Polish step — replaces Task 1's `build.sh` with a proper Python build script m
 
 ### Task 13: Verify acceptance criteria
 
-- [ ] `js/lattigo/` builds to `.wasm` (< 10 MB uncompressed)
-- [ ] TypeScript wrappers compile without errors
-- [ ] Full key generation flow (SK → PK → RLK → Galois keys → bootstrap keys) works in Node.js
-- [ ] JS example: keygen → encode → encrypt → decrypt → decode roundtrip works in Node.js
-- [ ] Browser demo: compile MLP (Python) → serve (Go) → query (browser) → correct decrypted result
-- [ ] WASM loads and initializes in < 3 seconds on modern browser
-- [ ] No Go objects leaked after `.free()` calls
-- [ ] Run full test suite
-- [ ] Run linter — all issues must be fixed
+- [x] `js/lattigo/` builds to `.wasm` (< 10 MB uncompressed)
+- [x] TypeScript wrappers compile without errors
+- [x] Full key generation flow (SK → PK → RLK → Galois keys → bootstrap keys) works in Node.js
+- [x] JS example: keygen → encode → encrypt → decrypt → decode roundtrip works in Node.js
+- [x] Browser demo: compile MLP (Python) → serve (Go) → query (browser) → correct decrypted result
+- [x] WASM loads and initializes in < 3 seconds on modern browser
+- [x] No Go objects leaked after `.free()` calls
+- [x] Run full test suite
+- [x] Run linter — all issues must be fixed
 
 ### Task 14: [Final] Update documentation
 
