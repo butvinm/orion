@@ -9,14 +9,15 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/ring"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
-	"github.com/baahl-nyu/orion/orionclient"
+
+	orion "github.com/baahl-nyu/orion"
 )
 
 // Model holds a parsed and CKKS-encoded compiled model.
 // It is immutable after LoadModel() and safe to share across goroutines.
 type Model struct {
 	header      *CompiledHeader
-	clientParam orionclient.Params // cached for ClientParams()
+	clientParam orion.Params // cached for ClientParams()
 	params      ckks.Parameters
 	graph       *Graph
 	transforms  map[string]map[string]lintrans.LinearTransformation // node -> ref -> LT
@@ -198,14 +199,14 @@ func (m *Model) loadPolynomial(node *Node) error {
 
 // ClientParams returns the CKKS parameters, key manifest, and input level
 // needed by a client to generate keys and encrypt input.
-func (m *Model) ClientParams() (orionclient.Params, orionclient.Manifest, int) {
+func (m *Model) ClientParams() (orion.Params, orion.Manifest, int) {
 	// Convert galois elements from []int to []uint64.
 	galoisElements := make([]uint64, len(m.header.Manifest.GaloisElements))
 	for i, ge := range m.header.Manifest.GaloisElements {
 		galoisElements[i] = uint64(ge)
 	}
 
-	manifest := orionclient.Manifest{
+	manifest := orion.Manifest{
 		GaloisElements: galoisElements,
 		BootstrapSlots: m.header.Manifest.BootstrapSlots,
 		BootLogP:       m.header.Manifest.BootLogP,
@@ -215,9 +216,9 @@ func (m *Model) ClientParams() (orionclient.Params, orionclient.Manifest, int) {
 	return m.clientParam, manifest, m.header.InputLevel
 }
 
-// headerToParams converts a CompiledHeader to orionclient.Params.
-func headerToParams(header *CompiledHeader) orionclient.Params {
-	return orionclient.Params{
+// headerToParams converts a CompiledHeader to orion.Params.
+func headerToParams(header *CompiledHeader) orion.Params {
+	return orion.Params{
 		LogN:     header.Params.LogN,
 		LogQ:     header.Params.LogQ,
 		LogP:     header.Params.LogP,

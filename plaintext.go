@@ -1,4 +1,4 @@
-package orionclient
+package orion
 
 import (
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
@@ -8,6 +8,11 @@ import (
 type Plaintext struct {
 	raw   *rlwe.Plaintext
 	shape []int
+}
+
+// NewPlaintext creates a Plaintext from a raw Lattigo plaintext and a shape.
+func NewPlaintext(raw *rlwe.Plaintext, shape []int) *Plaintext {
+	return &Plaintext{raw: raw, shape: shape}
 }
 
 // Raw returns the underlying Lattigo plaintext.

@@ -8,7 +8,7 @@ import (
 	"runtime/cgo"
 	"unsafe"
 
-	orionclient "github.com/baahl-nyu/orion/orionclient"
+	orion "github.com/baahl-nyu/orion"
 )
 
 // =========================================================================
@@ -18,7 +18,7 @@ import (
 //export CiphertextMarshal
 func CiphertextMarshal(ctH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.char {
 	defer catchPanic(errOut)
-	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
+	ct := cgo.Handle(ctH).Value().(*orion.Ciphertext)
 	data, err := ct.Marshal()
 	if err != nil {
 		setErr(errOut, err.Error())
@@ -33,7 +33,7 @@ func CiphertextMarshal(ctH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.cha
 func CiphertextUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 	goData := cBytesToGoSlice(data, dataLen)
-	ct, err := orionclient.UnmarshalCiphertext(goData)
+	ct, err := orion.UnmarshalCiphertext(goData)
 	if err != nil {
 		setErr(errOut, err.Error())
 		return 0
@@ -44,42 +44,42 @@ func CiphertextUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintp
 //export CiphertextLevel
 func CiphertextLevel(ctH C.uintptr_t) C.int {
 	defer logPanic()
-	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
+	ct := cgo.Handle(ctH).Value().(*orion.Ciphertext)
 	return C.int(ct.Level())
 }
 
 //export CiphertextScale
 func CiphertextScale(ctH C.uintptr_t) C.ulonglong {
 	defer logPanic()
-	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
+	ct := cgo.Handle(ctH).Value().(*orion.Ciphertext)
 	return C.ulonglong(ct.Scale())
 }
 
 //export CiphertextSetScale
 func CiphertextSetScale(ctH C.uintptr_t, scale C.ulonglong) {
 	defer logPanic()
-	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
+	ct := cgo.Handle(ctH).Value().(*orion.Ciphertext)
 	ct.SetScale(uint64(scale))
 }
 
 //export CiphertextSlots
 func CiphertextSlots(ctH C.uintptr_t) C.int {
 	defer logPanic()
-	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
+	ct := cgo.Handle(ctH).Value().(*orion.Ciphertext)
 	return C.int(ct.Slots())
 }
 
 //export CiphertextDegree
 func CiphertextDegree(ctH C.uintptr_t) C.int {
 	defer logPanic()
-	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
+	ct := cgo.Handle(ctH).Value().(*orion.Ciphertext)
 	return C.int(ct.Degree())
 }
 
 //export CiphertextShape
 func CiphertextShape(ctH C.uintptr_t, outLen *C.int) *C.int {
 	defer logPanic()
-	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
+	ct := cgo.Handle(ctH).Value().(*orion.Ciphertext)
 	shape := ct.Shape()
 	ptr, length := goIntsToCInts(shape)
 	*outLen = length
@@ -89,7 +89,7 @@ func CiphertextShape(ctH C.uintptr_t, outLen *C.int) *C.int {
 //export CiphertextNumCiphertexts
 func CiphertextNumCiphertexts(ctH C.uintptr_t) C.int {
 	defer logPanic()
-	ct := cgo.Handle(ctH).Value().(*orionclient.Ciphertext)
+	ct := cgo.Handle(ctH).Value().(*orion.Ciphertext)
 	return C.int(ct.NumCiphertexts())
 }
 
@@ -105,13 +105,13 @@ func CombineSingleCiphertexts(handles *C.uintptr_t, numHandles C.int, shapeDims 
 		return 0
 	}
 	hSlice := unsafe.Slice(handles, n)
-	cts := make([]*orionclient.Ciphertext, n)
+	cts := make([]*orion.Ciphertext, n)
 	for i := range cts {
-		cts[i] = cgo.Handle(hSlice[i]).Value().(*orionclient.Ciphertext)
+		cts[i] = cgo.Handle(hSlice[i]).Value().(*orion.Ciphertext)
 	}
 
 	shape := cIntsToGoInts(shapeDims, numDims)
-	combined := orionclient.CombineCiphertexts(cts, shape)
+	combined := orion.CombineCiphertexts(cts, shape)
 	return C.uintptr_t(cgo.NewHandle(combined))
 }
 
@@ -122,41 +122,40 @@ func CombineSingleCiphertexts(handles *C.uintptr_t, numHandles C.int, shapeDims 
 //export PlaintextLevel
 func PlaintextLevel(ptH C.uintptr_t) C.int {
 	defer logPanic()
-	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
+	pt := cgo.Handle(ptH).Value().(*orion.Plaintext)
 	return C.int(pt.Level())
 }
 
 //export PlaintextScale
 func PlaintextScale(ptH C.uintptr_t) C.ulonglong {
 	defer logPanic()
-	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
+	pt := cgo.Handle(ptH).Value().(*orion.Plaintext)
 	return C.ulonglong(pt.Scale())
 }
 
 //export PlaintextSetScale
 func PlaintextSetScale(ptH C.uintptr_t, scale C.ulonglong) {
 	defer logPanic()
-	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
+	pt := cgo.Handle(ptH).Value().(*orion.Plaintext)
 	pt.SetScale(uint64(scale))
 }
 
 //export PlaintextSlots
 func PlaintextSlots(ptH C.uintptr_t) C.int {
 	defer logPanic()
-	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
+	pt := cgo.Handle(ptH).Value().(*orion.Plaintext)
 	return C.int(pt.Slots())
 }
 
 //export PlaintextShape
 func PlaintextShape(ptH C.uintptr_t, outLen *C.int) *C.int {
 	defer logPanic()
-	pt := cgo.Handle(ptH).Value().(*orionclient.Plaintext)
+	pt := cgo.Handle(ptH).Value().(*orion.Plaintext)
 	shape := pt.Shape()
 	ptr, length := goIntsToCInts(shape)
 	*outLen = length
 	return ptr
 }
-
 
 // =========================================================================
 // Polynomial type operations
@@ -166,7 +165,7 @@ func PlaintextShape(ptH C.uintptr_t, outLen *C.int) *C.int {
 func GeneratePolynomialMonomial(coeffs *C.double, numCoeffs C.int, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 	goCoeffs := cDoublesToGoFloat64s(coeffs, numCoeffs)
-	poly := orionclient.GenerateMonomial(goCoeffs)
+	poly := orion.GenerateMonomial(goCoeffs)
 	return C.uintptr_t(cgo.NewHandle(poly))
 }
 
@@ -174,10 +173,9 @@ func GeneratePolynomialMonomial(coeffs *C.double, numCoeffs C.int, errOut **C.ch
 func GeneratePolynomialChebyshev(coeffs *C.double, numCoeffs C.int, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 	goCoeffs := cDoublesToGoFloat64s(coeffs, numCoeffs)
-	poly := orionclient.GenerateChebyshev(goCoeffs)
+	poly := orion.GenerateChebyshev(goCoeffs)
 	return C.uintptr_t(cgo.NewHandle(poly))
 }
-
 
 // =========================================================================
 // Minimax sign coefficients
@@ -195,7 +193,7 @@ func GenerateMinimaxSignCoeffs(
 ) *C.double {
 	defer catchPanic(errOut)
 	degrees := cIntsToGoInts(degreesPtr, numDegrees)
-	flat, err := orionclient.GenerateMinimaxSignCoeffs(degrees, uint(prec), int(logAlpha), int(logErr), int(debug) != 0)
+	flat, err := orion.GenerateMinimaxSignCoeffs(degrees, uint(prec), int(logAlpha), int(logErr), int(debug) != 0)
 	if err != nil {
 		setErr(errOut, err.Error())
 		return nil

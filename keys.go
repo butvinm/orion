@@ -1,4 +1,4 @@
-package orionclient
+package orion
 
 // Manifest describes which evaluation keys a Client must generate.
 // Mirrors Python's KeyManifest.

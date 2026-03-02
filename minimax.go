@@ -1,4 +1,4 @@
-package orionclient
+package orion
 
 import (
 	"fmt"

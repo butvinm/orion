@@ -8,7 +8,8 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/polynomial"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
-	"github.com/baahl-nyu/orion/orionclient"
+
+	orion "github.com/baahl-nyu/orion"
 )
 
 // Evaluator runs FHE inference on a compiled Model by walking the computation graph.
@@ -23,7 +24,7 @@ type Evaluator struct {
 
 // NewEvaluator creates an Evaluator from CKKS parameters and an evaluation key bundle.
 // The key bundle must contain at minimum the RLK and any required Galois keys.
-func NewEvaluator(p orionclient.Params, keys orionclient.EvalKeyBundle) (*Evaluator, error) {
+func NewEvaluator(p orion.Params, keys orion.EvalKeyBundle) (*Evaluator, error) {
 	ckksParams, err := p.NewCKKSParameters()
 	if err != nil {
 		return nil, fmt.Errorf("creating CKKS parameters: %w", err)

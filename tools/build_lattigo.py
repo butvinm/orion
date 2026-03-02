@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 def build(setup_kwargs=None):
-    """Build the Go shared library for orionclient bridge."""
+    """Build the Go shared library for lattigo bridge."""
     print("=== Building Go shared library ===")
 
     # Determine the output filename based on platform
@@ -23,7 +23,7 @@ def build(setup_kwargs=None):
 
     # Set up paths
     root_dir = Path(__file__).parent.parent
-    bridge_dir = root_dir / "orionclient" / "bridge"
+    bridge_dir = root_dir / "python" / "lattigo" / "bridge"
     output_dir = root_dir / "orion" / "backend" / "orionclient"
     output_path = output_dir / output_file
 
@@ -50,7 +50,7 @@ def build(setup_kwargs=None):
     # Run the build command with the configured environment
     try:
         print(f"Running: {' '.join(build_cmd)}")
-        subprocess.run(build_cmd, cwd=str(root_dir / "orionclient"), env=env, check=True)
+        subprocess.run(build_cmd, cwd=str(bridge_dir), env=env, check=True)
         print(f"Successfully built {output_file}")
     except subprocess.CalledProcessError as e:
         print(f"Go build failed with exit code {e.returncode}")

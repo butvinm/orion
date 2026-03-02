@@ -7,14 +7,16 @@ import (
 	"testing"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/orion/orionclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	orion "github.com/baahl-nyu/orion"
+	"github.com/baahl-nyu/orion/client"
 )
 
 // newTestEvaluator loads the MLP model, generates keys, and creates an Evaluator.
 // Returns the model, evaluator, and client (for encrypting test inputs).
-func newTestEvaluator(t *testing.T) (*Model, *Evaluator, *orionclient.Client) {
+func newTestEvaluator(t *testing.T) (*Model, *Evaluator, *client.Client) {
 	t.Helper()
 
 	data, err := os.ReadFile("testdata/mlp.orion")
@@ -25,7 +27,7 @@ func newTestEvaluator(t *testing.T) (*Model, *Evaluator, *orionclient.Client) {
 
 	params, manifest, _ := model.ClientParams()
 
-	client, err := orionclient.New(params)
+	client, err := client.New(params)
 	require.NoError(t, err)
 
 	keys, err := client.GenerateKeys(manifest)
@@ -163,7 +165,7 @@ func TestForwardClosedEvaluatorReturnsError(t *testing.T) {
 }
 
 // encryptVector is a helper that encodes and encrypts a float64 slice at a given level.
-func encryptVector(t *testing.T, client *orionclient.Client, values []float64, level int) *orionclient.Ciphertext {
+func encryptVector(t *testing.T, client *client.Client, values []float64, level int) *orion.Ciphertext {
 	t.Helper()
 	pt, err := client.Encode(values, level, client.DefaultScale())
 	require.NoError(t, err)
@@ -173,7 +175,7 @@ func encryptVector(t *testing.T, client *orionclient.Client, values []float64, l
 }
 
 // decryptVector is a helper that decrypts a raw rlwe.Ciphertext and returns the decoded float64 slice.
-func decryptVector(t *testing.T, client *orionclient.Client, ct *orionclient.Ciphertext) []float64 {
+func decryptVector(t *testing.T, client *client.Client, ct *orion.Ciphertext) []float64 {
 	t.Helper()
 	pts, err := client.Decrypt(ct)
 	require.NoError(t, err)
@@ -211,7 +213,7 @@ func TestEvalQuad(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decrypt and compare.
-	wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
+	wrapped := orion.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
 	decoded := decryptVector(t, client, wrapped)
 
 	numCheck := 10 // check first 10 slots
@@ -247,7 +249,7 @@ func TestEvalAdd(t *testing.T) {
 	result, err := eval.evalAdd(ctA.Raw()[0], ctB.Raw()[0])
 	require.NoError(t, err)
 
-	wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
+	wrapped := orion.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
 	decoded := decryptVector(t, client, wrapped)
 
 	numCheck := 10
@@ -283,7 +285,7 @@ func TestEvalMult(t *testing.T) {
 	result, err := eval.evalMult(ctA.Raw()[0], ctB.Raw()[0])
 	require.NoError(t, err)
 
-	wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
+	wrapped := orion.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
 	decoded := decryptVector(t, client, wrapped)
 
 	numCheck := 10
@@ -312,7 +314,7 @@ func TestEvalFlatten(t *testing.T) {
 	assert.NotSame(t, ct.Raw()[0], result, "flatten should return a copy, not the same pointer")
 
 	// Verify values are preserved.
-	wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
+	wrapped := orion.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
 	decoded := decryptVector(t, client, wrapped)
 	assert.InDelta(t, 42.0, decoded[0], 1e-3)
 	assert.InDelta(t, -7.5, decoded[1], 1e-3)
@@ -341,7 +343,7 @@ func TestEvalQuadLargeValues(t *testing.T) {
 	result, err := eval.evalQuad(ct.Raw()[0])
 	require.NoError(t, err)
 
-	wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
+	wrapped := orion.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
 	decoded := decryptVector(t, client, wrapped)
 
 	for i := 0; i < 16; i++ {
@@ -374,7 +376,7 @@ func loadModelAndEvaluate(t *testing.T, modelPath, inputPath, expectedPath strin
 
 	params, manifest, inputLevel := model.ClientParams()
 
-	client, err := orionclient.New(params)
+	client, err := client.New(params)
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -403,7 +405,7 @@ func loadModelAndEvaluate(t *testing.T, modelPath, inputPath, expectedPath strin
 	require.NoError(t, err, "Forward failed")
 
 	// Decrypt and decode.
-	wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
+	wrapped := orion.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
 	decoded := decryptVector(t, client, wrapped)
 
 	expected := loadJSONFloats(t, expectedPath)
@@ -488,11 +490,11 @@ func TestMultipleEvaluatorsShareModel(t *testing.T) {
 	params, manifest, inputLevel := model.ClientParams()
 
 	// Create two separate clients with independent key pairs.
-	client1, err := orionclient.New(params)
+	client1, err := client.New(params)
 	require.NoError(t, err)
 	defer client1.Close()
 
-	client2, err := orionclient.New(params)
+	client2, err := client.New(params)
 	require.NoError(t, err)
 	defer client2.Close()
 
@@ -529,7 +531,7 @@ func TestMultipleEvaluatorsShareModel(t *testing.T) {
 	result1, err := eval1.Forward(model, ct1.Raw()[0])
 	require.NoError(t, err)
 
-	wrapped1 := orionclient.NewCiphertext([]*rlwe.Ciphertext{result1}, nil)
+	wrapped1 := orion.NewCiphertext([]*rlwe.Ciphertext{result1}, nil)
 	decoded1 := decryptVector(t, client1, wrapped1)
 
 	// Client 2 encrypts, evaluator 2 evaluates, client 2 decrypts.
@@ -541,7 +543,7 @@ func TestMultipleEvaluatorsShareModel(t *testing.T) {
 	result2, err := eval2.Forward(model, ct2.Raw()[0])
 	require.NoError(t, err)
 
-	wrapped2 := orionclient.NewCiphertext([]*rlwe.Ciphertext{result2}, nil)
+	wrapped2 := orion.NewCiphertext([]*rlwe.Ciphertext{result2}, nil)
 	decoded2 := decryptVector(t, client2, wrapped2)
 
 	// Both should produce correct results independently (MLP model, same calibration).

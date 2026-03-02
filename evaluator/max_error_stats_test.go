@@ -9,8 +9,10 @@ import (
 	"testing"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/orion/orionclient"
 	"github.com/stretchr/testify/require"
+
+	orion "github.com/baahl-nyu/orion"
+	"github.com/baahl-nyu/orion/client"
 )
 
 // TestMaxErrorDistribution runs multiple E2E evaluations with fresh keys
@@ -56,7 +58,7 @@ func TestMaxErrorDistribution(t *testing.T) {
 			maxErrors := make([]float64, N)
 
 			for run := 0; run < N; run++ {
-				client, err := orionclient.New(params)
+				client, err := client.New(params)
 				require.NoError(t, err)
 
 				keys, err := client.GenerateKeys(manifest)
@@ -74,7 +76,7 @@ func TestMaxErrorDistribution(t *testing.T) {
 				result, err := eval.Forward(model, ct.Raw()[0])
 				require.NoError(t, err)
 
-				wrapped := orionclient.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
+				wrapped := orion.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
 				pts, err := client.Decrypt(wrapped)
 				require.NoError(t, err)
 				require.Len(t, pts, 1)

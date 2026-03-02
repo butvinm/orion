@@ -1,4 +1,4 @@
-package orionclient
+package orion
 
 import (
 	"github.com/baahl-nyu/lattigo/v6/utils/bignum"

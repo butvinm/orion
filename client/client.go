@@ -1,4 +1,4 @@
-package orionclient
+package client
 
 import (
 	"fmt"
@@ -8,12 +8,14 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils"
+
+	orion "github.com/baahl-nyu/orion"
 )
 
 // Client holds the secret key and performs encode/decode, encrypt/decrypt,
 // and key generation. Multiple Client instances can coexist.
 type Client struct {
-	params     Params
+	params     orion.Params
 	ckksParams ckks.Parameters
 	keygen     *rlwe.KeyGenerator
 	sk         *rlwe.SecretKey
@@ -24,7 +26,7 @@ type Client struct {
 }
 
 // New creates a Client with freshly generated secret and public keys.
-func New(p Params) (*Client, error) {
+func New(p orion.Params) (*Client, error) {
 	ckksParams, err := p.NewCKKSParameters()
 	if err != nil {
 		return nil, fmt.Errorf("creating CKKS parameters: %w", err)
@@ -51,7 +53,7 @@ func New(p Params) (*Client, error) {
 }
 
 // FromSecretKey restores a Client from a serialized secret key.
-func FromSecretKey(p Params, skData []byte) (*Client, error) {
+func FromSecretKey(p orion.Params, skData []byte) (*Client, error) {
 	ckksParams, err := p.NewCKKSParameters()
 	if err != nil {
 		return nil, fmt.Errorf("creating CKKS parameters: %w", err)
@@ -114,7 +116,7 @@ func (c *Client) SecretKey() ([]byte, error) {
 
 // Encode encodes a float64 slice into a Plaintext at the given level and scale.
 // The values slice length must not exceed MaxSlots().
-func (c *Client) Encode(values []float64, level int, scale uint64) (*Plaintext, error) {
+func (c *Client) Encode(values []float64, level int, scale uint64) (*orion.Plaintext, error) {
 	if c.encoder == nil {
 		return nil, fmt.Errorf("client is closed")
 	}
@@ -126,20 +128,17 @@ func (c *Client) Encode(values []float64, level int, scale uint64) (*Plaintext, 
 		return nil, fmt.Errorf("encoding: %w", err)
 	}
 
-	return &Plaintext{
-		raw:   pt,
-		shape: []int{len(values)},
-	}, nil
+	return orion.NewPlaintext(pt, []int{len(values)}), nil
 }
 
 // Decode decodes a Plaintext back to float64 values.
-func (c *Client) Decode(pt *Plaintext) ([]float64, error) {
+func (c *Client) Decode(pt *orion.Plaintext) ([]float64, error) {
 	if c.encoder == nil {
 		return nil, fmt.Errorf("client is closed")
 	}
 
 	result := make([]float64, c.ckksParams.MaxSlots())
-	if err := c.encoder.Decode(pt.raw, result); err != nil {
+	if err := c.encoder.Decode(pt.Raw(), result); err != nil {
 		return nil, fmt.Errorf("decoding: %w", err)
 	}
 
@@ -147,39 +146,34 @@ func (c *Client) Decode(pt *Plaintext) ([]float64, error) {
 }
 
 // Encrypt encrypts a Plaintext into a Ciphertext (with one underlying ct).
-func (c *Client) Encrypt(pt *Plaintext) (*Ciphertext, error) {
+func (c *Client) Encrypt(pt *orion.Plaintext) (*orion.Ciphertext, error) {
 	if c.encryptor == nil {
 		return nil, fmt.Errorf("client is closed")
 	}
 
-	ct := ckks.NewCiphertext(c.ckksParams, 1, pt.raw.Level())
-	if err := c.encryptor.Encrypt(pt.raw, ct); err != nil {
+	ct := ckks.NewCiphertext(c.ckksParams, 1, pt.Raw().Level())
+	if err := c.encryptor.Encrypt(pt.Raw(), ct); err != nil {
 		return nil, fmt.Errorf("encrypting: %w", err)
 	}
 
-	shape := make([]int, len(pt.shape))
-	copy(shape, pt.shape)
+	shape := make([]int, len(pt.Shape()))
+	copy(shape, pt.Shape())
 
-	return &Ciphertext{
-		cts:   []*rlwe.Ciphertext{ct},
-		shape: shape,
-	}, nil
+	return orion.NewCiphertext([]*rlwe.Ciphertext{ct}, shape), nil
 }
 
 // Decrypt decrypts all ciphertexts in a Ciphertext, returning one Plaintext per ct.
-func (c *Client) Decrypt(ct *Ciphertext) ([]*Plaintext, error) {
+func (c *Client) Decrypt(ct *orion.Ciphertext) ([]*orion.Plaintext, error) {
 	if c.decryptor == nil {
 		return nil, fmt.Errorf("client is closed")
 	}
 
-	pts := make([]*Plaintext, len(ct.cts))
-	for i, ciphertext := range ct.cts {
+	raw := ct.Raw()
+	pts := make([]*orion.Plaintext, len(raw))
+	for i, ciphertext := range raw {
 		pt := ckks.NewPlaintext(c.ckksParams, ciphertext.Level())
 		c.decryptor.Decrypt(ciphertext, pt)
-		pts[i] = &Plaintext{
-			raw:   pt,
-			shape: ct.Shape(),
-		}
+		pts[i] = orion.NewPlaintext(pt, ct.Shape())
 	}
 
 	return pts, nil
@@ -233,8 +227,8 @@ func (c *Client) GenerateBootstrapKeys(slots int, logP []int) ([]byte, error) {
 }
 
 // GenerateKeys generates all evaluation keys specified by a Manifest.
-func (c *Client) GenerateKeys(manifest Manifest) (*EvalKeyBundle, error) {
-	bundle := &EvalKeyBundle{
+func (c *Client) GenerateKeys(manifest orion.Manifest) (*orion.EvalKeyBundle, error) {
+	bundle := &orion.EvalKeyBundle{
 		GaloisKeys:    make(map[uint64][]byte),
 		BootstrapKeys: make(map[int][]byte),
 		BootLogP:      manifest.BootLogP,

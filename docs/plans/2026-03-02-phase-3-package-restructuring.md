@@ -133,32 +133,32 @@ Create root `go.mod`, move shared types and client logic out of `orionclient/`. 
 
 **Inventory (do first):**
 
-- [ ] Identify all types evaluator imports from `orionclient/`: `Params`, `EvalKeyBundle`, `Client`, `Manifest`, `Ciphertext`, `Plaintext`, `NewCiphertext`, etc.
-- [ ] Identify all types bridge imports from `orionclient/` (~20+ references across `client.go`, `types.go`, `evaluator.go`, `main.go`)
-- [ ] Identify all types evaluator tests import from `orionclient/`
+- [x] Identify all types evaluator imports from `orionclient/`: `Params`, `EvalKeyBundle`, `Client`, `Manifest`, `Ciphertext`, `Plaintext`, `NewCiphertext`, etc.
+- [x] Identify all types bridge imports from `orionclient/` (~20+ references across `client.go`, `types.go`, `evaluator.go`, `main.go`)
+- [x] Identify all types evaluator tests import from `orionclient/`
 
 **Create root module + move code:**
 
-- [ ] Create root `go.mod` with `module github.com/baahl-nyu/orion`
-- [ ] Move shared types (`Params`, `Manifest`, `EvalKeyBundle`) to root-level package
-- [ ] Move `Ciphertext`/`Plaintext` Go types (multi-ct wrapper, marshal/unmarshal) to root-level or `ciphertext/` subpackage
-- [ ] Move client logic (`Client`, keygen, encrypt, decrypt, encode, decode) to `client/` subpackage
-- [ ] Merge `evaluator/go.mod` into root `go.mod` — delete `evaluator/go.mod` and its `replace` directive
-- [ ] Update evaluator imports: `orionclient.X` → `orion.X` / `orion/client.X` throughout `evaluator/*.go`
+- [x] Create root `go.mod` with `module github.com/baahl-nyu/orion`
+- [x] Move shared types (`Params`, `Manifest`, `EvalKeyBundle`) to root-level package
+- [x] Move `Ciphertext`/`Plaintext` Go types (multi-ct wrapper, marshal/unmarshal) to root-level or `ciphertext/` subpackage
+- [x] Move client logic (`Client`, keygen, encrypt, decrypt, encode, decode) to `client/` subpackage
+- [x] Merge `evaluator/go.mod` into root `go.mod` — delete `evaluator/go.mod` and its `replace` directive
+- [x] Update evaluator imports: `orionclient.X` → `orion.X` / `orion/client.X` throughout `evaluator/*.go`
 
 **Move bridge + update imports:**
 
-- [ ] Move bridge Go code from `orionclient/bridge/` to `python/lattigo/bridge/`
-- [ ] Update bridge `go.mod` to import from root module (`github.com/baahl-nyu/orion`)
-- [ ] Update all `orionclient.X` references in bridge files to new import paths (~20+ changes across `client.go`, `types.go`, `main.go`)
-- [ ] `Client*` bridge exports must still compile and work after import update
+- [x] Move bridge Go code from `orionclient/bridge/` to `python/lattigo/bridge/`
+- [x] Update bridge `go.mod` to import from root module (`github.com/baahl-nyu/orion`)
+- [x] Update all `orionclient.X` references in bridge files to new import paths (~20+ changes across `client.go`, `types.go`, `main.go`)
+- [x] `Client*` bridge exports must still compile and work after import update
 
 **Delete + verify:**
 
-- [ ] Delete `orionclient/` directory (all code moved out)
-- [ ] Run `go test ./evaluator/...` — all Go tests must pass
-- [ ] Run `go vet ./...` — no issues
-- [ ] Rebuild shared library, run `pytest tests/` — all Python tests must pass (Client tests still work via updated bridge)
+- [x] Delete `orionclient/` directory (all code moved out)
+- [x] Run `go test ./evaluator/...` — all Go tests must pass
+- [x] Run `go vet ./...` — no issues
+- [x] Rebuild shared library, run `pytest tests/` — all Python tests must pass (Client tests still work via updated bridge)
 
 ### Task 6: Create python/lattigo/ package with new Lattigo-primitive API (ARCH.md 3.1)
 
