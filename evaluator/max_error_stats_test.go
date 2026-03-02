@@ -9,10 +9,8 @@ import (
 	"testing"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
+	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/stretchr/testify/require"
-
-	orion "github.com/baahl-nyu/orion"
-	"github.com/baahl-nyu/orion/client"
 )
 
 // TestMaxErrorDistribution runs multiple E2E evaluations with fresh keys
@@ -55,33 +53,45 @@ func TestMaxErrorDistribution(t *testing.T) {
 
 			params, manifest, inputLevel := model.ClientParams()
 
+			ckksParams, err := params.NewCKKSParameters()
+			require.NoError(t, err)
+
 			maxErrors := make([]float64, N)
 
 			for run := 0; run < N; run++ {
-				client, err := client.New(params)
+				// Fresh keys each run to sample noise distribution.
+				kg := rlwe.NewKeyGenerator(ckksParams)
+				sk := kg.GenSecretKeyNew()
+				pk := kg.GenPublicKeyNew(sk)
+				rlk := kg.GenRelinearizationKeyNew(sk)
+
+				galoisKeys := make([]*rlwe.GaloisKey, 0, len(manifest.GaloisElements))
+				for _, ge := range manifest.GaloisElements {
+					galoisKeys = append(galoisKeys, kg.GenGaloisKeyNew(ge, sk))
+				}
+
+				evk := rlwe.NewMemEvaluationKeySet(rlk, galoisKeys...)
+				eval, err := NewEvaluatorFromKeySet(ckksParams, evk)
 				require.NoError(t, err)
 
-				keys, err := client.GenerateKeys(manifest)
+				enc := ckks.NewEncoder(ckksParams)
+				encryptor := ckks.NewEncryptor(ckksParams, pk)
+				decryptor := ckks.NewDecryptor(ckksParams, sk)
+
+				pt := ckks.NewPlaintext(ckksParams, inputLevel)
+				pt.Scale = ckksParams.DefaultScale()
+				require.NoError(t, enc.Encode(padded, pt))
+
+				ct := ckks.NewCiphertext(ckksParams, 1, inputLevel)
+				require.NoError(t, encryptor.Encrypt(pt, ct))
+
+				result, err := eval.Forward(model, ct)
 				require.NoError(t, err)
 
-				eval, err := NewEvaluator(params, *keys)
-				require.NoError(t, err)
-
-				pt, err := client.Encode(padded, inputLevel, client.DefaultScale())
-				require.NoError(t, err)
-
-				ct, err := client.Encrypt(pt)
-				require.NoError(t, err)
-
-				result, err := eval.Forward(model, ct.Raw()[0])
-				require.NoError(t, err)
-
-				wrapped := orion.NewCiphertext([]*rlwe.Ciphertext{result}, nil)
-				pts, err := client.Decrypt(wrapped)
-				require.NoError(t, err)
-				require.Len(t, pts, 1)
-				vals, err := client.Decode(pts[0])
-				require.NoError(t, err)
+				ptOut := ckks.NewPlaintext(ckksParams, result.Level())
+				decryptor.Decrypt(result, ptOut)
+				vals := make([]float64, maxSlots)
+				require.NoError(t, enc.Decode(ptOut, vals))
 
 				var maxErr float64
 				for i, v := range expectedValues {
@@ -93,15 +103,14 @@ func TestMaxErrorDistribution(t *testing.T) {
 				maxErrors[run] = maxErr
 
 				eval.Close()
-				client.Close()
 			}
 
 			sort.Float64s(maxErrors)
 			min := maxErrors[0]
 			max := maxErrors[N-1]
 			median := maxErrors[N/2]
-			p90 := maxErrors[N-N/10-1]  // index 26
-			p95 := maxErrors[N-N/20-1]  // index 28
+			p90 := maxErrors[N-N/10-1]
+			p95 := maxErrors[N-N/20-1]
 
 			var sum float64
 			for _, e := range maxErrors {
@@ -118,7 +127,6 @@ func TestMaxErrorDistribution(t *testing.T) {
 			fmt.Printf("  max:    %.6f\n", max)
 			fmt.Printf("  all:    %v\n", formatFloats(maxErrors))
 
-			// Dump raw data as JSON
 			raw, _ := json.Marshal(maxErrors)
 			fmt.Printf("  json:   %s\n", string(raw))
 		})
