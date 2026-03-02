@@ -93,7 +93,9 @@ func (s *Server) HandleParams(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("HandleParams: encode response: %v", err)
+	}
 }
 
 // sessionResponse is the JSON response for POST /session.
@@ -146,7 +148,9 @@ func (s *Server) HandleSession(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sessionResponse{SessionID: id})
+	if err := json.NewEncoder(w).Encode(sessionResponse{SessionID: id}); err != nil {
+		log.Printf("HandleSession: encode response: %v", err)
+	}
 }
 
 // HandleInfer runs inference on a ciphertext using the session's evaluator.
@@ -207,7 +211,9 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(resultBytes)
+	if _, err := w.Write(resultBytes); err != nil {
+		log.Printf("HandleInfer: write result: %v", err)
+	}
 }
 
 // Handler returns an http.Handler with all routes registered.

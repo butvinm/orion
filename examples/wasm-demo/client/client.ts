@@ -117,6 +117,19 @@ async function initializeKeys(): Promise<void> {
   btnInfer.disabled = true;
   setStatus("Fetching parameters from server...");
 
+  // Free previously allocated Go handles before overwriting the module-level
+  // variables. Without this, each re-initialization leaks the old handles.
+  params?.free();
+  params = null;
+  sk?.free();
+  sk = null;
+  encoder?.free();
+  encoder = null;
+  encryptor?.free();
+  encryptor = null;
+  decryptor?.free();
+  decryptor = null;
+
   const tTotal = performance.now();
 
   // 1. GET /params
@@ -183,9 +196,7 @@ async function initializeKeys(): Promise<void> {
     appendLine("Generating relinearization key...");
     const t3 = performance.now();
     rlk = kg.genRelinKey(sk);
-    appendLine(
-      `RLK in ${formatDuration(performance.now() - t3)} (${formatBytes(rlk.marshalBinary().length)})`,
-    );
+    appendLine(`RLK in ${formatDuration(performance.now() - t3)}`);
   }
 
   // 7. Generate Galois keys

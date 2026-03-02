@@ -35,6 +35,16 @@ export async function loadLattigo(wasmPath?: string): Promise<WasmBridge> {
     );
   }
 
+  // Return existing bridge if already initialized — avoids spawning a second
+  // Go WASM runtime that would run select{} indefinitely and leak resources.
+  const existing = (globalThis as Record<string, unknown>).lattigo as
+    | WasmBridge
+    | undefined;
+  if (existing?.__ready) {
+    setBridge(existing);
+    return existing;
+  }
+
   const go = new Go();
   let instance: WebAssembly.Instance;
 
