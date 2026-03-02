@@ -177,15 +177,15 @@ Build the server side of the end-to-end demo.
 
 **Prerequisite:** A compiled `.orion` model file is needed. Generate one using the Python compiler (e.g., compile MLP with random weights — accuracy doesn't matter, pipeline correctness does). Document the generation command in the demo README.
 
-- [ ] Generate a demo `.orion` model file using the Python compiler (MLP on MNIST, random weights OK). Save as `examples/wasm-demo/model.orion`. Document the command to regenerate it.
-- [ ] Create `examples/wasm-demo/server/main.go` — HTTP server that:
+- [x] Generate a demo `.orion` model file using the Python compiler (MLP on MNIST, random weights OK). Save as `examples/wasm-demo/model.orion`. Document the command to regenerate it.
+- [x] Create `examples/wasm-demo/server/main.go` — HTTP server that:
   - `GET /params` — loads `.orion` model file, returns `model.ClientParams()` JSON (CKKS params, key manifest, input level)
   - `POST /session` — accepts `MemEvaluationKeySet` bytes, creates evaluator, returns session ID
   - `POST /session/{id}/infer` — accepts ciphertext bytes, runs `evaluator.Forward()`, returns result ciphertext bytes
   - Serves static files from `examples/wasm-demo/client/`
-- [ ] Create `examples/wasm-demo/server/go.mod` — imports `github.com/baahl-nyu/orion/evaluator` with `replace github.com/baahl-nyu/orion => ../../../` (3 levels up: `server/` → `wasm-demo/` → `examples/` → root)
-- [ ] Write Go tests for server handlers (mock model, test request/response format)
-- [ ] Run tests — must pass before next task
+- [x] Create `examples/wasm-demo/server/go.mod` — imports `github.com/baahl-nyu/orion/evaluator` with `replace github.com/baahl-nyu/orion => ../../../` (3 levels up: `server/` → `wasm-demo/` → `examples/` → root)
+- [x] Write Go tests for server handlers (mock model, test request/response format)
+- [x] Run tests — must pass before next task
 
 ### Task 11: Browser demo — HTML/JS client
 
