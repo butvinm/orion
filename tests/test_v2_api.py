@@ -1,4 +1,7 @@
-"""Integration tests for Compiler, Client, and v2 CompiledModel format."""
+"""Integration tests for Compiler and v2 CompiledModel format.
+
+Client tests migrated to use lattigo primitives directly.
+"""
 
 import gc
 import json
@@ -11,14 +14,21 @@ from orion.params import CKKSParams, CostProfile
 from orion.compiled_model import (
     CompiledModel,
     KeyManifest,
-    EvalKeys,
     Graph,
     unpack_raw_diagonals,
 )
 from orion.compiler import Compiler
-from orion.client import Client
-from orion.ciphertext import Ciphertext, PlainText
 import orion.nn as on
+from lattigo.ckks import Parameters, Encoder
+from lattigo.rlwe import (
+    KeyGenerator,
+    Encryptor,
+    Decryptor,
+    SecretKey,
+    Ciphertext,
+    Plaintext,
+    MemEvaluationKeySet,
+)
 
 
 # -----------------------------------------------------------------------
@@ -261,142 +271,236 @@ class TestCompiler:
 
 
 # -----------------------------------------------------------------------
-# Client tests
+# Lattigo primitive tests (replacing old Client tests)
 # -----------------------------------------------------------------------
 
 
-class TestClient:
-    def test_client_encode_decode(self):
-        """Client encode/decode roundtrip."""
-        client = Client(MLP_PARAMS)
-        inp = torch.randn(1, 784)
-        pt = client.encode(inp, level=5)
-        assert isinstance(pt, PlainText)
+def _make_params():
+    """Create lattigo Parameters matching MLP_PARAMS."""
+    return Parameters.from_logn(
+        logn=13,
+        logq=[29, 26, 26, 26, 26, 26],
+        logp=[29, 29],
+        logscale=26,
+        h=8192,
+        ring_type="conjugate_invariant",
+    )
 
-        decoded = client.decode(pt)
+
+def _encode_tensor(encoder, params, tensor, level=None):
+    """Encode a torch.Tensor into a lattigo rlwe.Plaintext."""
+    if level is None:
+        level = params.max_level()
+    scale = params.default_scale()
+    max_slots = params.max_slots()
+    flat = tensor.flatten().double().tolist()
+    if len(flat) < max_slots:
+        flat.extend([0.0] * (max_slots - len(flat)))
+    return encoder.encode(flat, level, scale)
+
+
+def _decode_tensor(encoder, params, pt, shape):
+    """Decode a lattigo rlwe.Plaintext back to a torch.Tensor."""
+    values = encoder.decode(pt, params.max_slots())
+    numel = 1
+    for s in shape:
+        numel *= s
+    return torch.tensor(values[:numel]).reshape(shape)
+
+
+class TestLattigoPrimitives:
+    def test_encode_decode(self):
+        """Lattigo encode/decode roundtrip with torch tensor."""
+        params = _make_params()
+        encoder = Encoder.new(params)
+        inp = torch.randn(1, 784)
+        pt = _encode_tensor(encoder, params, inp, level=5)
+        assert isinstance(pt, Plaintext)
+
+        decoded = _decode_tensor(encoder, params, pt, inp.shape)
         assert decoded.shape == inp.shape
-        # Allow small FHE encoding error
         assert torch.allclose(decoded.float(), inp.float(), atol=1e-4)
 
-        del client
+        pt.close()
+        encoder.close()
+        params.close()
         _cleanup_backend()
 
-    def test_client_encrypt_decrypt(self):
-        """Client encrypt/decrypt roundtrip."""
-        client = Client(MLP_PARAMS)
+    def test_encrypt_decrypt(self):
+        """Lattigo encrypt/decrypt roundtrip."""
+        params = _make_params()
+        encoder = Encoder.new(params)
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
+        pk = kg.gen_public_key(sk)
+        encryptor = Encryptor.new(params, pk)
+        decryptor = Decryptor.new(params, sk)
+
         inp = torch.randn(1, 784)
-        pt = client.encode(inp, level=5)
-        ct = client.encrypt(pt)
+        pt = _encode_tensor(encoder, params, inp, level=5)
+        ct = encryptor.encrypt_new(pt)
         assert isinstance(ct, Ciphertext)
 
-        pt2 = client.decrypt(ct)
-        decoded = client.decode(pt2)
+        pt2 = decryptor.decrypt_new(ct)
+        decoded = _decode_tensor(encoder, params, pt2, inp.shape)
         assert decoded.shape == inp.shape
         assert torch.allclose(decoded.float(), inp.float(), atol=1e-3)
 
-        del client
+        pt.close()
+        ct.close()
+        pt2.close()
+        decryptor.close()
+        encryptor.close()
+        pk.close()
+        sk.close()
+        kg.close()
+        encoder.close()
+        params.close()
         _cleanup_backend()
 
     def test_ciphertext_serialization(self):
-        """Ciphertext to_bytes/from_bytes roundtrip."""
-        client = Client(MLP_PARAMS)
-        inp = torch.randn(1, 784)
-        pt = client.encode(inp, level=5)
-        ct = client.encrypt(pt)
+        """Ciphertext marshal/unmarshal roundtrip."""
+        params = _make_params()
+        encoder = Encoder.new(params)
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
+        pk = kg.gen_public_key(sk)
+        encryptor = Encryptor.new(params, pk)
+        decryptor = Decryptor.new(params, sk)
 
-        ct_bytes = ct.to_bytes()
+        inp = torch.randn(1, 784)
+        pt = _encode_tensor(encoder, params, inp, level=5)
+        ct = encryptor.encrypt_new(pt)
+
+        ct_bytes = ct.marshal_binary()
         assert isinstance(ct_bytes, bytes)
         assert len(ct_bytes) > 0
 
-        ct2 = Ciphertext.from_bytes(ct_bytes)
-        pt2 = client.decrypt(ct2)
-        decoded = client.decode(pt2)
+        ct2 = Ciphertext.unmarshal_binary(ct_bytes)
+        pt2 = decryptor.decrypt_new(ct2)
+        decoded = _decode_tensor(encoder, params, pt2, inp.shape)
         assert decoded.shape == inp.shape
         assert torch.allclose(decoded.float(), inp.float(), atol=1e-3)
 
-        del client
+        pt.close()
+        ct.close()
+        ct2.close()
+        pt2.close()
+        decryptor.close()
+        encryptor.close()
+        pk.close()
+        sk.close()
+        kg.close()
+        encoder.close()
+        params.close()
         _cleanup_backend()
 
-    def test_client_generate_keys(self):
-        """Client generates EvalKeys from a KeyManifest."""
-        client = Client(MLP_PARAMS)
-        manifest = KeyManifest(
-            galois_elements=frozenset([5, 25, 125]),
-            bootstrap_slots=(),
-            boot_logp=None,
-            needs_rlk=True,
-        )
-        keys = client.generate_keys(manifest)
-        assert isinstance(keys, EvalKeys)
-        assert keys.has_rlk
-        assert len(keys.galois_keys) == 3
-        assert 5 in keys.galois_keys
-        assert 25 in keys.galois_keys
-        assert 125 in keys.galois_keys
+    def test_key_generation(self):
+        """Generate individual keys via Lattigo KeyGenerator."""
+        params = _make_params()
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
 
-        del client
+        # Relinearization key
+        rlk = kg.gen_relinearization_key(sk)
+        assert rlk._handle
+
+        # Galois keys
+        galois_elements = [5, 25, 125]
+        gks = []
+        for gel in galois_elements:
+            gk = kg.gen_galois_key(sk, gel)
+            assert gk._handle
+            gks.append(gk)
+
+        # Build MemEvaluationKeySet
+        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        assert evk._handle
+
+        evk.close()
+        for gk in gks:
+            gk.close()
+        rlk.close()
+        sk.close()
+        kg.close()
+        params.close()
         _cleanup_backend()
 
-    def test_evalkeys_serialization(self):
-        """EvalKeys to_bytes/from_bytes roundtrip."""
-        client = Client(MLP_PARAMS)
-        manifest = KeyManifest(
-            galois_elements=frozenset([5, 25]),
-            bootstrap_slots=(),
-            boot_logp=None,
-            needs_rlk=True,
-        )
-        keys = client.generate_keys(manifest)
+    def test_eval_key_set_serialization(self):
+        """MemEvaluationKeySet marshal/unmarshal roundtrip."""
+        params = _make_params()
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
 
-        keys_bytes = keys.to_bytes()
+        rlk = kg.gen_relinearization_key(sk)
+        gk1 = kg.gen_galois_key(sk, 5)
+        gk2 = kg.gen_galois_key(sk, 25)
+
+        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=[gk1, gk2])
+        keys_bytes = evk.marshal_binary()
         assert isinstance(keys_bytes, bytes)
+        assert len(keys_bytes) > 0
 
-        keys2 = EvalKeys.from_bytes(keys_bytes)
-        assert keys2.has_rlk
-        assert keys2.galois_elements == {5, 25}
+        evk2 = MemEvaluationKeySet.unmarshal_binary(keys_bytes)
+        assert evk2._handle
+        # Re-marshal should produce identical bytes
+        keys_bytes2 = evk2.marshal_binary()
+        assert keys_bytes == keys_bytes2
 
-        del client
+        evk2.close()
+        evk.close()
+        gk2.close()
+        gk1.close()
+        rlk.close()
+        sk.close()
+        kg.close()
+        params.close()
         _cleanup_backend()
 
 
-# -----------------------------------------------------------------------
-# Evaluator tests (skipped — Python evaluator removed in v2)
-# -----------------------------------------------------------------------
-
-
-@pytest.mark.skip(
-    reason="Python evaluator removed — Phase 2 provides Go evaluator"
-)
-class TestEvaluator:
-    def test_evaluator_modules_have_levels(self):
-        pass
-
-
-class TestClientSecretKey:
+class TestSecretKeyRoundtrip:
     def test_secret_key_roundtrip(self):
-        """Client secret key can be serialized and restored."""
-        client = Client(MLP_PARAMS)
+        """Secret key can be serialized and used to decrypt with a new Decryptor."""
+        params = _make_params()
+        encoder = Encoder.new(params)
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
+        pk = kg.gen_public_key(sk)
+        encryptor = Encryptor.new(params, pk)
+
         inp = torch.randn(1, 784)
-        pt = client.encode(inp, level=5)
-        ct = client.encrypt(pt)
+        pt = _encode_tensor(encoder, params, inp, level=5)
+        ct = encryptor.encrypt_new(pt)
 
         # Serialize secret key and ciphertext
-        sk_bytes = client.secret_key
-        ct_bytes = ct.to_bytes()
+        sk_bytes = sk.marshal_binary()
+        ct_bytes = ct.marshal_binary()
         assert isinstance(sk_bytes, bytes)
         assert len(sk_bytes) > 0
 
-        del client
+        # Destroy original objects
+        pt.close()
+        ct.close()
+        encryptor.close()
+        pk.close()
+        sk.close()
+        kg.close()
         _cleanup_backend()
 
-        # Restore client with same secret key
-        client2 = Client(MLP_PARAMS, secret_key=sk_bytes)
-        ct2 = Ciphertext.from_bytes(ct_bytes)
-        pt2 = client2.decrypt(ct2)
-        decoded = client2.decode(pt2)
+        # Restore secret key and decrypt
+        sk2 = SecretKey.unmarshal_binary(sk_bytes)
+        decryptor = Decryptor.new(params, sk2)
+        ct2 = Ciphertext.unmarshal_binary(ct_bytes)
+        pt2 = decryptor.decrypt_new(ct2)
+        decoded = _decode_tensor(encoder, params, pt2, inp.shape)
 
         assert decoded.shape == inp.shape
         assert torch.allclose(decoded.float(), inp.float(), atol=1e-3)
 
-        del client2
+        pt2.close()
+        ct2.close()
+        decryptor.close()
+        sk2.close()
+        encoder.close()
+        params.close()
         _cleanup_backend()

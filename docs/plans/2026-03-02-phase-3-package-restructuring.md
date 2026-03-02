@@ -182,12 +182,12 @@ Create standalone `lattigo` Python package. Exposes Lattigo primitives directly 
 
 Replace all `Client` usage in tests with direct Lattigo primitive calls. After this task, `Client` class and old `Client*` bridge exports are no longer needed.
 
-- [ ] Update `tests/test_v2_api.py`: replace `Client(params)` + `client.encode/encrypt/decrypt/decode` with `lattigo.ckks`/`lattigo.rlwe` calls
-- [ ] Update `tests/test_gohandle.py`: replace all `Client` usage (skip or remove tests for deleted `Evaluator` class that are already skipped)
-- [ ] Update any other test files using `Client`
-- [ ] Remove `EvalKeys` usage from tests — use `MemEvaluationKeySet` marshal/unmarshal instead
-- [ ] Run `pytest tests/` — all tests must pass using only Lattigo primitives
-- [ ] Verify: `grep -r "Client(" tests/` returns nothing (except skipped test classes)
+- [x] Update `tests/test_v2_api.py`: replace `Client(params)` + `client.encode/encrypt/decrypt/decode` with `lattigo.ckks`/`lattigo.rlwe` calls
+- [x] Update `tests/test_gohandle.py`: replace all `Client` usage (skip or remove tests for deleted `Evaluator` class that are already skipped)
+- [x] Update any other test files using `Client`
+- [x] Remove `EvalKeys` usage from tests — use `MemEvaluationKeySet` marshal/unmarshal instead
+- [x] Run `pytest tests/` — all tests must pass using only Lattigo primitives
+- [x] Verify: `grep -r "Client(" tests/` returns nothing (except skipped test classes)
 
 ### Task 8: Extract python/orion-compiler/ package (ARCH.md 3.2)
 

@@ -13,10 +13,7 @@ import torch
 import pytest
 
 from orion.params import CKKSParams
-from orion.compiled_model import CompiledModel, EvalKeys
 from orion.compiler import Compiler
-from orion.client import Client
-from orion.ciphertext import Ciphertext as CipherText
 import orion.nn as on
 
 
