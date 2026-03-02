@@ -1,8 +1,8 @@
 """Compile-time backend adapter wrapping orionclient FFI.
 
 Provides the same interface as the old backend/python/ wrappers
-(NewParameters, NewEncoder, PolynomialGenerator, TransformEncoder)
-but backed by the orionclient bridge shared library.
+(NewParameters, NewEncoder, PolynomialGenerator) but backed by the
+orionclient bridge shared library.
 """
 
 from __future__ import annotations
@@ -177,9 +177,9 @@ class NewParameters:
 class CompilerBackend:
     """Adapter providing the LattigoLibrary interface via orionclient FFI.
 
-    The compiler and its helpers (NewEncoder, PolynomialGenerator,
-    TransformEncoder) call self.backend.XXX(). This class provides those
-    methods by delegating to the orionclient FFI.
+    The compiler and its helpers (NewEncoder, PolynomialGenerator)
+    call self.backend.XXX(). This class provides those methods by
+    delegating to the orionclient FFI.
     """
 
     def __init__(self):
@@ -244,27 +244,6 @@ class CompilerBackend:
 
     def GetAuxModuliChain(self):
         return ffi.client_aux_moduli_chain(self._client_h)
-
-    # -- Linear transform operations --
-
-    def GenerateLinearTransform(self, diag_idxs, diag_data, level, bsgs_ratio):
-        """Generate a linear transform. Returns a handle (int)."""
-        slots = self.GetMaxSlots()
-        return ffi.generate_linear_transform(
-            self._params_json_str, diag_idxs, diag_data, slots, level, bsgs_ratio,
-        )
-
-    def SerializeLinearTransform(self, lt_h):
-        """Serialize a linear transform to bytes."""
-        return ffi.linear_transform_marshal(lt_h)
-
-    def GetLinearTransformRotationKeys(self, lt_h):
-        """Get required Galois elements for a linear transform."""
-        return ffi.linear_transform_required_galois_elements(lt_h, self._params_json_str)
-
-    def DeleteLinearTransform(self, lt_h):
-        """Delete a linear transform handle."""
-        lt_h.close()
 
     # -- Polynomial operations --
 
@@ -441,47 +420,3 @@ class PolynomialGenerator:
         return torch.split(coeffs_flat, splits)
 
 
-# =========================================================================
-# TransformEncoder (moved from backend/python/lt_evaluator.py)
-# =========================================================================
-
-class TransformEncoder:
-    """Compile-time only. Encodes diagonals into LinearTransform objects,
-    collects Galois elements.
-    """
-
-    def __init__(self, backend, params):
-        self.backend = backend
-        self.params = params
-        self.required_galois_elements = set()
-
-    def generate_transforms(self, linear_layer):
-        diagonals = linear_layer.diagonals
-        level = linear_layer.level
-        bsgs_ratio = linear_layer.bsgs_ratio
-
-        lintransf_ids = {}
-        for (row, col), diags in diagonals.items():
-            diags_idxs, diags_data = [], []
-            for idx, diag in diags.items():
-                diags_idxs.append(idx)
-                diags_data.extend(diag)
-
-            lintransf_id = self.backend.GenerateLinearTransform(
-                diags_idxs, diags_data, level, bsgs_ratio
-            )
-            lintransf_ids[(row, col)] = lintransf_id
-            self._collect_galois_elements(lintransf_id)
-
-        return lintransf_ids
-
-    def get_galois_elements(self, transform_id):
-        return self.backend.GetLinearTransformRotationKeys(transform_id)
-
-    def _collect_galois_elements(self, transform_id):
-        keys = self.get_galois_elements(transform_id)
-        self.required_galois_elements.update(keys)
-
-    def delete_transforms(self, transform_ids: dict):
-        for tid in transform_ids.values():
-            self.backend.DeleteLinearTransform(tid)

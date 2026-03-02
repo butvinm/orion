@@ -33,7 +33,6 @@ from orion.core.compiler_backend import (
     NewParameters,
     NewEncoder,
     PolynomialGenerator,
-    TransformEncoder,
 )
 from orion.core.tracer import StatsTracker, OrionTracer
 from orion.core.fuser import Fuser
@@ -78,7 +77,6 @@ class Compiler:
         # Build compile-time wrappers
         self._encoder = NewEncoder(self)
         self._poly_evaluator = PolynomialGenerator(self.backend)
-        self._lt_evaluator = TransformEncoder(self.backend, self.params)
 
         # Will be set by fit()
         self._traced = None
@@ -94,10 +92,6 @@ class Compiler:
         return self._encoder
 
     @property
-    def lt_evaluator(self):
-        return self._lt_evaluator
-
-    @property
     def poly_evaluator(self):
         return self._poly_evaluator
 
@@ -111,7 +105,6 @@ class Compiler:
         ctx.backend = self.backend
         ctx.params = self.params
         ctx.encoder = self._encoder
-        ctx.lt_evaluator = self._lt_evaluator
         ctx.poly_evaluator = self._poly_evaluator
         ctx.margin = self._margin
         ctx.config = self.config

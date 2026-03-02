@@ -34,7 +34,3 @@ class TestErrorPropagation:
         else:
             pytest.fail("Expected RuntimeError")
 
-    def test_bad_linear_transform_raises(self):
-        """Invalid LT blob should raise RuntimeError."""
-        with pytest.raises(RuntimeError):
-            ffi.linear_transform_unmarshal(b"bad lt blob data here!!")

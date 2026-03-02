@@ -103,29 +103,29 @@ Remove only truly dead exports: eval-only, LT functions, EvalKeyBundle. Keep `Cl
 
 **Bridge Go code:**
 
-- [ ] Delete `orionclient/bridge/evaluator.go` entirely (all Eval\* exports — dead since Python evaluator deleted)
-- [ ] Delete from `orionclient/bridge/types.go`: `NewEvalKeyBundle`, all `EvalKeyBundle*` setters, `GenerateLinearTransformFromParams`, `LinearTransformRequiredGaloisElements`, `LinearTransformMarshal`, `LinearTransformUnmarshal`
+- [x] Delete `orionclient/bridge/evaluator.go` entirely (all Eval\* exports — dead since Python evaluator deleted)
+- [x] Delete from `orionclient/bridge/types.go`: `NewEvalKeyBundle`, all `EvalKeyBundle*` setters, `GenerateLinearTransformFromParams`, `LinearTransformRequiredGaloisElements`, `LinearTransformMarshal`, `LinearTransformUnmarshal`
 
 **Python FFI:**
 
-- [ ] Remove all eval-only function prototypes and wrappers from `orion/backend/orionclient/ffi.py`
-- [ ] Remove LT function wrappers
-- [ ] Remove `EvalKeyBundle*` wrappers
-- [ ] Keep all `Client*` wrappers (still used by `orion/client.py` until replaced in Task 6)
+- [x] Remove all eval-only function prototypes and wrappers from `orion/backend/orionclient/ffi.py`
+- [x] Remove LT function wrappers
+- [x] Remove `EvalKeyBundle*` wrappers
+- [x] Keep all `Client*` wrappers (still used by `orion/client.py` until replaced in Task 6)
 
 **Dead compiler code:**
 
-- [ ] Delete `TransformEncoder` class from `orion/core/compiler_backend.py`
-- [ ] Remove `Compiler._lt_evaluator` attribute and `lt_evaluator` property from `orion/compiler.py`
-- [ ] Remove `ctx.lt_evaluator` from `Compiler._build_context()`
-- [ ] Remove `test_galois.py::TestGaloisVsLattigo` class (equivalence proven; pure-Python BSGS unit tests remain)
-- [ ] Delete `experiments/07_galois_elements_python/` and `experiments/test_lt_removal.py`
+- [x] Delete `TransformEncoder` class from `orion/core/compiler_backend.py`
+- [x] Remove `Compiler._lt_evaluator` attribute and `lt_evaluator` property from `orion/compiler.py`
+- [x] Remove `ctx.lt_evaluator` from `Compiler._build_context()`
+- [x] Remove `test_galois.py::TestGaloisVsLattigo` class (equivalence proven; pure-Python BSGS unit tests remain)
+- [x] Delete `experiments/07_galois_elements_python/` and `experiments/test_lt_removal.py`
 
 **Verify:**
 
-- [ ] Rebuild shared library: `python tools/build_lattigo.py`
-- [ ] Run `pytest tests/` — all tests must pass (Client tests still work)
-- [ ] Run `pytest tests/test_galois.py` — pure-Python BSGS unit tests still pass
+- [x] Rebuild shared library: `python tools/build_lattigo.py`
+- [x] Run `pytest tests/` — all tests must pass (Client tests still work)
+- [x] Run `pytest tests/test_galois.py` — pure-Python BSGS unit tests still pass
 
 ### Task 5: Restructure Go modules (ARCH.md 3.4)
 
