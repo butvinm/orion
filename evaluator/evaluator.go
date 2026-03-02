@@ -65,6 +65,23 @@ func NewEvaluator(p orion.Params, keys orion.EvalKeyBundle) (*Evaluator, error) 
 	}, nil
 }
 
+// NewEvaluatorFromKeySet creates an Evaluator directly from Lattigo types.
+// This is the preferred constructor for new code — no intermediate EvalKeyBundle needed.
+func NewEvaluatorFromKeySet(ckksParams ckks.Parameters, keys *rlwe.MemEvaluationKeySet) (*Evaluator, error) {
+	eval := ckks.NewEvaluator(ckksParams, keys)
+	enc := ckks.NewEncoder(ckksParams)
+	polyEval := polynomial.NewEvaluator(ckksParams, eval)
+	linEval := lintrans.NewEvaluator(eval)
+
+	return &Evaluator{
+		params:   ckksParams,
+		encoder:  enc,
+		eval:     eval,
+		linEval:  linEval,
+		polyEval: polyEval,
+	}, nil
+}
+
 // Close releases evaluator resources.
 func (e *Evaluator) Close() {
 	e.eval = nil

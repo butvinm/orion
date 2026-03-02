@@ -213,22 +213,22 @@ New CGO bridge wrapping Go evaluator. Accepts raw Lattigo bytes.
 
 **Prerequisite — refactor evaluator Go API:**
 
-- [ ] Add `NewEvaluatorFromKeySet(params ckks.Parameters, keys *rlwe.MemEvaluationKeySet) (*Evaluator, error)` to `evaluator/evaluator.go` — constructs evaluator directly from Lattigo types instead of `EvalKeyBundle`. The existing `NewEvaluator(p Params, keys EvalKeyBundle)` can stay for backward compat or be refactored
-- [ ] Run `go test ./evaluator/...` — verify existing tests still pass
+- [x] Add `NewEvaluatorFromKeySet(params ckks.Parameters, keys *rlwe.MemEvaluationKeySet) (*Evaluator, error)` to `evaluator/evaluator.go` — constructs evaluator directly from Lattigo types instead of `EvalKeyBundle`. The existing `NewEvaluator(p Params, keys EvalKeyBundle)` can stay for backward compat or be refactored
+- [x] Run `go test ./evaluator/...` — verify existing tests still pass
 
 **Bridge + Python package:**
 
-- [ ] Create directory structure: `python/orion-evaluator/orion_evaluator/`, `python/orion-evaluator/bridge/`
-- [ ] Write bridge Go code: CGO exports for `LoadModel`, `ModelClientParams`, `ModelClose`, `NewEvaluator` (accepts `MemEvaluationKeySet.MarshalBinary()` bytes — bridge unmarshals into `*rlwe.MemEvaluationKeySet`, calls `NewEvaluatorFromKeySet`), `EvaluatorForward` (accepts/returns `rlwe.Ciphertext.MarshalBinary()` bytes), `EvaluatorClose`
-- [ ] Create bridge `go.mod` importing `github.com/baahl-nyu/orion/evaluator` and Lattigo
-- [ ] Write Python FFI bindings: `python/orion-evaluator/orion_evaluator/ffi.py`
-- [ ] Write `orion_evaluator/model.py` — `Model` class with `load()`, `client_params()`, `close()`
-- [ ] Write `orion_evaluator/evaluator.py` — `Evaluator` class with `__init__(model, keys_bytes)`, `forward(ct_bytes) → bytes`, `close()`
-- [ ] Create `__init__.py` and `pyproject.toml`
-- [ ] Verify: `cd python/orion-evaluator && pip install -e .` succeeds and builds `.so`
-- [ ] Write unit tests for Model load/close lifecycle
-- [ ] Write unit tests for Evaluator creation/close lifecycle
-- [ ] Write E2E test: compile (orion-compiler) → keygen+encrypt (lattigo) → forward (orion-evaluator) → decrypt (lattigo) → correct output
+- [x] Create directory structure: `python/orion-evaluator/orion_evaluator/`, `python/orion-evaluator/bridge/`
+- [x] Write bridge Go code: CGO exports for `LoadModel`, `ModelClientParams`, `ModelClose`, `NewEvaluator` (accepts `MemEvaluationKeySet.MarshalBinary()` bytes — bridge unmarshals into `*rlwe.MemEvaluationKeySet`, calls `NewEvaluatorFromKeySet`), `EvaluatorForward` (accepts/returns `rlwe.Ciphertext.MarshalBinary()` bytes), `EvaluatorClose`
+- [x] Create bridge `go.mod` importing `github.com/baahl-nyu/orion/evaluator` and Lattigo
+- [x] Write Python FFI bindings: `python/orion-evaluator/orion_evaluator/ffi.py`
+- [x] Write `orion_evaluator/model.py` — `Model` class with `load()`, `client_params()`, `close()`
+- [x] Write `orion_evaluator/evaluator.py` — `Evaluator` class with `__init__(model, keys_bytes)`, `forward(ct_bytes) → bytes`, `close()`
+- [x] Create `__init__.py` and `pyproject.toml`
+- [x] Verify: `cd python/orion-evaluator && pip install -e .` succeeds and builds `.so`
+- [x] Write unit tests for Model load/close lifecycle
+- [x] Write unit tests for Evaluator creation/close lifecycle
+- [x] Write E2E test: compile (orion-compiler) → keygen+encrypt (lattigo) → forward (orion-evaluator) → decrypt (lattigo) → correct output
 
 ### Task 10: Final cleanup and acceptance verification
 
