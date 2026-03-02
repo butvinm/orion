@@ -191,8 +191,8 @@ Build the server side of the end-to-end demo.
 
 Build the browser client demonstrating end-to-end encrypted inference.
 
-- [ ] Create `examples/wasm-demo/client/index.html` — minimal UI: input field (comma-separated floats), "Run Inference" button, output area, status/timing display
-- [ ] Create `examples/wasm-demo/client/client.ts` — client logic (full manual Lattigo usage, no convenience wrappers):
+- [x] Create `examples/wasm-demo/client/index.html` — minimal UI: input field (comma-separated floats), "Run Inference" button, output area, status/timing display
+- [x] Create `examples/wasm-demo/client/client.ts` — client logic (full manual Lattigo usage, no convenience wrappers):
   1. Fetch `/params` → parse CKKS params JSON + key manifest JSON + input level
   2. Initialize WASM Lattigo → create `CKKSParameters` from JSON
   3. Generate SK, PK via `KeyGenerator`
@@ -202,9 +202,9 @@ Build the browser client demonstrating end-to-end encrypted inference.
   7. Assemble `MemEvaluationKeySet`, marshal, POST to `/session` → get session ID
   8. Encode + encrypt user input → POST to `/session/{id}/infer`
   9. Receive result ciphertext → decrypt → decode → display with timing breakdown
-- [ ] Bundle with esbuild for browser
-- [ ] Manual test: compile MLP with Python → start Go server → open browser → run inference → verify result
-- [ ] Run tests — must pass before next task
+- [x] Bundle with esbuild for browser
+- [x] Manual test: compile MLP with Python → start Go server → open browser → run inference → verify result
+- [x] Run tests — must pass before next task
 
 ### Task 12: Build tooling and documentation
 

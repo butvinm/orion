@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orion FHE Demo</title>
+    <style>
+      body {
+        font-family: monospace;
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 0 20px;
+        background: #fff;
+        color: #222;
+      }
+      h1 {
+        font-size: 1.4em;
+      }
+      p.subtitle {
+        color: #555;
+        font-size: 0.9em;
+        margin-top: -8px;
+      }
+      .section {
+        margin: 20px 0;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: bold;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+        font-family: monospace;
+        font-size: 1em;
+        border: 1px solid #ccc;
+      }
+      .buttons {
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        padding: 10px 20px;
+        cursor: pointer;
+        font-size: 1em;
+        border: 1px solid #999;
+        background: #f0f0f0;
+      }
+      button:hover:not(:disabled) {
+        background: #ddd;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      pre {
+        background: #f6f6f6;
+        border: 1px solid #ddd;
+        padding: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        min-height: 60px;
+        font-size: 0.9em;
+      }
+      #status {
+        color: #333;
+      }
+      #output {
+        color: #005500;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Orion Encrypted Inference Demo</h1>
+    <p class="subtitle">
+      Client-side key generation with Lattigo WASM. The secret key never leaves
+      the browser.
+    </p>
+
+    <div class="section">
+      <label for="input-values">Input values (comma-separated floats):</label>
+      <input
+        type="text"
+        id="input-values"
+        value="0.1, 0.2, 0.3, 0.4, 0.5"
+        placeholder="e.g. 0.1, -0.5, 0.8"
+      />
+    </div>
+
+    <div class="section buttons">
+      <button id="btn-init">Initialize Keys</button>
+      <button id="btn-infer" disabled>Run Inference</button>
+    </div>
+
+    <div class="section">
+      <label>Status:</label>
+      <pre id="status">Click "Initialize Keys" to load parameters and generate keys.</pre>
+    </div>
+
+    <div class="section">
+      <label>Output:</label>
+      <pre id="output"></pre>
+    </div>
+
+    <!-- Go WASM runtime — must load before client.js sets globalThis.Go -->
+    <script src="wasm/wasm_exec.js"></script>
+    <!-- Bundled client logic -->
+    <script type="module" src="client.js"></script>
+  </body>
+</html>
