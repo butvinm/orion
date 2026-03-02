@@ -210,9 +210,9 @@ Build the browser client demonstrating end-to-end encrypted inference.
 
 Polish step — replaces Task 1's `build.sh` with a proper Python build script matching the existing `tools/build_lattigo.py` pattern.
 
-- [ ] Create `tools/build_lattigo_wasm.py` (or extend `build_lattigo.py`) — builds `js/lattigo/bridge/` to WASM, copies `wasm_exec.js`, reports binary size
-- [ ] Add npm scripts: `build:wasm` (Go WASM build), `build:ts` (esbuild), `build` (both), `test`
-- [ ] Verify clean build from scratch: `tools/build_lattigo_wasm.py && cd js/lattigo && npm install && npm run build && npm test`
+- [x] Create `tools/build_lattigo_wasm.py` (or extend `build_lattigo.py`) — builds `js/lattigo/bridge/` to WASM, copies `wasm_exec.js`, reports binary size
+- [x] Add npm scripts: `build:wasm` (Go WASM build), `build:ts` (esbuild), `build` (both), `test`
+- [x] Verify clean build from scratch: `tools/build_lattigo_wasm.py && cd js/lattigo && npm install && npm run build && npm test`
 
 ### Task 13: Verify acceptance criteria
 
