@@ -46,6 +46,37 @@ func main() {
 	ns.Set("newDecryptor", js.FuncOf(newDecryptor))
 	ns.Set("decryptorDecryptNew", js.FuncOf(decryptorDecryptNew))
 
+	// Serialization — SecretKey
+	ns.Set("secretKeyMarshal", js.FuncOf(secretKeyMarshal))
+	ns.Set("secretKeyUnmarshal", js.FuncOf(secretKeyUnmarshal))
+
+	// Serialization — PublicKey
+	ns.Set("publicKeyMarshal", js.FuncOf(publicKeyMarshal))
+	ns.Set("publicKeyUnmarshal", js.FuncOf(publicKeyUnmarshal))
+
+	// Serialization — RelinearizationKey
+	ns.Set("relinKeyMarshal", js.FuncOf(relinKeyMarshal))
+	ns.Set("relinKeyUnmarshal", js.FuncOf(relinKeyUnmarshal))
+
+	// Serialization — GaloisKey
+	ns.Set("galoisKeyMarshal", js.FuncOf(galoisKeyMarshal))
+	ns.Set("galoisKeyUnmarshal", js.FuncOf(galoisKeyUnmarshal))
+
+	// Serialization — Ciphertext
+	ns.Set("ciphertextMarshal", js.FuncOf(ciphertextMarshal))
+	ns.Set("ciphertextUnmarshal", js.FuncOf(ciphertextUnmarshal))
+	ns.Set("ciphertextLevel", js.FuncOf(ciphertextLevel))
+
+	// Serialization — Plaintext
+	ns.Set("plaintextMarshal", js.FuncOf(plaintextMarshal))
+	ns.Set("plaintextUnmarshal", js.FuncOf(plaintextUnmarshal))
+	ns.Set("plaintextLevel", js.FuncOf(plaintextLevel))
+
+	// MemEvaluationKeySet
+	ns.Set("newMemEvalKeySet", js.FuncOf(newMemEvalKeySet))
+	ns.Set("memEvalKeySetMarshal", js.FuncOf(memEvalKeySetMarshal))
+	ns.Set("memEvalKeySetUnmarshal", js.FuncOf(memEvalKeySetUnmarshal))
+
 	// Readiness signal — MUST be last registration.
 	ns.Set("__ready", true)
 

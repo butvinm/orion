@@ -100,13 +100,13 @@ Port encoding/encryption/decryption operations.
 
 Port serialization for all key and ciphertext types. Critical for client↔server communication.
 
-- [ ] Add `serialize.go` — marshal/unmarshal for: `SecretKey`, `PublicKey`, `RelinearizationKey`, `GaloisKey`, `Ciphertext`, `Plaintext`, `MemEvaluationKeySet`
-- [ ] Each marshal returns `Uint8Array`, each unmarshal accepts `Uint8Array` and returns handle ID
-- [ ] Add `MemEvaluationKeySet`: `newMemEvalKeySet(rlkHID, galoisKeyHIDs[]) → hID`, `memEvalKeySetMarshal(hID) → bytes`, `memEvalKeySetUnmarshal(bytes) → hID`
-- [ ] Add ciphertext/plaintext accessors: `ciphertextLevel(ctHID) → int`, `plaintextLevel(ptHID) → int`
-- [ ] Node.js test: keygen → marshal all keys → unmarshal → verify roundtrip (marshal again, compare bytes)
-- [ ] Node.js test: encrypt → marshal ciphertext → unmarshal → decrypt → verify values
-- [ ] Run tests — must pass before next task
+- [x] Add `serialize.go` — marshal/unmarshal for: `SecretKey`, `PublicKey`, `RelinearizationKey`, `GaloisKey`, `Ciphertext`, `Plaintext`, `MemEvaluationKeySet`
+- [x] Each marshal returns `Uint8Array`, each unmarshal accepts `Uint8Array` and returns handle ID
+- [x] Add `MemEvaluationKeySet`: `newMemEvalKeySet(rlkHID, galoisKeyHIDs[]) → hID`, `memEvalKeySetMarshal(hID) → bytes`, `memEvalKeySetUnmarshal(bytes) → hID`
+- [x] Add ciphertext/plaintext accessors: `ciphertextLevel(ctHID) → int`, `plaintextLevel(ptHID) → int`
+- [x] Node.js test: keygen → marshal all keys → unmarshal → verify roundtrip (marshal again, compare bytes)
+- [x] Node.js test: encrypt → marshal ciphertext → unmarshal → decrypt → verify values
+- [x] Run tests — must pass before next task
 
 ### Task 5: Go WASM bridge — bootstrap parameter primitives
 
