@@ -10,15 +10,15 @@ import struct
 import torch
 import pytest
 
-from orion.params import CKKSParams, CostProfile
-from orion.compiled_model import (
+from orion_compiler.params import CKKSParams, CostProfile
+from orion_compiler.compiled_model import (
     CompiledModel,
     KeyManifest,
     Graph,
     unpack_raw_diagonals,
 )
-from orion.compiler import Compiler
-import orion.nn as on
+from orion_compiler.compiler import Compiler
+import orion_compiler.nn as on
 from lattigo.ckks import Parameters, Encoder
 from lattigo.rlwe import (
     KeyGenerator,

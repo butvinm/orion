@@ -4,8 +4,8 @@ import struct
 
 import pytest
 
-from orion.params import CostProfile
-from orion.compiled_model import (
+from orion_compiler.params import CostProfile
+from orion_compiler.compiled_model import (
     GraphNode,
     GraphEdge,
     Graph,

@@ -9,9 +9,9 @@ import gc
 import torch
 import pytest
 
-from orion.params import CKKSParams
-from orion.compiler import Compiler
-import orion.nn as on
+from orion_compiler.params import CKKSParams
+from orion_compiler.compiler import Compiler
+import orion_compiler.nn as on
 
 # Lattigo primitive imports
 from lattigo.ckks import Parameters, Encoder
@@ -26,7 +26,7 @@ from lattigo.rlwe import (
 from lattigo.gohandle import GoHandle
 
 # Old FFI imports — still needed for TestClientModuliChain and TestGoErrorPropagation
-from orion.backend.orionclient import ffi as old_ffi
+from lattigo import legacy_ffi as old_ffi
 
 
 MLP_PARAMS = CKKSParams(

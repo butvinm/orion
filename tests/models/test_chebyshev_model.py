@@ -12,9 +12,9 @@ import gc
 import torch
 import pytest
 
-from orion.params import CKKSParams
-from orion.compiler import Compiler
-import orion.nn as on
+from orion_compiler.params import CKKSParams
+from orion_compiler.compiler import Compiler
+import orion_compiler.nn as on
 
 
 # Deeper moduli chain to accommodate Chebyshev polynomial depth.

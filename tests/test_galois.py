@@ -2,7 +2,7 @@
 
 import pytest
 
-from orion.core.galois import (
+from orion_compiler.core.galois import (
     GALOIS_GEN,
     galois_element,
     bsgs_index,

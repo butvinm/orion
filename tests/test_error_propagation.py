@@ -2,7 +2,7 @@
 
 import pytest
 
-from orion.backend.orionclient import ffi
+from lattigo import legacy_ffi as ffi
 
 
 class TestErrorPropagation:

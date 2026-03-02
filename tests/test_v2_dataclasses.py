@@ -3,16 +3,15 @@ KeyManifest, CompiledModel, EvalKeys, and the NewParameters adapter."""
 
 import pytest
 
-from orion.params import CKKSParams, CostProfile, CompilerConfig
-from orion.compiled_model import (
+from orion_compiler.params import CKKSParams, CostProfile, CompilerConfig
+from orion_compiler.compiled_model import (
     CompiledModel,
     KeyManifest,
-    EvalKeys,
     Graph,
     GraphNode,
     GraphEdge,
 )
-from orion.core.compiler_backend import NewParameters
+from orion_compiler.core.compiler_backend import NewParameters
 
 
 # ---------------------------------------------------------------------------
@@ -311,55 +310,6 @@ class TestCompiledModel:
 # ---------------------------------------------------------------------------
 # EvalKeys
 # ---------------------------------------------------------------------------
-
-
-class TestEvalKeys:
-    def test_empty_keys(self):
-        ek = EvalKeys()
-        assert not ek.has_rlk
-        assert ek.galois_elements == set()
-
-    def test_with_rlk(self):
-        ek = EvalKeys(rlk_data=b"rlk_bytes")
-        assert ek.has_rlk
-
-    def test_properties(self):
-        ek = EvalKeys(
-            rlk_data=b"rlk",
-            galois_keys={5: b"gk5", 25: b"gk25"},
-            bootstrap_keys={4096: b"bk4096"},
-        )
-        assert ek.galois_elements == {5, 25}
-        assert ek.has_rlk is True
-
-    def test_serialization_roundtrip(self):
-        ek = EvalKeys(
-            rlk_data=b"relinearization_key_data",
-            galois_keys={5: b"galois_5", 25: b"galois_25", 125: b"galois_125"},
-            bootstrap_keys={4096: b"bootstrap_4096"},
-        )
-        data = ek.to_bytes()
-        ek2 = EvalKeys.from_bytes(data)
-
-        assert ek2.rlk_data == ek.rlk_data
-        assert ek2.galois_keys == ek.galois_keys
-        assert ek2.bootstrap_keys == ek.bootstrap_keys
-
-    def test_serialization_no_rlk(self):
-        ek = EvalKeys(
-            galois_keys={5: b"gk5"},
-        )
-        data = ek.to_bytes()
-        ek2 = EvalKeys.from_bytes(data)
-        assert ek2.rlk_data is None
-        assert ek2.galois_keys == {5: b"gk5"}
-
-    def test_wrong_magic(self):
-        ek = EvalKeys(rlk_data=b"rlk")
-        data = bytearray(ek.to_bytes())
-        data[:8] = b"ORMDL\x00\x01\x00"  # model magic instead of keys magic
-        with pytest.raises(ValueError, match="Invalid magic"):
-            EvalKeys.from_bytes(bytes(data))
 
 
 # ---------------------------------------------------------------------------

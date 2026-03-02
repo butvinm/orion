@@ -193,19 +193,19 @@ Replace all `Client` usage in tests with direct Lattigo primitive calls. After t
 
 Move compiler code to standalone package. `orion/client.py`, `orion/ciphertext.py` are NOT moved — they die when `orion/` is deleted.
 
-- [ ] Create directory structure: `python/orion-compiler/orion_compiler/`
-- [ ] Move `orion/compiler.py` → `orion_compiler/compiler.py`
-- [ ] Move `orion/nn/` → `orion_compiler/nn/`
-- [ ] Move `orion/core/` → `orion_compiler/core/`
-- [ ] Move `orion/params.py` → `orion_compiler/params.py`
-- [ ] Move `orion/compiled_model.py` → `orion_compiler/compiled_model.py` (remove `EvalKeys` class and `ORKEY` format during move — no longer needed after Task 7)
-- [ ] Move `orion/models/` → `orion_compiler/models/` (if used)
-- [ ] Update all imports: `from orion.xxx` → `from orion_compiler.xxx`, FFI imports → `from lattigo import ...`. Critical: `orion/core/compiler_backend.py` imports `from orion.backend.orionclient import ffi` — must change to `from lattigo import ...`
-- [ ] Create `python/orion-compiler/orion_compiler/__init__.py` — export `Compiler`, `CKKSParams`, `CompiledModel`, `KeyManifest`
-- [ ] Create `python/orion-compiler/pyproject.toml` — depends on `lattigo`, `torch`, `networkx`
-- [ ] Verify: `cd python/orion-compiler && pip install -e .` succeeds
-- [ ] Verify: `from orion_compiler import Compiler, CKKSParams, CompiledModel` works
-- [ ] Run compiler tests with updated imports — all must pass
+- [x] Create directory structure: `python/orion-compiler/orion_compiler/`
+- [x] Move `orion/compiler.py` → `orion_compiler/compiler.py`
+- [x] Move `orion/nn/` → `orion_compiler/nn/`
+- [x] Move `orion/core/` → `orion_compiler/core/`
+- [x] Move `orion/params.py` → `orion_compiler/params.py`
+- [x] Move `orion/compiled_model.py` → `orion_compiler/compiled_model.py` (remove `EvalKeys` class and `ORKEY` format during move — no longer needed after Task 7)
+- [x] Move `orion/models/` → `orion_compiler/models/` (if used)
+- [x] Update all imports: `from orion.xxx` → `from orion_compiler.xxx`, FFI imports → `from lattigo import ...`. Critical: `orion/core/compiler_backend.py` imports `from orion.backend.orionclient import ffi` — must change to `from lattigo import ...`
+- [x] Create `python/orion-compiler/orion_compiler/__init__.py` — export `Compiler`, `CKKSParams`, `CompiledModel`, `KeyManifest`
+- [x] Create `python/orion-compiler/pyproject.toml` — depends on `lattigo`, `torch`, `networkx`
+- [x] Verify: `cd python/orion-compiler && pip install -e .` succeeds
+- [x] Verify: `from orion_compiler import Compiler, CKKSParams, CompiledModel` works
+- [x] Run compiler tests with updated imports — all must pass
 
 ### Task 9: Create python/orion-evaluator/ package (ARCH.md 3.5)
 

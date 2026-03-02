@@ -11,15 +11,15 @@ import numpy as np
 import pytest
 import torch
 
-from orion.compiled_model import (
+from orion_compiler.compiled_model import (
     CompiledModel,
     pack_raw_diagonals,
     unpack_raw_bias,
     unpack_raw_diagonals,
 )
-from orion.compiler import Compiler
-from orion.params import CKKSParams
-import orion.nn as on
+from orion_compiler.compiler import Compiler
+from orion_compiler.params import CKKSParams
+import orion_compiler.nn as on
 
 
 # -----------------------------------------------------------------------

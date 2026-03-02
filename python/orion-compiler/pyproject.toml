@@ -1,0 +1,20 @@
+[build-system]
+requires = ["poetry-core>=1.0.2", "setuptools>=61.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "orion-compiler"
+version = "2.0.0"
+description = "Orion FHE compiler — traces, fits, and compiles PyTorch neural networks for encrypted inference"
+authors = []
+packages = [{include = "orion_compiler"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+lattigo = {path = "../lattigo", develop = true}
+torch = ">=2.2.0"
+networkx = ">=2.6"
+tqdm = ">=4.30.0"
+numpy = ">=1.21.0"
+scipy = ">=1.7.0,<=1.14.1"
+matplotlib = ">=3.1.0"

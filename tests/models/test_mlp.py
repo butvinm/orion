@@ -2,12 +2,12 @@ import gc
 
 import torch
 import pytest
-import orion
-import orion.models as models
-from orion.core.utils import get_mnist_datasets, mae
+import orion_compiler
+import orion_compiler.models as models
+from orion_compiler.core.utils import get_mnist_datasets, mae
 
 
-MLP_PARAMS = orion.CKKSParams(
+MLP_PARAMS = orion_compiler.CKKSParams(
     logn=13,
     logq=(29, 26, 26, 26, 26, 26),
     logp=(29, 29),
