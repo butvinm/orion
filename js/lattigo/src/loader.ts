@@ -55,8 +55,9 @@ export async function loadLattigo(wasmPath?: string): Promise<WasmBridge> {
     // Node.js: read wasm file from disk
     const fs = await import("fs");
     const path = await import("path");
+    const { fileURLToPath } = await import("url");
     const resolvedPath =
-      wasmPath ?? path.join(path.dirname(import.meta.url.replace("file://", "")), "..", "wasm", "lattigo.wasm");
+      wasmPath ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "wasm", "lattigo.wasm");
     const wasmBuffer = fs.readFileSync(resolvedPath);
     const result = await WebAssembly.instantiate(wasmBuffer, go.importObject);
     instance = result.instance;
