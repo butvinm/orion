@@ -197,8 +197,10 @@ func main() {
 
     // POST /session — client uploads eval keys, server creates evaluator
     http.HandleFunc("POST /session", func(w http.ResponseWriter, r *http.Request) {
-        keys, _ := evaluator.ReadEvalKeys(r.Body)
-        eval, _ := evaluator.NewEvaluator(model.Params(), keys)
+        keysData, _ := io.ReadAll(r.Body)
+        evk := new(rlwe.MemEvaluationKeySet)
+        evk.UnmarshalBinary(keysData)
+        eval, _ := evaluator.NewEvaluatorFromKeySet(model.Params(), evk)
         id := generateID()
         evaluators.Store(id, eval)
         json.NewEncoder(w).Encode(map[string]string{"id": id})
@@ -531,7 +533,7 @@ Monorepo. Go module at root (`github.com/baahl-nyu/orion`). One Go package — `
 ```
 orion/
 ├── go.mod                          # module github.com/baahl-nyu/orion
-├── params.go, client/ ...          # Shared types + client logic (used by evaluator + bridges)
+├── params.go, keys.go, ...         # Shared types: Params, Manifest, Polynomial (used by evaluator + bridges)
 │
 ├── evaluator/                      # Go pkg: Orion FHE inference engine
 │                                   #   imports Lattigo directly
@@ -924,12 +926,12 @@ type Evaluator struct {
     bootstrappers map[int]*bootstrapping.Evaluator
 }
 
-func NewEvaluator(params CKKSParams, keys EvalKeyBundle) (*Evaluator, error)
-func (e *Evaluator) Forward(model *Model, input []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error)
+func NewEvaluatorFromKeySet(ckksParams ckks.Parameters, keys *rlwe.MemEvaluationKeySet) (*Evaluator, error)
+func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
 func (e *Evaluator) Close()
 ```
 
-The `Evaluator` is created from `orionclient.NewEvaluator()` (reuse existing constructor that builds Lattigo evaluator from params + keys) or by directly constructing the Lattigo types. It holds per-client evaluation keys. No secret key.
+The `Evaluator` is created directly from Lattigo types — no intermediate serialization bundle. It holds per-client evaluation keys. No secret key.
 
 An `Evaluator` is **not goroutine-safe** — Lattigo evaluators carry internal NTT/decomposition buffers that are reused across operations. Use one `Evaluator` per goroutine, or protect `Forward()` with a mutex.
 
@@ -962,7 +964,7 @@ func (e *Evaluator) Forward(model *Model, input []*rlwe.Ciphertext) ([]*rlwe.Cip
 
 #### 2.5 Op implementations
 
-Each op is a method on `Evaluator`. All underlying Lattigo calls already exist in `orionclient/evaluator.go`.
+Each op is a method on `Evaluator`. All underlying Lattigo calls are in `evaluator/evaluator.go`.
 
 **`linear_transform`:**
 
@@ -1044,12 +1046,13 @@ Only `.orion` files and cleartext JSON cross the Python→Go boundary. Keys and 
 
 1. `LoadModel("testdata/mlp.orion")` → model
 2. `model.ClientParams()` → params, manifest, inputLevel
-3. `orionclient.New(params)` → client (fresh key pair, Go side)
-4. `client.GenerateKeys(manifest)` → eval keys (Go side)
-5. `NewEvaluator(params, keys)` → evaluator
-6. Load input from `mlp.input.json`, encode and encrypt via `client` (Go side)
-7. `eval.Forward(model, ct)` → result
-8. Decrypt result via `client`, compare against `mlp.expected.json` — tolerance ≤ 1e-3
+3. `params.NewCKKSParameters()` → ckksParams
+4. `rlwe.NewKeyGenerator(ckksParams)` → generate sk, pk, rlk, Galois keys from manifest
+5. `rlwe.NewMemEvaluationKeySet(rlk, galoisKeys...)` → evk
+6. `NewEvaluatorFromKeySet(ckksParams, evk)` → evaluator
+7. Encode + encrypt via `ckks.Encoder` + `rlwe.Encryptor`
+8. `eval.Forward(model, ct)` → result
+9. Decrypt + decode via `rlwe.Decryptor` + `ckks.Encoder`, compare against `mlp.expected.json`
 
 Repeat for at least: MLP (linear-only), model with Chebyshev activations, model with bootstrap (if feasible in test time).
 
@@ -1057,7 +1060,7 @@ Repeat for at least: MLP (linear-only), model with Chebyshev activations, model 
 
 - [x] `evaluator.LoadModel(data)` successfully parses `.orion` v2 files produced by the Python compiler
 - [x] `model.ClientParams()` returns correct CKKS params, key manifest, and input level
-- [x] `evaluator.NewEvaluator(params, keys)` constructs from Go-generated eval keys (keys generated in Go via `orionclient.Client.GenerateKeys()`, not deserialized from Python)
+- [x] `evaluator.NewEvaluatorFromKeySet(ckksParams, evk)` constructs from Lattigo types directly (keys generated via `rlwe.KeyGenerator`)
 - [x] `eval.Forward(model, ct)` produces correct results for MLP (tolerance ≤ 0.02 — inherent CKKS noise with logscale=26 parameters yields ~0.01 max error; 1e-3 was overly optimistic for these params)
 - [x] `eval.Forward()` handles: `linear_transform`, `quad`, `polynomial`, `flatten`. Deferred: `add`, `mult` have unit tests but no E2E model exercises them; `bootstrap` deferred to future work
 - [x] Multiple `Evaluator` instances sharing one `Model` work correctly (concurrent reads)
@@ -1150,8 +1153,8 @@ After Phase 2 delivers the `evaluator/` package:
 - Root `go.mod`: `module github.com/baahl-nyu/orion` (single module for evaluator + shared types)
 - `evaluator/` becomes a package under the root module
 - `python/lattigo/bridge/` retains its own `go.mod` (CGO shared library, separate build)
-- Move shared types (`Params`, `Manifest`, etc.) from `orionclient/` to root-level or `client/` subpackage
-- Delete `orionclient/` (its client logic moves to root module packages, bridge moves to `python/lattigo/bridge/`)
+- Move shared types (`Params`, `Manifest`, etc.) from `orionclient/` to root-level package
+- Delete `orionclient/` (bridge moves to `python/lattigo/bridge/`, client logic deleted — users use Lattigo directly)
 
 #### 3.5 Create `python/orion-evaluator/`
 
