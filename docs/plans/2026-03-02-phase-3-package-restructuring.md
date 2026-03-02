@@ -77,14 +77,14 @@ Dead code removal. The Python evaluator was deleted in Phase 1, so all `if self.
 
 Remove only the truly dead code from `ciphertext.py`. Keep `Client`, `Ciphertext`, `PlainText` classes functional — they are still used by tests until Task 7 replaces them.
 
-- [ ] Remove `context` attribute from `Ciphertext.__init__()` and all references
-- [ ] Remove dead arithmetic methods from `Ciphertext`: `add()`, `sub()`, `mul()`, `roll()`, `bootstrap()`, `_eval_h()`, `_wrap()`, all dunder operators (`__add__`, `__sub__`, `__mul__`, `__rmul__`, `__neg__`, `__iadd__`, `__isub__`, `__imul__`)
-- [ ] Remove `on_shape` attribute (only read by dead arithmetic methods and skipped tests)
-- [ ] Remove dead `PlainText.mul()` and `PlainText.__mul__`
-- [ ] Remove `_EvalContext` remnants if any exist
-- [ ] Verify `Ciphertext` still works for client-side usage: shape tracking, Go handle wrapping, serialization, `Client.encrypt()`/`Client.decrypt()`
-- [ ] Verify no other files reference removed methods (grep for `ct.add(`, `ct.mul(`, `ct.context`, etc.)
-- [ ] Run `pytest tests/` — all tests must pass (including Client tests)
+- [x] Remove `context` attribute from `Ciphertext.__init__()` and all references
+- [x] Remove dead arithmetic methods from `Ciphertext`: `add()`, `sub()`, `mul()`, `roll()`, `bootstrap()`, `_eval_h()`, `_wrap()`, all dunder operators (`__add__`, `__sub__`, `__mul__`, `__rmul__`, `__neg__`, `__iadd__`, `__isub__`, `__imul__`)
+- [x] Remove `on_shape` attribute (only read by dead arithmetic methods and skipped tests)
+- [x] Remove dead `PlainText.mul()` and `PlainText.__mul__`
+- [x] Remove `_EvalContext` remnants if any exist
+- [x] Verify `Ciphertext` still works for client-side usage: shape tracking, Go handle wrapping, serialization, `Client.encrypt()`/`Client.decrypt()`
+- [x] Verify no other files reference removed methods (grep for `ct.add(`, `ct.mul(`, `ct.context`, etc.)
+- [x] Run `pytest tests/` — all tests must pass (including Client tests)
 
 ### Task 3: ~~Investigate GenerateLinearTransform redundancy~~ ✅ COMPLETED
 
