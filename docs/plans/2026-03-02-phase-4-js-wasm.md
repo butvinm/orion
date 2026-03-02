@@ -89,12 +89,12 @@ Port parameter construction and key generation from `python/lattigo/bridge/latti
 
 Port encoding/encryption/decryption operations.
 
-- [ ] Add `encoder.go` — `newEncoder(paramsHID) → hID`, `encoderEncode(encHID, values[], level, scale) → ptHID` (sync — encoding is <1ms even for 2^14 slots), `encoderDecode(encHID, ptHID, numSlots) → float64[]` (sync)
-- [ ] Add `encryptor.go` — `newEncryptor(paramsHID, pkHID) → hID`, `encryptorEncryptNew(encHID, ptHID) → ctHID`
-- [ ] Add `decryptor.go` — `newDecryptor(paramsHID, skHID) → hID`, `decryptorDecryptNew(decHID, ctHID) → ptHID`
-- [ ] Register all in `main.go`
-- [ ] Node.js test: params → keygen → encode → encrypt → decrypt → decode → verify values match (roundtrip)
-- [ ] Run tests — must pass before next task
+- [x] Add `encoder.go` — `newEncoder(paramsHID) → hID`, `encoderEncode(encHID, values[], level, scale) → ptHID` (sync — encoding is <1ms even for 2^14 slots), `encoderDecode(encHID, ptHID, numSlots) → float64[]` (sync)
+- [x] Add `encryptor.go` — `newEncryptor(paramsHID, pkHID) → hID`, `encryptorEncryptNew(encHID, ptHID) → ctHID`
+- [x] Add `decryptor.go` — `newDecryptor(paramsHID, skHID) → hID`, `decryptorDecryptNew(decHID, ctHID) → ptHID`
+- [x] Register all in `main.go`
+- [x] Node.js test: params → keygen → encode → encrypt → decrypt → decode → verify values match (roundtrip)
+- [x] Run tests — must pass before next task
 
 ### Task 4: Go WASM bridge — serialization (marshal/unmarshal)
 

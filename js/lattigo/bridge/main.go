@@ -33,6 +33,19 @@ func main() {
 	ns.Set("keyGenGenRelinKey", js.FuncOf(keyGenGenRelinKey))
 	ns.Set("keyGenGenGaloisKey", js.FuncOf(keyGenGenGaloisKey))
 
+	// Encoder
+	ns.Set("newEncoder", js.FuncOf(newEncoder))
+	ns.Set("encoderEncode", js.FuncOf(encoderEncode))
+	ns.Set("encoderDecode", js.FuncOf(encoderDecode))
+
+	// Encryptor
+	ns.Set("newEncryptor", js.FuncOf(newEncryptor))
+	ns.Set("encryptorEncryptNew", js.FuncOf(encryptorEncryptNew))
+
+	// Decryptor
+	ns.Set("newDecryptor", js.FuncOf(newDecryptor))
+	ns.Set("decryptorDecryptNew", js.FuncOf(decryptorDecryptNew))
+
 	// Readiness signal — MUST be last registration.
 	ns.Set("__ready", true)
 
