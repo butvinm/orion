@@ -138,13 +138,13 @@ Set up the npm package structure and TypeScript foundation.
 
 Wrap the raw WASM functions in ergonomic TypeScript classes. All classes receive the `WasmBridge` instance via a module-level variable set by `loadLattigo()`. Classes are only usable after `loadLattigo()` resolves — calling methods before that throws.
 
-- [ ] Create `js/lattigo/src/ckks.ts` — `CKKSParameters` class: `static fromLogn(...)`, `static fromJSON(paramsJson)`, `maxSlots()`, `maxLevel()`, `defaultScale()`, `galoisElement(rotation)`, `moduliChain()`, `auxModuliChain()`, `free()`
-- [ ] Create `js/lattigo/src/rlwe.ts` — `KeyGenerator`, `SecretKey`, `PublicKey`, `RelinearizationKey`, `GaloisKey`, `Encryptor`, `Decryptor`, `Ciphertext`, `Plaintext`, `MemEvaluationKeySet` — each wrapping handle + calling bridge functions + `.free()` → `deleteHandle` + `FinalizationRegistry` safety net (catches forgotten `.free()` calls)
-- [ ] Create `js/lattigo/src/encoder.ts` — `Encoder` class: `static new(params)`, `encode(values, level, scale)`, `decode(plaintext, numSlots)`, `free()`
-- [ ] Create `js/lattigo/src/index.ts` — re-export `loadLattigo` + all public classes
-- [ ] Add `esbuild` build script in `package.json` — bundle to `dist/`
-- [ ] Verify build produces `dist/index.js` + `dist/index.d.ts`
-- [ ] Run tests — must pass before next task
+- [x] Create `js/lattigo/src/ckks.ts` — `CKKSParameters` class: `static fromLogn(...)`, `static fromJSON(paramsJson)`, `maxSlots()`, `maxLevel()`, `defaultScale()`, `galoisElement(rotation)`, `moduliChain()`, `auxModuliChain()`, `free()`
+- [x] Create `js/lattigo/src/rlwe.ts` — `KeyGenerator`, `SecretKey`, `PublicKey`, `RelinearizationKey`, `GaloisKey`, `Encryptor`, `Decryptor`, `Ciphertext`, `Plaintext`, `MemEvaluationKeySet` — each wrapping handle + calling bridge functions + `.free()` → `deleteHandle` + `FinalizationRegistry` safety net (catches forgotten `.free()` calls)
+- [x] Create `js/lattigo/src/encoder.ts` — `Encoder` class: `static new(params)`, `encode(values, level, scale)`, `decode(plaintext, numSlots)`, `free()`
+- [x] Create `js/lattigo/src/index.ts` — re-export `loadLattigo` + all public classes
+- [x] Add `esbuild` build script in `package.json` — bundle to `dist/`
+- [x] Verify build produces `dist/index.js` + `dist/index.d.ts`
+- [x] Run tests — must pass before next task
 
 ### Task 8: TypeScript integration tests
 

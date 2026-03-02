@@ -1,4 +1,5 @@
 import type { WasmBridge } from "./types.js";
+import { setBridge } from "./bridge.js";
 
 /**
  * Minimal type for Go's WASM runtime class (from wasm_exec.js).
@@ -76,6 +77,7 @@ export async function loadLattigo(wasmPath?: string): Promise<WasmBridge> {
       | WasmBridge
       | undefined;
     if (lattigo?.__ready) {
+      setBridge(lattigo);
       return lattigo;
     }
     await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS));
