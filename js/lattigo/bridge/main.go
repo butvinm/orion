@@ -77,6 +77,10 @@ func main() {
 	ns.Set("memEvalKeySetMarshal", js.FuncOf(memEvalKeySetMarshal))
 	ns.Set("memEvalKeySetUnmarshal", js.FuncOf(memEvalKeySetUnmarshal))
 
+	// Bootstrap
+	ns.Set("newBootstrapParametersFromLiteral", js.FuncOf(newBootstrapParametersFromLiteral))
+	ns.Set("btpParamsGenEvaluationKeys", js.FuncOf(btpParamsGenEvaluationKeys))
+
 	// Readiness signal — MUST be last registration.
 	ns.Set("__ready", true)
 

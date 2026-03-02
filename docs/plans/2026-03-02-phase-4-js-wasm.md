@@ -114,13 +114,13 @@ Expose Lattigo's bootstrap API as thin bindings. No orchestration logic — the 
 
 **Note:** This is NEW code, not a port — the Python bridge has NO bootstrap functions. Reference implementation is `experiments/lattigo-wasm-bootstrap/main.go` which uses `bootstrapping.NewParametersFromLiteral()` + `btpParams.GenEvaluationKeys(sk)`.
 
-- [ ] Add `bootstrap.go` with thin bindings to `circuits/ckks/bootstrapping`:
+- [x] Add `bootstrap.go` with thin bindings to `circuits/ckks/bootstrapping`:
   - `newBootstrapParametersFromLiteral(paramsHID, btpLitJSON) → btpParamsHID` — accepts `bootstrapping.ParametersLiteral` as JSON (user constructs it with `LogN`, `LogP`, `Xs`, `LogSlots`). Sync — just parameter construction.
   - `btpParamsGenEvaluationKeys(btpParamsHID, skHID) → Promise<{evkHID, btpEvkHID}>` — async (goroutine+resolve/reject). Returns both the `*rlwe.MemEvaluationKeySet` and `bootstrapping.EvaluationKeys` handles. Heavy operation (5–30s).
-- [ ] Register in `main.go`
-- [ ] Node.js test: construct bootstrap params literal JSON (with ConjugateInvariant LogN+1 adjustment done in JS), generate keys, verify handles are valid
-- [ ] Node.js test: marshal the resulting `MemEvaluationKeySet` → unmarshal → verify roundtrip
-- [ ] Run tests — must pass before next task
+- [x] Register in `main.go`
+- [x] Node.js test: construct bootstrap params literal JSON (with ConjugateInvariant LogN+1 adjustment done in JS), generate keys, verify handles are valid
+- [x] Node.js test: marshal the resulting `MemEvaluationKeySet` → unmarshal → verify roundtrip
+- [x] Run tests — must pass before next task
 
 ### Task 6: TypeScript wrappers — project setup and types
 
