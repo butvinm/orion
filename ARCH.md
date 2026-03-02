@@ -1281,6 +1281,8 @@ Model architectures move out of the library into `examples/`. The `orion-compile
 
 Starts after Phase 3 (packages split, `orion-evaluator` available).
 
+> **Note:** The old `examples/` and `demo/` directories were deleted after Phase 3 — they imported from the deleted `orion` monolith and were completely broken. This phase creates them from scratch using the new package API (`lattigo`, `orion_compiler`, `orion_evaluator`).
+
 #### 5.1 Move models from `orion/models/` to `examples/`
 
 Delete `orion/models/` (or `orion_compiler/models/` after Phase 3). Each model becomes a standalone example:
