@@ -228,8 +228,8 @@ Polish step — replaces Task 1's `build.sh` with a proper Python build script m
 
 ### Task 14: [Final] Update documentation
 
-- [ ] Update `CLAUDE.md` if new build commands or conventions emerged
-- [ ] Update `ARCH.md` Phase 4 checklist items to `[x]`
+- [x] Update `CLAUDE.md` if new build commands or conventions emerged
+- [x] Update `ARCH.md` Phase 4 checklist items to `[x]`
 
 ## Technical Details
 

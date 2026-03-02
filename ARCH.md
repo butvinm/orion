@@ -1283,13 +1283,13 @@ Tensor-to-slot mapping (flatten, pad, split) is trivial user code — no JS libr
 
 #### Phase 4 acceptance checklist
 
-- [ ] `js/lattigo/` builds to `.wasm` (< 10 MB uncompressed)
-- [ ] TypeScript wrappers compile without errors
-- [ ] Full key generation flow (SK → PK → RLK → Galois keys → MemEvaluationKeySet) → `encrypt()` → `decrypt()` roundtrip works in Node.js
-- [ ] JS example: keygen → encode → encrypt → decrypt → decode roundtrip works in Node.js
-- [ ] Browser demo: compile MLP (Python) → serve (Go) → query (browser) → correct decrypted result
-- [ ] WASM loads and initializes in < 3 seconds on modern browser
-- [ ] No Go objects leaked after `.free()` calls
+- [x] `js/lattigo/` builds to `.wasm` (< 10 MB uncompressed)
+- [x] TypeScript wrappers compile without errors
+- [x] Full key generation flow (SK → PK → RLK → Galois keys → MemEvaluationKeySet) → `encrypt()` → `decrypt()` roundtrip works in Node.js
+- [x] JS example: keygen → encode → encrypt → decrypt → decode roundtrip works in Node.js
+- [x] Browser demo: compile MLP (Python) → serve (Go) → query (browser) → correct decrypted result
+- [x] WASM loads and initializes in < 3 seconds on modern browser
+- [x] No Go objects leaked after `.free()` calls
 
 ---
 

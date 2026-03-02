@@ -12,7 +12,7 @@ See `ARCH.md` for the full target architecture, compiled model format specificat
 
 ## Repository Structure
 
-Three independent Python packages plus a Go evaluator:
+Three independent Python packages plus a Go evaluator plus a JS/WASM package:
 
 ```
 python/lattigo/           # pip install lattigo — Lattigo CKKS bindings
@@ -33,19 +33,34 @@ evaluator/                # Pure Go FHE inference engine (subpackage of root mod
 client/                   # Go client logic (keygen, encrypt, decrypt)
 go.mod                    # Root module: github.com/baahl-nyu/orion
 python/tests/             # All Python tests
+
+js/lattigo/               # @orion/lattigo npm package — Lattigo WASM bindings
+  bridge/                 # Go WASM: builds to wasm/lattigo.wasm (GOOS=js GOARCH=wasm)
+  src/                    # TypeScript wrappers: ckks.ts, rlwe.ts, encoder.ts, loader.ts
+  wasm/                   # lattigo.wasm + wasm_exec.js runtime
+  tests/                  # vitest integration tests
+  dist/                   # Built output: index.js + index.d.ts
+
+js/examples/              # JS usage examples
+  node/                   # Node.js: roundtrip.ts, eval-keys.ts
+
+examples/wasm-demo/       # Browser demo: Go HTTP server + HTML/JS client
+  server/                 # Go server: /params, /session, /session/{id}/infer endpoints
+  client/                 # HTML/JS browser client
+  model.orion             # Pre-compiled demo model
 ```
 
-**Dependency graph:** `lattigo` ← `orion-compiler` (+ torch, networkx). `orion-evaluator` is independent.
+**Dependency graph:** `lattigo` ← `orion-compiler` (+ torch, networkx). `orion-evaluator` is independent. `js/lattigo` depends only on Lattigo (no Orion-specific code).
 
 ## Build & Development
 
-**System prerequisites:** Go 1.22+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.9–3.12.
+**System prerequisites:** Go 1.22+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.9–3.12, Node.js 18+.
 
 ```bash
-# Build the shared library (required before installing packages)
+# Build the Python CGO shared library (required before installing Python packages)
 python tools/build_lattigo.py
 
-# Install packages in editable mode
+# Install Python packages in editable mode
 cd python/lattigo && pip install -e .
 cd python/orion-compiler && pip install -e .
 cd python/orion-evaluator && pip install -e .
@@ -53,12 +68,30 @@ cd python/orion-evaluator && pip install -e .
 # Run all Python tests
 pytest python/tests/
 
-# Run a single test
+# Run a single Python test
 pytest python/tests/test_v2_api.py::TestCompiler::test_compiler_produces_compiled_model
 
 # Go evaluator tests
 go test ./evaluator/...
 go vet ./...
+
+# Build JS/WASM binary (requires Go with js/wasm support)
+python tools/build_lattigo_wasm.py
+
+# JS/WASM package — install deps, build TypeScript, run tests
+cd js/lattigo && npm install && npm run build && npm test
+
+# JS/WASM — build only WASM (Go bridge to lattigo.wasm)
+cd js/lattigo && npm run build:wasm
+
+# JS/WASM — build only TypeScript wrappers
+cd js/lattigo && npm run build:ts
+
+# JS/WASM — type-check without emitting
+cd js/lattigo && npm run typecheck
+
+# JS/WASM — lint TypeScript
+cd js/lattigo && npm run lint
 ```
 
 ## Design Principles
