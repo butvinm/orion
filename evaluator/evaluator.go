@@ -8,8 +8,6 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/polynomial"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
-
-	orion "github.com/baahl-nyu/orion"
 )
 
 // Evaluator runs FHE inference on a compiled Model by walking the computation graph.
@@ -22,51 +20,7 @@ type Evaluator struct {
 	polyEval *polynomial.Evaluator
 }
 
-// NewEvaluator creates an Evaluator from CKKS parameters and an evaluation key bundle.
-// The key bundle must contain at minimum the RLK and any required Galois keys.
-func NewEvaluator(p orion.Params, keys orion.EvalKeyBundle) (*Evaluator, error) {
-	ckksParams, err := p.NewCKKSParameters()
-	if err != nil {
-		return nil, fmt.Errorf("creating CKKS parameters: %w", err)
-	}
-
-	// Deserialize relinearization key.
-	var rlk *rlwe.RelinearizationKey
-	if keys.RLK != nil {
-		rlk = &rlwe.RelinearizationKey{}
-		if err := rlk.UnmarshalBinary(keys.RLK); err != nil {
-			return nil, fmt.Errorf("unmarshalling RLK: %w", err)
-		}
-	}
-
-	// Deserialize Galois keys.
-	galoisKeys := make([]*rlwe.GaloisKey, 0, len(keys.GaloisKeys))
-	for _, gkData := range keys.GaloisKeys {
-		gk := &rlwe.GaloisKey{}
-		if err := gk.UnmarshalBinary(gkData); err != nil {
-			return nil, fmt.Errorf("unmarshalling Galois key: %w", err)
-		}
-		galoisKeys = append(galoisKeys, gk)
-	}
-
-	evalKeys := rlwe.NewMemEvaluationKeySet(rlk, galoisKeys...)
-
-	eval := ckks.NewEvaluator(ckksParams, evalKeys)
-	enc := ckks.NewEncoder(ckksParams)
-	polyEval := polynomial.NewEvaluator(ckksParams, eval)
-	linEval := lintrans.NewEvaluator(eval)
-
-	return &Evaluator{
-		params:   ckksParams,
-		encoder:  enc,
-		eval:     eval,
-		linEval:  linEval,
-		polyEval: polyEval,
-	}, nil
-}
-
-// NewEvaluatorFromKeySet creates an Evaluator directly from Lattigo types.
-// This is the preferred constructor for new code — no intermediate EvalKeyBundle needed.
+// NewEvaluatorFromKeySet creates an Evaluator from Lattigo types directly.
 func NewEvaluatorFromKeySet(ckksParams ckks.Parameters, keys *rlwe.MemEvaluationKeySet) (*Evaluator, error) {
 	eval := ckks.NewEvaluator(ckksParams, keys)
 	enc := ckks.NewEncoder(ckksParams)
