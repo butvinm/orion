@@ -256,7 +256,10 @@ async function initializeKeys(): Promise<void> {
       `Bootstrap eval keys in ${formatDuration(performance.now() - t5)}`,
     );
 
-    // Free bootstrap handles — this demo only needs the standard eval keys
+    // NOTE: This demo serves a non-bootstrapping model (bootstrap_slots is always
+    // empty), so this block never executes in practice. If you need bootstrap
+    // support, include btpKeys.evkHID in the MemEvaluationKeySet below instead
+    // of freeing it here.
     bridge.deleteHandle(btpParamsResult.handle);
     bridge.deleteHandle(btpKeys.evkHID);
     bridge.deleteHandle(btpKeys.btpEvkHID);

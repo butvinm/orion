@@ -618,7 +618,9 @@ Source-only builds for now. Pre-built wheels with bundled Go shared library are 
 
 **Orion compiler:** `cd python/orion-compiler && pip install -e .` — pulls in `lattigo` + torch.
 
-**JS:** Build script in `js/` compiles `js/lattigo/` to WASM (~8 MB uncompressed, ~3 MB gzipped). This single .wasm provides all lattigo bindings.
+**JS/WASM:** `python tools/build_lattigo_wasm.py` compiles `js/lattigo/bridge/` to `js/lattigo/wasm/lattigo.wasm` (~8 MB uncompressed, ~3 MB gzipped) and copies `wasm_exec.js` from the Go distribution. Then `cd js/lattigo && npm install && npm run build` builds the TypeScript wrappers to `dist/`.
+
+**Browser demo:** See `examples/wasm-demo/`. Steps: (1) generate model: `cd examples/wasm-demo && python generate_model.py`, (2) build client: `cd examples/wasm-demo/client && npm install && npm run build`, (3) run server: `cd examples/wasm-demo/server && go run . ../model.orion`, (4) open http://localhost:8080.
 
 **Orion evaluator (Python bindings):** `cd python/orion-evaluator && pip install -e .` — triggers Go compilation of `bridge/` into a shared library wrapping the `evaluator/` package. Requires the `evaluator/` Go package (repo root).
 
@@ -628,6 +630,7 @@ Source-only builds for now. Pre-built wheels with bundled Go shared library are 
 
 - **Go:** `_test.go` files alongside source (Go convention). `go test ./...`
 - **Python:** `python/tests/` with pytest. All tests require the Go shared lib (compiler uses Lattigo).
+- **JS/WASM:** `cd js/lattigo && npm test` — vitest integration tests exercising TypeScript wrappers via WASM. Requires the WASM binary (`python tools/build_lattigo_wasm.py`) to be built first.
 - **E2E / cross-language:** Runnable examples in `examples/` that validate correctness. Compiler (Python) produces `.orion` → evaluator (Go) consumes it → numerical results compared against cleartext PyTorch output.
 
 Python-side evaluation uses `orion-evaluator` bindings (Go evaluator via CGO bridge). Self-contained Python E2E tests: compile → encrypt → evaluate (via bindings) → decrypt → compare to cleartext.

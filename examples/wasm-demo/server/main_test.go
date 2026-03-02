@@ -88,13 +88,12 @@ func testSetup(t *testing.T) (*Server, ckks.Parameters, *rlwe.SecretKey) {
 		t.Fatalf("LoadModel: %v", err)
 	}
 
-	srv := NewServer(model)
-
-	ckksParams, err := srv.CKKSParams()
+	srv, err := NewServer(model)
 	if err != nil {
-		t.Fatalf("CKKSParams: %v", err)
+		t.Fatalf("NewServer: %v", err)
 	}
 
+	ckksParams := srv.CKKSParams()
 	kg := rlwe.NewKeyGenerator(ckksParams)
 	sk := kg.GenSecretKeyNew()
 
@@ -213,6 +212,10 @@ func TestHandleSessionSuccess(t *testing.T) {
 	if result.SessionID == "" {
 		t.Error("expected non-empty session_id")
 	}
+	// Session IDs are hex-encoded random bytes (32 hex chars = 16 bytes).
+	if len(result.SessionID) != 32 {
+		t.Errorf("expected session_id length 32, got %d: %q", len(result.SessionID), result.SessionID)
+	}
 }
 
 func TestHandleInferNotFound(t *testing.T) {
@@ -236,7 +239,10 @@ func TestHandleInferEmptyBody(t *testing.T) {
 	kg := rlwe.NewKeyGenerator(ckksParams)
 	rlk := kg.GenRelinearizationKeyNew(sk)
 	evk := rlwe.NewMemEvaluationKeySet(rlk)
-	evkBytes, _ := evk.MarshalBinary()
+	evkBytes, err := evk.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
+	}
 
 	handler := srv.Handler("")
 
@@ -246,7 +252,9 @@ func TestHandleInferEmptyBody(t *testing.T) {
 	handler.ServeHTTP(w, req)
 
 	var sessResp sessionResponse
-	json.NewDecoder(w.Result().Body).Decode(&sessResp)
+	if err := json.NewDecoder(w.Result().Body).Decode(&sessResp); err != nil {
+		t.Fatalf("decoding session response: %v", err)
+	}
 
 	// Infer with empty body.
 	req = httptest.NewRequest(http.MethodPost, "/session/"+sessResp.SessionID+"/infer", bytes.NewReader(nil))
@@ -266,7 +274,10 @@ func TestFullRoundtrip(t *testing.T) {
 	pk := kg.GenPublicKeyNew(sk)
 	rlk := kg.GenRelinearizationKeyNew(sk)
 	evk := rlwe.NewMemEvaluationKeySet(rlk)
-	evkBytes, _ := evk.MarshalBinary()
+	evkBytes, err := evk.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
+	}
 
 	handler := srv.Handler("")
 
@@ -290,24 +301,32 @@ func TestFullRoundtrip(t *testing.T) {
 	}
 
 	var sessResp sessionResponse
-	json.NewDecoder(w.Result().Body).Decode(&sessResp)
+	if err := json.NewDecoder(w.Result().Body).Decode(&sessResp); err != nil {
+		t.Fatalf("decoding session response: %v", err)
+	}
 
-	// 3. Encrypt input.
+	// 3. Encrypt input — use distinct values to catch slot permutation bugs.
 	encoder := ckks.NewEncoder(ckksParams)
 	encryptor := ckks.NewEncryptor(ckksParams, pk)
 	decryptor := ckks.NewDecryptor(ckksParams, sk)
 
 	inputValues := make([]float64, ckksParams.MaxSlots())
 	for i := range inputValues {
-		inputValues[i] = 0.5
+		inputValues[i] = float64(i%10) * 0.1 // 0.0, 0.1, 0.2, ..., 0.9, 0.0, ...
 	}
 
 	pt := ckks.NewPlaintext(ckksParams, 2) // input_level = 2
 	pt.Scale = ckksParams.DefaultScale()
 	encoder.Encode(inputValues, pt)
-	ct, _ := encryptor.EncryptNew(pt)
+	ct, err := encryptor.EncryptNew(pt)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
 
-	ctBytes, _ := ct.MarshalBinary()
+	ctBytes, err := ct.MarshalBinary()
+	if err != nil {
+		t.Fatalf("marshal CT: %v", err)
+	}
 
 	// 4. POST /session/{id}/infer.
 	req = httptest.NewRequest(http.MethodPost, "/session/"+sessResp.SessionID+"/infer", bytes.NewReader(ctBytes))
@@ -334,13 +353,45 @@ func TestFullRoundtrip(t *testing.T) {
 	outputValues := make([]float64, ckksParams.MaxSlots())
 	encoder.Decode(resultPT, outputValues)
 
-	// Quad = x^2. Input was 0.5, expected output ~0.25.
-	expected := 0.25
+	// Quad = x^2. Check the first 10 slots with their distinct expected values.
 	tolerance := 0.01
 	for i := 0; i < 10; i++ {
+		expected := inputValues[i] * inputValues[i]
 		diff := outputValues[i] - expected
 		if diff < -tolerance || diff > tolerance {
-			t.Errorf("slot %d: expected ~%.4f, got %.4f (diff=%.6f)", i, expected, outputValues[i], diff)
+			t.Errorf("slot %d: expected ~%.4f (%.1f^2), got %.4f (diff=%.6f)",
+				i, expected, inputValues[i], outputValues[i], diff)
 		}
+	}
+}
+
+func TestCORSMiddleware(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := corsMiddleware(srv.Handler(""))
+
+	// Regular GET request should have CORS headers.
+	req := httptest.NewRequest(http.MethodGet, "/params", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("expected Access-Control-Allow-Origin: *, got %q", got)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Methods"); got == "" {
+		t.Error("missing Access-Control-Allow-Methods header")
+	}
+
+	// OPTIONS preflight should return 200 with no body processing.
+	req = httptest.NewRequest(http.MethodOptions, "/session", nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	resp = w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("OPTIONS: expected 200, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("OPTIONS: expected Access-Control-Allow-Origin: *, got %q", got)
 	}
 }

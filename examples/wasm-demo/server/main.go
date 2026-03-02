@@ -8,6 +8,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,32 +24,46 @@ import (
 	"github.com/baahl-nyu/orion/evaluator"
 )
 
+// Maximum request body sizes.
+const (
+	maxKeySetBytes    = 512 * 1024 * 1024 // 512 MB — key sets can be large
+	maxCiphertextBytes = 32 * 1024 * 1024  // 32 MB — ciphertexts are much smaller
+)
+
 // session holds an evaluator created from client-provided keys.
+// mu serializes Forward calls — Lattigo evaluators are not goroutine-safe.
 type session struct {
+	mu   sync.Mutex
 	eval *evaluator.Evaluator
 }
 
 // Server holds shared state for the HTTP handlers.
 type Server struct {
-	model    *evaluator.Model
-	mu       sync.Mutex
-	sessions map[string]*session
-	nextID   int
+	model      *evaluator.Model
+	ckksParams ckks.Parameters // cached at construction time
+	mu         sync.Mutex
+	sessions   map[string]*session
 }
 
 // NewServer creates a Server with a loaded model.
-func NewServer(model *evaluator.Model) *Server {
-	return &Server{
-		model:    model,
-		sessions: make(map[string]*session),
+func NewServer(model *evaluator.Model) (*Server, error) {
+	orionParams, _, _ := model.ClientParams()
+	ckksParams, err := orionParams.NewCKKSParameters()
+	if err != nil {
+		return nil, fmt.Errorf("creating CKKS params: %w", err)
 	}
+	return &Server{
+		model:      model,
+		ckksParams: ckksParams,
+		sessions:   make(map[string]*session),
+	}, nil
 }
 
 // paramsResponse is the JSON response for GET /params.
 type paramsResponse struct {
-	CKKSParams json.RawMessage `json:"ckks_params"`
+	CKKSParams  json.RawMessage `json:"ckks_params"`
 	KeyManifest json.RawMessage `json:"key_manifest"`
-	InputLevel int              `json:"input_level"`
+	InputLevel  int             `json:"input_level"`
 }
 
 // HandleParams returns CKKS parameters, key manifest, and input level.
@@ -92,6 +108,7 @@ func (s *Server) HandleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxKeySetBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
@@ -109,25 +126,22 @@ func (s *Server) HandleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get CKKS params from model.
-	orionParams, _, _ := s.model.ClientParams()
-	ckksParams, err := orionParams.NewCKKSParameters()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("creating CKKS params: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Create evaluator.
-	eval, err := evaluator.NewEvaluatorFromKeySet(ckksParams, evk)
+	// Create evaluator using cached CKKS params.
+	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("creating evaluator: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	// Generate a random session ID.
+	id, err := newSessionID()
+	if err != nil {
+		http.Error(w, "generating session ID", http.StatusInternalServerError)
+		return
+	}
+
 	// Store session.
 	s.mu.Lock()
-	s.nextID++
-	id := fmt.Sprintf("session-%d", s.nextID)
 	s.sessions[id] = &session{eval: eval}
 	s.mu.Unlock()
 
@@ -158,6 +172,7 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxCiphertextBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
@@ -175,8 +190,10 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Run inference.
+	// Serialize Forward calls on this session — Lattigo evaluators are not goroutine-safe.
+	sess.mu.Lock()
 	result, err := sess.eval.Forward(s.model, ct)
+	sess.mu.Unlock()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("inference error: %v", err), http.StatusInternalServerError)
 		return
@@ -205,6 +222,15 @@ func (s *Server) Handler(clientDir string) http.Handler {
 	}
 
 	return mux
+}
+
+// newSessionID generates a cryptographically random session ID.
+func newSessionID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func main() {
@@ -238,7 +264,10 @@ func main() {
 	log.Printf("Model loaded: logn=%d, galois_elements=%d, needs_rlk=%v, input_level=%d",
 		params.LogN, len(manifest.GaloisElements), manifest.NeedsRLK, inputLevel)
 
-	srv := NewServer(model)
+	srv, err := NewServer(model)
+	if err != nil {
+		log.Fatalf("creating server: %v", err)
+	}
 
 	// Enable CORS for browser demo.
 	handler := corsMiddleware(srv.Handler(clientDir))
@@ -265,8 +294,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// CKKSParams returns the CKKS parameters from the model (exposed for testing).
-func (s *Server) CKKSParams() (ckks.Parameters, error) {
-	orionParams, _, _ := s.model.ClientParams()
-	return orionParams.NewCKKSParameters()
+// CKKSParams returns the cached CKKS parameters (exposed for testing).
+func (s *Server) CKKSParams() ckks.Parameters {
+	return s.ckksParams
 }

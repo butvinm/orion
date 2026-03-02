@@ -116,5 +116,9 @@ func btpParamsGenEvaluationKeys(_ js.Value, args []js.Value) any {
 		}()
 		return nil
 	})
-	return js.Global().Get("Promise").New(handler)
+	// Promise constructor is synchronous — it captures handler immediately.
+	// Release the js.Func after construction to avoid leaking the Go function table slot.
+	promise := js.Global().Get("Promise").New(handler)
+	handler.Release()
+	return promise
 }

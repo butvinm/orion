@@ -5,14 +5,16 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WASM_PATH = join(__dirname, "..", "wasm", "lattigo.wasm");
 
-let loaded = false;
+// Use a promise singleton to prevent double-initialization if multiple beforeAll
+// hooks call ensureWasmLoaded() concurrently (possible with isolate: false).
+let loadPromise: Promise<void> | null = null;
 
 /** Ensure WASM bridge is loaded exactly once across all tests. */
-export async function ensureWasmLoaded(): Promise<void> {
-  if (!loaded) {
-    await loadLattigo(WASM_PATH);
-    loaded = true;
+export function ensureWasmLoaded(): Promise<void> {
+  if (loadPromise === null) {
+    loadPromise = loadLattigo(WASM_PATH).then(() => {});
   }
+  return loadPromise;
 }
 
 /** Small CKKS parameters for fast tests. */

@@ -111,7 +111,9 @@ func ckksGaloisElement(_ js.Value, args []js.Value) any {
 		return nil
 	}
 	rotation := args[1].Int()
-	return int64(p.(*ckks.Parameters).GaloisElement(rotation))
+	// Return float64 for consistency with ckksModuliChain/ckksAuxModuliChain.
+	// Galois elements fit safely in float64 for any practical CKKS ring dimension.
+	return float64(p.(*ckks.Parameters).GaloisElement(rotation))
 }
 
 // ckksModuliChain(paramsHID: number) → Array<number>
