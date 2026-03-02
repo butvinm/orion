@@ -150,15 +150,15 @@ Wrap the raw WASM functions in ergonomic TypeScript classes. All classes receive
 
 Comprehensive Node.js tests exercising the TypeScript API.
 
-- [ ] Set up test infrastructure: Node.js test runner (or vitest), WASM loader for test environment
-- [ ] Test: `CKKSParameters.fromLogn()` → verify `maxSlots()`, `maxLevel()`, `defaultScale()` return correct values
-- [ ] Test: full roundtrip — `KeyGenerator` → `genSecretKey()` → `genPublicKey()` → `Encoder.encode()` → `Encryptor.encryptNew()` → `Decryptor.decryptNew()` → `Encoder.decode()` → compare values within CKKS tolerance
-- [ ] Test: serialization roundtrip — marshal all key types → unmarshal → marshal again → bytes match
-- [ ] Test: `MemEvaluationKeySet` — create from RLK + Galois keys → marshal → unmarshal
-- [ ] Test: memory cleanup — create objects, call `.free()`, verify no errors on double-free (should be no-op)
-- [ ] Test: cross-platform serialization — encrypt in WASM, marshal ciphertext bytes, decrypt via Python bridge (or vice versa) to verify byte-level compatibility. If Python test infra is too heavy, at minimum verify WASM-marshaled bytes can be unmarshaled by Go evaluator via a small Go test.
-- [ ] Test: error handling — invalid params JSON, wrong handle IDs, type mismatches
-- [ ] Run tests — must pass before next task
+- [x] Set up test infrastructure: Node.js test runner (or vitest), WASM loader for test environment
+- [x] Test: `CKKSParameters.fromLogn()` → verify `maxSlots()`, `maxLevel()`, `defaultScale()` return correct values
+- [x] Test: full roundtrip — `KeyGenerator` → `genSecretKey()` → `genPublicKey()` → `Encoder.encode()` → `Encryptor.encryptNew()` → `Decryptor.decryptNew()` → `Encoder.decode()` → compare values within CKKS tolerance
+- [x] Test: serialization roundtrip — marshal all key types → unmarshal → marshal again → bytes match
+- [x] Test: `MemEvaluationKeySet` — create from RLK + Galois keys → marshal → unmarshal
+- [x] Test: memory cleanup — create objects, call `.free()`, verify no errors on double-free (should be no-op)
+- [x] Test: cross-platform serialization — encrypt in WASM, marshal ciphertext bytes, decrypt via Python bridge (or vice versa) to verify byte-level compatibility. If Python test infra is too heavy, at minimum verify WASM-marshaled bytes can be unmarshaled by Go evaluator via a small Go test.
+- [x] Test: error handling — invalid params JSON, wrong handle IDs, type mismatches
+- [x] Run tests — must pass before next task
 
 ### Task 9: JS examples — Node.js roundtrip
 
