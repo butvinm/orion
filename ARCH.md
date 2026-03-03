@@ -52,8 +52,6 @@ The evaluator has two core types — **Model** and **Evaluator**:
 3. Runs FHE inference by walking the model's computation graph: `evaluator.Forward(model, ciphertexts)`
 4. Returns result ciphertexts
 
-The evaluator accepts the Lattigo crypto context FROM THE USER. It never owns secret keys. This keeps Orion independent from the encryption scheme — users can use threshold encryption, custom key management, or any protocol Lattigo supports.
-
 All methods return `(result, error)`. Errors include level mismatches, missing Galois keys, bootstrap failures, and scale overflows.
 
 ### lattigo bindings (Go + Python/JS wrappers)
@@ -73,14 +71,7 @@ Anyone doing FHE with Lattigo from Python or JS can use these bindings, regardle
 
 **Dependencies:** `lattigo` (Python).
 
-Thin Python bindings over the Go `evaluator/` package, following the same CGO bridge pattern as `python/lattigo/`. Ships a separate `.so` that wraps the evaluator-specific Go code. The bridge exposes:
-
-- `LoadModel(data []byte) → Model` — parses `.orion` v2, CKKS-encodes diagonals at load time
-- `Model.ClientParams() → json` — returns CKKS params, key manifest, input level as JSON
-- `NewEvaluator(model, keys_bytes) → Evaluator` — creates per-client evaluator from Lattigo-serialized eval keys
-- `Evaluator.Forward(ct_bytes) → ct_bytes` — runs FHE inference, accepts and returns Lattigo-serialized ciphertexts
-
-The evaluator accepts raw Lattigo `MarshalBinary` bytes for both keys and ciphertexts. No Orion-specific serialization formats — keys are `MemEvaluationKeySet.MarshalBinary()` output, ciphertexts are Lattigo `rlwe.Ciphertext.MarshalBinary()` output. This keeps the evaluator independent of how keys were generated (standard keygen, threshold encryption, any Lattigo-compatible protocol).
+Thin Python bindings over the Go `evaluator/` package, following the same CGO bridge pattern as `python/lattigo/`. Ships a separate `.so` that wraps the evaluator-specific Go code (see Phase 3.5 for the full bridge C export table). Accepts raw Lattigo `MarshalBinary` bytes for keys and ciphertexts — no Orion-specific serialization formats.
 
 Python API:
 
@@ -89,13 +80,13 @@ from orion_evaluator import Model, Evaluator
 
 # Load model (one-time cost: parses .orion, CKKS-encodes diagonals)
 model = Model.load(open("model.orion", "rb").read())
-params = model.client_params()  # CKKSParams, KeyManifest, input_level
+params, manifest, input_level = model.client_params()
 
-# Create evaluator with Lattigo-serialized eval keys
-evaluator = Evaluator(model, keys_bytes)
+# Create evaluator with CKKS params dict and Lattigo-serialized eval keys
+evaluator = Evaluator(params, keys_bytes)
 
 # Run inference (Lattigo ciphertext bytes in, Lattigo ciphertext bytes out)
-result_bytes = evaluator.forward(ct_bytes)
+result_bytes = evaluator.forward(model, ct_bytes)
 
 # Cleanup
 evaluator.close()
@@ -161,7 +152,9 @@ params = CKKSParams(
 )
 compiler = Compiler(net, params)
 compiler.fit(train_loader)
-compiler.compile("model.orion")
+compiled = compiler.compile()
+with open("model.orion", "wb") as f:
+    f.write(compiled.to_bytes())
 ```
 
 The compiler produces `model.orion` — a JSON header describing the computation graph plus binary blobs with raw packed numerical data (float64 diagonals, bias vectors, polynomial coefficients). Lattigo is used during compilation (via Go bridge) for polynomial approximation, parameter validation, and key manifest computation, but the output contains no Lattigo binary formats. The compiled model is a portable mathematical description.
@@ -175,9 +168,14 @@ package main
 
 import (
     "encoding/json"
+    "fmt"
+    "io"
     "net/http"
     "os"
     "sync"
+
+    "github.com/baahl-nyu/lattigo/v6/core/rlwe"
+    "github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 
     "github.com/baahl-nyu/orion/evaluator"
 )
@@ -187,40 +185,54 @@ func main() {
     data, _ := os.ReadFile("model.orion")
     model, _ := evaluator.LoadModel(data)
 
-    var evaluators sync.Map
+    // Cache CKKS params for evaluator construction
+    orionParams, _, _ := model.ClientParams()
+    ckksParams, _ := orionParams.NewCKKSParameters()
+
+    var sessions sync.Map
 
     // GET /params — client needs CKKS params, key manifest, and input level
     // to generate the right keys and encode at the right level
     http.HandleFunc("GET /params", func(w http.ResponseWriter, r *http.Request) {
-        json.NewEncoder(w).Encode(model.ClientParams())
+        params, manifest, inputLevel := model.ClientParams()
+        paramsJSON, _ := json.Marshal(params)
+        manifestJSON, _ := json.Marshal(manifest)
+        json.NewEncoder(w).Encode(map[string]any{
+            "ckks_params":  json.RawMessage(paramsJSON),
+            "key_manifest": json.RawMessage(manifestJSON),
+            "input_level":  inputLevel,
+        })
     })
 
     // POST /session — client uploads eval keys, server creates evaluator
     http.HandleFunc("POST /session", func(w http.ResponseWriter, r *http.Request) {
         keysData, _ := io.ReadAll(r.Body)
-        evk := new(rlwe.MemEvaluationKeySet)
+        evk := &rlwe.MemEvaluationKeySet{}
         evk.UnmarshalBinary(keysData)
-        eval, _ := evaluator.NewEvaluatorFromKeySet(model.Params(), evk)
+        eval, _ := evaluator.NewEvaluatorFromKeySet(ckksParams, evk)
         id := generateID()
-        evaluators.Store(id, eval)
+        sessions.Store(id, eval)
         json.NewEncoder(w).Encode(map[string]string{"id": id})
     })
 
     // POST /session/{id}/infer — client sends ciphertext, evaluator uses model + cached keys
     http.HandleFunc("POST /session/{id}/infer", func(w http.ResponseWriter, r *http.Request) {
-        val, _ := evaluators.Load(r.PathValue("id"))
+        val, _ := sessions.Load(r.PathValue("id"))
         eval := val.(*evaluator.Evaluator)
 
-        ct, _ := evaluator.ReadCiphertexts(r.Body)
+        ctData, _ := io.ReadAll(r.Body)
+        ct := &rlwe.Ciphertext{}
+        ct.UnmarshalBinary(ctData)
         result, _ := eval.Forward(model, ct)
-        w.Write(result.Marshal())
+        resultBytes, _ := result.MarshalBinary()
+        w.Write(resultBytes)
     })
 
     http.ListenAndServe(":8080", nil)
 }
 ```
 
-Pure Go. No Python, no PyTorch, no skeleton network. The model is loaded once and shared across all evaluators. Each evaluator holds one client's evaluation keys. `eval.Forward(model, ct)` walks the model's computation graph using that evaluator's keys. Eval keys are uploaded once per session — not per request (Galois keys alone can be 100MB+). The user provides the Lattigo crypto context — Orion never constrains how keys are generated or managed.
+Pure Go. No Python, no PyTorch, no skeleton network. The model is loaded once and shared across all evaluators. Each evaluator holds one client's evaluation keys. `eval.Forward(model, ct)` walks the model's computation graph using that evaluator's keys. Eval keys are uploaded once per session — not per request (Galois keys alone can be 100MB+).
 
 ### 3. Encrypt and query (JavaScript, browser)
 
@@ -231,8 +243,8 @@ import {
   Encryptor,
   Decryptor,
   Encoder,
+  Ciphertext,
   MemEvaluationKeySet,
-  unmarshalCiphertext,
 } from "lattigo";
 
 // Fetch params from server — CKKS params, key manifest, input level
@@ -240,119 +252,48 @@ const params = await fetch("/params").then((r) => r.json());
 
 // Generate keys in the browser (runs in WASM, secret key never leaves the client)
 const ckks = CKKSParameters.fromJSON(params.ckks);
-const keygen = new KeyGenerator(ckks);
+const keygen = KeyGenerator.new(ckks);
 const sk = keygen.genSecretKey();
 const pk = keygen.genPublicKey(sk);
-const rlk = keygen.genRelinearizationKey(sk);
+const rlk = keygen.genRelinKey(sk);
 const gks = params.manifest.galois_elements.map((el) =>
   keygen.genGaloisKey(sk, el),
 );
-const evalKeys = new MemEvaluationKeySet(rlk, gks);
+const evalKeys = MemEvaluationKeySet.new(rlk, gks);
 
 // Upload eval keys once — server caches them in a session
 const { id: sessionId } = await fetch("/session", {
   method: "POST",
-  body: evalKeys.marshal(),
+  body: evalKeys.marshalBinary(),
 }).then((r) => r.json());
 
 // Encode + encrypt the input (flatten, pad to slots, encode, encrypt)
-const encoder = new Encoder(ckks);
+const encoder = Encoder.new(ckks);
 const slots = ckks.maxSlots();
 const padded = new Float64Array(slots);
 padded.set(inputData.flat());
-const pt = encoder.encode(padded, params.inputLevel);
-const encryptor = new Encryptor(ckks, pk);
-const ct = encryptor.encrypt(pt);
+const pt = encoder.encode(padded, params.inputLevel, ckks.defaultScale());
+const encryptor = Encryptor.new(ckks, pk);
+const ct = encryptor.encryptNew(pt);
 
 // Run inference — only ciphertext sent, keys are already on server
 const response = await fetch(`/session/${sessionId}/infer`, {
   method: "POST",
-  body: ct.marshal(),
+  body: ct.marshalBinary(),
 });
 
 // Decrypt the result and decode
-const resultCt = unmarshalCiphertext(await response.arrayBuffer());
-const decryptor = new Decryptor(ckks, sk);
-const resultPt = decryptor.decrypt(resultCt);
-const output = encoder.decode(resultPt).slice(0, 10);
+const resultCt = Ciphertext.unmarshalBinary(
+  new Uint8Array(await response.arrayBuffer()),
+);
+const decryptor = Decryptor.new(ckks, sk);
+const resultPt = decryptor.decryptNew(resultCt);
+const output = encoder.decode(resultPt, slots).slice(0, 10);
 ```
 
 The secret key is generated in the browser and never leaves it. Lattigo bindings (Go compiled to WASM, ~8 MB uncompressed / ~3 MB gzipped) handle all cryptographic operations and serialization. Tensor-to-slot mapping (flatten, pad) is trivial user code — no library needed. For models requiring bootstrap keys, see `examples/wasm-demo/client/client.ts` for the full flow including `BootstrapParameters` construction.
 
-### 4. Self-contained Python (single machine, prototyping)
-
-```python
-import numpy as np
-import torch
-from lattigo import ckks, rlwe
-from orion_compiler import Compiler, CKKSParams
-from orion_compiler.nn import Linear, BatchNorm1d, Quad, Flatten, Module
-from orion_evaluator import Model, Evaluator
-
-# --- Define model (see examples/ for full architectures) ---
-class MLP(Module):
-    def __init__(self):
-        super().__init__()
-        self.flatten = Flatten()
-        self.fc1 = Linear(784, 64)
-        self.bn1 = BatchNorm1d(64)
-        self.act1 = Quad()
-        self.fc2 = Linear(64, 10)
-
-    def forward(self, x):
-        x = self.flatten(x)
-        x = self.act1(self.bn1(self.fc1(x)))
-        return self.fc2(x)
-
-# --- Train ---
-net = MLP()
-# ... training loop ...
-
-# --- Compile ---
-params = CKKSParams(
-    logn=14,
-    logq=[55, 40, 40, 40, 40, 40, 40, 40, 55],
-    logp=[56, 56],
-    logscale=40,
-)
-compiler = Compiler(net, params)
-compiler.fit(train_loader)
-compiled = compiler.compile()
-model_bytes = compiled.to_bytes()
-
-# --- Client: generate keys and encrypt (using Lattigo directly) ---
-ckks_params = ckks.new_parameters(compiled.params.to_lattigo_json())
-keygen = rlwe.new_keygenerator(ckks_params)
-sk = keygen.gen_secret_key()
-rlk = keygen.gen_relinearization_key(sk)
-gks = [keygen.gen_galois_key(sk, el) for el in compiled.manifest.galois_elements]
-key_set = rlwe.new_mem_evaluation_key_set(rlk, gks)
-keys_bytes = key_set.marshal_binary()
-
-encoder = ckks.new_encoder(ckks_params)
-encryptor = rlwe.new_encryptor(ckks_params, sk)
-input_vals = np.zeros(ckks_params.max_slots(), dtype=np.float64)
-input_vals[:784] = input_tensor.flatten().numpy().astype(np.float64)
-pt = encoder.encode(input_vals, compiled.input_level)
-ct = encryptor.encrypt(pt)
-ct_bytes = ct.marshal_binary()
-
-# --- Evaluate (Go evaluator via Python bindings) ---
-model = Model.load(model_bytes)
-evaluator = Evaluator(model, keys_bytes)
-result_bytes = evaluator.forward(ct_bytes)
-
-# --- Decrypt (using Lattigo directly) ---
-decryptor = rlwe.new_decryptor(ckks_params, sk)
-result_ct = rlwe.unmarshal_ciphertext(result_bytes)
-result_pt = decryptor.decrypt(result_ct)
-result = encoder.decode(result_pt)[:10]  # first 10 values = model output
-
-evaluator.close()
-model.close()
-```
-
-All four stages in one Python script. Useful for prototyping, testing, and research notebooks. The Go evaluator runs natively under the hood via CGO — same code path as a production Go server, just accessed through Python bindings. All crypto operations use Lattigo directly — no Orion wrapper constrains how keys are generated or ciphertexts are handled.
+For a self-contained Python example (compile + keygen + encrypt + evaluate + decrypt in one script), see the `CLAUDE.md` end-to-end usage section or the Phase 5 `run.py` template below.
 
 ## Compiled Model Format
 
@@ -488,34 +429,35 @@ The JSON + binary blob format requires zero dependencies in any language, is hum
 ### Go types for the header
 
 ```go
-type CompiledModel struct {
+type CompiledHeader struct {
     Version    int            `json:"version"`
-    Params     CKKSParams     `json:"params"`
-    Config     CompilerConfig `json:"config"`
-    Manifest   KeyManifest    `json:"manifest"`
+    Params     HeaderParams   `json:"params"`
+    Config     HeaderConfig   `json:"config"`
+    Manifest   HeaderManifest `json:"manifest"`
     InputLevel int            `json:"input_level"`
-    Cost       CostProfile    `json:"cost"`       // informational, not validated by evaluator
-    Graph      Graph          `json:"graph"`
+    Cost       HeaderCost     `json:"cost"`       // informational, not validated by evaluator
+    Graph      HeaderGraph    `json:"graph"`
+    BlobCount  int            `json:"blob_count"`
 }
 
-type Graph struct {
-    Input  string `json:"input"`
-    Output string `json:"output"`
-    Nodes  []Node `json:"nodes"`
-    Edges  []Edge `json:"edges"`
+type HeaderGraph struct {
+    Input  string       `json:"input"`
+    Output string       `json:"output"`
+    Nodes  []HeaderNode `json:"nodes"`
+    Edges  []HeaderEdge `json:"edges"`
 }
 
-type Node struct {
+type HeaderNode struct {
     Name     string            `json:"name"`
     Op       string            `json:"op"`
     Level    int               `json:"level"`
     Depth    int               `json:"depth"`
-    Shape    *NodeShape        `json:"shape,omitempty"`
+    Shape    map[string][]int  `json:"shape"`
     Config   json.RawMessage   `json:"config"`
-    BlobRefs map[string]int    `json:"blob_refs,omitempty"`
+    BlobRefs map[string]int    `json:"blob_refs"`
 }
 
-type Edge struct {
+type HeaderEdge struct {
     Src string `json:"src"`
     Dst string `json:"dst"`
 }
@@ -527,13 +469,13 @@ Op-specific configs are `json.RawMessage`, parsed by a type switch when loading:
 switch node.Op {
 case "linear_transform":
     var cfg LinearTransformConfig
-    if err := json.Unmarshal(node.Config, &cfg); err != nil { ... }
+    if err := json.Unmarshal(node.ConfigRaw, &cfg); err != nil { ... }
 case "polynomial":
     var cfg PolynomialConfig
-    if err := json.Unmarshal(node.Config, &cfg); err != nil { ... }
+    if err := json.Unmarshal(node.ConfigRaw, &cfg); err != nil { ... }
 case "bootstrap":
     var cfg BootstrapConfig
-    if err := json.Unmarshal(node.Config, &cfg); err != nil { ... }
+    if err := json.Unmarshal(node.ConfigRaw, &cfg); err != nil { ... }
 // ...
 default:
     return fmt.Errorf("unknown op: %s", node.Op)
@@ -576,14 +518,8 @@ orion/
 │   └── examples/                   # JS example code (tensor-to-slot mapping is user code)
 │
 ├── examples/
-│   ├── mlp/                        # MNIST, simplest: Flatten → Linear → Quad → Linear
-│   ├── lenet/                      # MNIST, conv: Conv2d → Quad → Conv2d → Quad → FC
-│   ├── lola/                       # MNIST, lightweight: 1 Conv2d + 1 FC
-│   ├── alexnet/                    # CIFAR-10, deeper CNN with SiLU activations
-│   ├── vgg/                        # CIFAR-10, deep CNN with ReLU (minimax sign)
-│   ├── resnet/                     # CIFAR-10, residual connections + bootstrap
-│   ├── yolo/                       # Object detection, ResNet34 backbone
 │   └── wasm-demo/                  # Browser demo: Go server + WASM client
+│   # Phase 5 (planned): mlp/, lenet/, lola/, alexnet/, vgg/, resnet/, yolo/
 │
 └── docs/
 ```
@@ -645,31 +581,9 @@ The `.orion` v2 format is the contract between compiler and evaluator. Everythin
 
 #### 1.1 Rewrite `CompiledModel` dataclass
 
-**File:** `orion/compiled_model.py`
+**File:** `orion_compiler/compiled_model.py`
 
-Replace the current `CompiledModel` fields:
-
-```python
-# Current (v1)
-params: CKKSParams
-config: CompilerConfig
-manifest: KeyManifest
-input_level: int
-module_metadata: dict      # module_name -> per-type metadata dict
-topology: list[str]        # flat execution order
-blobs: list[bytes]         # Lattigo-serialized LinearTransform blobs + raw bias blobs
-
-# New (v2)
-params: CKKSParams
-config: CompilerConfig
-manifest: KeyManifest
-input_level: int
-cost: CostProfile          # new: informational, not validated by evaluator
-graph: Graph               # new: nodes + edges (replaces topology + module_metadata)
-blobs: list[bytes]         # raw float64 diagonal blobs + raw bias blobs (no Lattigo artifacts)
-```
-
-New supporting types:
+The v2 format replaces the v1 flat `topology` + `module_metadata` + Lattigo-serialized blobs with a `graph` (nodes + edges) + `cost` profile + raw float64 blobs. V2 `CompiledModel` fields:
 
 ```python
 @dataclass
@@ -789,13 +703,13 @@ Changes to the compilation loop:
    | `Mult`                                 | `mult`                              |
    | `Flatten`                              | `flatten`                           |
 
-   Note: `ReLU` decomposes into sub-components via FX tracing (`mult`, `polynomial` x N, `mult`) — no single `relu` op. `BatchNorm1d`/`BatchNorm2d` are fused into the preceding `linear_transform` and excluded from the graph.
+   Note: `ReLU` decomposes into sub-nodes — see "ReLU deviation" in 1.2 above. `BatchNorm1d`/`BatchNorm2d` are fused into the preceding `linear_transform` and excluded from the graph.
 
 5. **Compute cost profile.** Count bootstrap count and key counts (Galois keys = `len(manifest.galois_elements)`, bootstrap keys = `len(manifest.bootstrap_slots)`). Rotation count is deferred — it requires counting actual eval-time rotations per node. The cost profile is informational metadata for the user — the evaluator does not validate it.
 
 6. **Determine graph input/output.** The first node in topological order with no predecessors is `graph.input`. The last node with no successors is `graph.output`.
 
-7. **ReLU handling.** ReLU is not a single graph node. PyTorch FX tracing decomposes it into sub-components (`mult`, `polynomial` x N, `mult`), each becoming a separate graph node. Chebyshev coefficients for the minimax sign polynomials are stored inline on each `polynomial` node's `config`. No special `relu` op type or `evalReLU` handler needed — the evaluator walks the individual sub-nodes.
+7. **ReLU handling.** ReLU decomposes into sub-nodes — see "ReLU deviation" in 1.2 above.
 
 #### 1.5 Delete Python evaluator
 
@@ -879,17 +793,21 @@ Implement `ParseBiasBlob(data []byte, maxSlots int) ([]float64, error)` — read
 
 ```go
 type Model struct {
-    header     CompiledModel                                    // parsed JSON header
-    transforms map[string]map[string]*lintrans.LinearTransformation // node_name -> {"diag_0_0": LT, ...}
-    biases     map[string]*rlwe.Plaintext                       // node_name -> CKKS-encoded bias
-    polys      map[string]*polynomial.Polynomial                // node_name -> Lattigo polynomial
-    graph      *Graph                                           // processed graph with adjacency + topo order
+    header      *CompiledHeader
+    clientParam orion.Params                                         // cached for ClientParams()
+    params      ckks.Parameters
+    graph       *Graph                                               // processed graph with adjacency + topo order
+    transforms  map[string]map[string]lintrans.LinearTransformation  // node_name -> {"diag_0_0": LT, ...}
+    biases      map[string]*rlwe.Plaintext                           // node_name -> CKKS-encoded bias
+    polys       map[string]bignum.Polynomial                         // node_name -> Lattigo polynomial
+    ltConfigs   map[string]*LinearTransformConfig                    // node_name -> parsed LT config
+    polyConfigs map[string]*PolynomialConfig                         // node_name -> parsed poly config
 }
 ```
 
 `LoadModel(data []byte) (*Model, error)`:
 
-1. Parse binary container → `CompiledModel` header + blobs
+1. Parse binary container → `CompiledHeader` + blobs
 2. Build `ckks.Parameters` from header params
 3. Create a temporary `ckks.Encoder` for encoding (no keys needed)
 4. For each node where `op == "linear_transform"`:
@@ -902,7 +820,7 @@ type Model struct {
 6. Build `*Graph`: compute topological sort, build adjacency map (`nodeName → []inputNodeNames`)
 7. Validate: all blob_refs resolved, all edge endpoints exist, graph is acyclic
 
-`ClientParams() ClientParams` — returns `{Params, Manifest, InputLevel}` for the client.
+`ClientParams() (orion.Params, orion.Manifest, int)` — returns params, manifest, and input level for the client.
 
 The `Model` is immutable after `LoadModel()` returns. Safe to share across goroutines.
 
@@ -920,7 +838,7 @@ type Graph struct {
 }
 ```
 
-`buildGraph(header CompiledModel) (*Graph, error)`:
+`buildGraph(header *CompiledHeader) (*Graph, error)`:
 
 - Index nodes by name
 - Build reverse adjacency from edges: for each edge `{src, dst}`, append `src` to `Inputs[dst]`
@@ -935,12 +853,11 @@ For nodes with multiple inputs (`add`, `mult`, residual joins): `Inputs[name]` h
 
 ```go
 type Evaluator struct {
-    params       ckks.Parameters
-    encoder      *ckks.Encoder
-    evaluator    *ckks.Evaluator
-    linEval      *lintrans.Evaluator
-    polyEval     *polynomial.Evaluator
-    bootstrappers map[int]*bootstrapping.Evaluator
+    params   ckks.Parameters
+    encoder  *ckks.Encoder
+    eval     *ckks.Evaluator
+    linEval  *lintrans.Evaluator
+    polyEval *polynomial.Evaluator
 }
 
 func NewEvaluatorFromKeySet(ckksParams ckks.Parameters, keys *rlwe.MemEvaluationKeySet) (*Evaluator, error)
@@ -955,8 +872,8 @@ An `Evaluator` is **not goroutine-safe** — Lattigo evaluators carry internal N
 `Forward()` walks `model.graph.Order`:
 
 ```go
-func (e *Evaluator) Forward(model *Model, input []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
-    results := make(map[string][]*rlwe.Ciphertext)
+func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
+    results := make(map[string]*rlwe.Ciphertext)
     results[model.graph.Input] = input
 
     for _, name := range model.graph.Order {
@@ -964,8 +881,8 @@ func (e *Evaluator) Forward(model *Model, input []*rlwe.Ciphertext) ([]*rlwe.Cip
             continue
         }
         node := model.graph.Nodes[name]
-        inputs := gatherInputs(results, model.graph.Inputs, name)
-        out, err := e.evalNode(model, node, inputs)
+        // gather inputs from results map, dispatch to op-specific handler via switch
+        out, err := e.dispatch(model, node, results)
         if err != nil {
             return nil, fmt.Errorf("node %s: %w", name, err)
         }
@@ -975,7 +892,7 @@ func (e *Evaluator) Forward(model *Model, input []*rlwe.Ciphertext) ([]*rlwe.Cip
 }
 ```
 
-**Scope limitation:** Phase 2 targets single-ciphertext-in, single-ciphertext-out models (MLP, LeNet, LoLA, small conv nets). Multi-ciphertext block-matrix routing (when weight matrices exceed the slot count in both dimensions) is deferred. The `[]*rlwe.Ciphertext` type signature is the extensibility point for future multi-CT support.
+**Scope limitation:** Currently targets single-ciphertext-in, single-ciphertext-out models (MLP, LeNet, LoLA, small conv nets). Multi-ciphertext block-matrix routing (when weight matrices exceed the slot count in both dimensions) is deferred.
 
 **Memory:** The `results` map keeps all intermediate ciphertexts alive until `Forward()` returns. Implementations may free intermediate results once all downstream consumers have been evaluated.
 
@@ -1015,9 +932,9 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 3. `polyEval.Evaluate(ct, poly, targetScale)` (Lattigo's Paterson-Stockmeyer or baby-step-giant-step polynomial evaluator)
 4. If `config.postscale != 1`: `evaluator.MulScalar(ct, postscale)`, `evaluator.Rescale(ct)`
 
-**ReLU:** There is no `evalReLU` handler. ReLU is decomposed into sub-nodes by FX tracing (`mult` -> `polynomial` x N -> `mult`). The evaluator walks these as individual `evalMult` and `evalPolynomial` calls. Total depth per ReLU: `sum(ceil(log2(d+1)) for d in degrees) + 2` (one multiplication for prescale × input, one for input × sign). For default degrees `[15, 15, 27]`: depth = 4 + 4 + 5 + 2 = **15 levels**.
+**ReLU:** No `evalReLU` handler — ReLU decomposes into sub-nodes (see "ReLU deviation" in 1.2). Total depth per ReLU: `sum(ceil(log2(d+1)) for d in degrees) + 2`. For default degrees `[15, 15, 27]`: depth = 4 + 4 + 5 + 2 = **15 levels**.
 
-**`bootstrap`:**
+**`bootstrap`** (not yet implemented — returns error):
 
 ```go
 func (e *Evaluator) evalBootstrap(node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
@@ -1083,7 +1000,7 @@ Repeat for at least: MLP (linear-only), model with Chebyshev activations, model 
 - [x] Multiple `Evaluator` instances sharing one `Model` work correctly (concurrent reads)
 - [x] `Evaluator.Close()` releases resources (nils evaluator fields); calling `Forward()` on a closed evaluator returns an error
 - [x] All methods return `(result, error)` — no panics on malformed input
-- [x] `go test ./evaluator/...` passes (42 tests)
+- [x] `go test ./evaluator/...` passes (43 tests)
 - [x] E2E test: Python compile → Go keygen + encrypt → Go evaluate → Go decrypt → correct output (MLP + Sigmoid models)
 
 ---
@@ -1183,14 +1100,14 @@ After Phase 2 (Go evaluator exists) and 3.4 (Go modules restructured).
 
 A separate CGO shared library that wraps the `evaluator/` Go package. Exports:
 
-| C export                                                 | Go implementation                                                          |
-| -------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `LoadModel(data, len) → handle`                          | `evaluator.LoadModel(data) → *Model`                                       |
-| `ModelClientParams(h) → json`                            | `model.ClientParams()` → JSON with CKKSParams, KeyManifest, inputLevel     |
-| `ModelClose(h)`                                          | release handle                                                             |
-| `NewEvaluator(modelH, keysData, keysLen) → handle`       | `MemEvaluationKeySet.UnmarshalBinary(keys)` → `NewEvaluator()`             |
-| `EvaluatorForward(evalH, modelH, ctData, ctLen) → ctOut` | `rlwe.Ciphertext.UnmarshalBinary()` → `eval.Forward()` → `MarshalBinary()` |
-| `EvaluatorClose(h)`                                      | release handle                                                             |
+| C export                                                     | Go implementation                                                                           |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `EvalLoadModel(data, len) → handle`                          | `evaluator.LoadModel(data) → *Model`                                                        |
+| `EvalModelClientParams(h) → paramsJSON, manifestJSON, level` | `model.ClientParams()` → JSON with Params, Manifest, inputLevel                             |
+| `EvalModelClose(h)`                                          | release handle (no-op, Model is immutable)                                                  |
+| `EvalNewEvaluator(paramsJSON, keysData, keysLen) → handle`   | parse params → `NewCKKSParameters()` → `UnmarshalBinary(keys)` → `NewEvaluatorFromKeySet()` |
+| `EvalForward(evalH, modelH, ctData, ctLen) → ctOut`          | `rlwe.Ciphertext.UnmarshalBinary()` → `eval.Forward()` → `MarshalBinary()`                  |
+| `EvalClose(h)`                                               | `eval.Close()`, release handle                                                              |
 
 The evaluator bridge accepts raw Lattigo `MarshalBinary` bytes for both keys and ciphertexts. Keys are `MemEvaluationKeySet.MarshalBinary()` output. Ciphertexts are Lattigo `rlwe.Ciphertext.MarshalBinary()` output. No Orion-specific serialization formats.
 
@@ -1204,22 +1121,22 @@ The bridge has its own `go.mod` that imports both `github.com/baahl-nyu/orion/ev
 class Model:
     """Loaded .orion model. Immutable, shareable across Evaluators."""
 
-    @staticmethod
-    def load(data: bytes) -> "Model":
+    @classmethod
+    def load(cls, data: bytes) -> "Model":
         """Parse .orion v2 and CKKS-encode diagonals (one-time cost)."""
 
-    def client_params(self) -> dict:
-        """Returns dict with ckks_params, manifest, input_level."""
+    def client_params(self) -> tuple[dict, dict, int]:
+        """Returns (params_dict, manifest_dict, input_level)."""
 
     def close(self) -> None: ...
 
 class Evaluator:
     """Per-client evaluator. Holds eval keys. Not thread-safe."""
 
-    def __init__(self, model: Model, keys_bytes: bytes) -> None:
-        """Create evaluator from Lattigo MemEvaluationKeySet.MarshalBinary() bytes."""
+    def __init__(self, params: dict, keys_bytes: bytes) -> None:
+        """Create evaluator from CKKS params dict and Lattigo MemEvaluationKeySet.MarshalBinary() bytes."""
 
-    def forward(self, ct_bytes: bytes) -> bytes:
+    def forward(self, model: Model, ct_bytes: bytes) -> bytes:
         """Run FHE inference. Accepts and returns Lattigo ciphertext MarshalBinary bytes."""
 
     def close(self) -> None: ...
@@ -1231,25 +1148,25 @@ Both classes wrap `GoHandle` with the standard RAII pattern (idempotent `close()
 
 #### Phase 3 acceptance checklist
 
-- [ ] `cd python/lattigo && pip install -e .` succeeds, builds `.so`
-- [ ] `cd python/orion-compiler && pip install -e .` succeeds (depends on lattigo, torch, networkx)
-- [ ] `cd python/orion-evaluator && pip install -e .` succeeds, builds `.so`
-- [ ] `from lattigo import ckks, rlwe` works (Lattigo primitives directly accessible)
-- [ ] `from orion_compiler import Compiler, CKKSParams, CompiledModel` works
-- [ ] `from orion_evaluator import Model, Evaluator` works
-- [ ] Compiler E2E: compile MLP → produces valid `.orion` v2
-- [ ] Lattigo E2E: keygen + encode + encrypt/decrypt roundtrip using Lattigo bindings directly
-- [ ] Python E2E: compile → encrypt (Lattigo) → evaluate (orion-evaluator) → decrypt (Lattigo) → correct output
-- [ ] Evaluator accepts `MemEvaluationKeySet.MarshalBinary()` bytes for keys
-- [ ] Evaluator accepts/returns `rlwe.Ciphertext.MarshalBinary()` bytes for ciphertexts
-- [ ] Lattigo bridge `.so` does not export `Client*` or `Eval*` functions
-- [ ] No `he_mode`, `he()`, or FHE forward branches in nn modules
-- [ ] `orion/client.py`, `orion/ciphertext.py` deleted (no `Client`, `Ciphertext`, `PlainText` classes)
-- [ ] `EvalKeys` class and `ORKEY` format deleted
-- [ ] `orionclient/` directory deleted
-- [ ] `go.mod` at repo root, `go test ./evaluator/...` passes
-- [ ] No circular imports between packages
-- [ ] `python/tests/` pass with the new package structure
+- [x] `cd python/lattigo && pip install -e .` succeeds, builds `.so`
+- [x] `cd python/orion-compiler && pip install -e .` succeeds (depends on lattigo, torch, networkx)
+- [x] `cd python/orion-evaluator && pip install -e .` succeeds, builds `.so`
+- [x] `from lattigo import ckks, rlwe` works (Lattigo primitives directly accessible)
+- [x] `from orion_compiler import Compiler, CKKSParams, CompiledModel` works
+- [x] `from orion_evaluator import Model, Evaluator` works
+- [x] Compiler E2E: compile MLP → produces valid `.orion` v2
+- [x] Lattigo E2E: keygen + encode + encrypt/decrypt roundtrip using Lattigo bindings directly
+- [x] Python E2E: compile → encrypt (Lattigo) → evaluate (orion-evaluator) → decrypt (Lattigo) → correct output
+- [x] Evaluator accepts `MemEvaluationKeySet.MarshalBinary()` bytes for keys
+- [x] Evaluator accepts/returns `rlwe.Ciphertext.MarshalBinary()` bytes for ciphertexts
+- [x] Lattigo bridge `.so` does not export `Client*` or `Eval*` functions
+- [x] No `he_mode`, `he()`, or FHE forward branches in nn modules
+- [x] `orion/client.py`, `orion/ciphertext.py` deleted (no `Client`, `Ciphertext`, `PlainText` classes)
+- [x] `EvalKeys` class and `ORKEY` format deleted
+- [x] `orionclient/` directory deleted
+- [x] `go.mod` at repo root, `go test ./evaluator/...` passes
+- [x] No circular imports between packages
+- [x] `python/tests/` pass with the new package structure
 
 ---
 
@@ -1361,28 +1278,32 @@ compiler.fit(train_loader)
 compiled = compiler.compile()
 
 # Keygen + encrypt (using Lattigo directly)
-ckks_params = ckks.new_parameters(compiled.params.to_lattigo_json())
-keygen = rlwe.new_keygenerator(ckks_params)
+ckks_params = ckks.Parameters.from_json(compiled.params.to_bridge_json())
+keygen = rlwe.KeyGenerator.new(ckks_params)
 sk = keygen.gen_secret_key()
+pk = keygen.gen_public_key(sk)
 rlk = keygen.gen_relinearization_key(sk)
 gks = [keygen.gen_galois_key(sk, el) for el in compiled.manifest.galois_elements]
-keys_bytes = rlwe.new_mem_evaluation_key_set(rlk, gks).marshal_binary()
+keys_bytes = rlwe.MemEvaluationKeySet.new(rlk, gks).marshal_binary()
 
-encoder = ckks.new_encoder(ckks_params)
-encryptor = rlwe.new_encryptor(ckks_params, sk)
+encoder = ckks.Encoder.new(ckks_params)
+encryptor = rlwe.Encryptor.new(ckks_params, pk)
 input_vals = np.zeros(ckks_params.max_slots(), dtype=np.float64)
 input_vals[:inp.numel()] = inp.flatten().numpy().astype(np.float64)
-ct_bytes = encryptor.encrypt(encoder.encode(input_vals, compiled.input_level)).marshal_binary()
+pt = encoder.encode(input_vals, compiled.input_level, ckks_params.default_scale())
+ct_bytes = encryptor.encrypt_new(pt).marshal_binary()
 
 # Evaluate (Go evaluator via Python bindings)
 model = Model.load(compiled.to_bytes())
-evaluator = Evaluator(model, keys_bytes)
-result_bytes = evaluator.forward(ct_bytes)
+params_dict, _, _ = model.client_params()
+evaluator = Evaluator(params_dict, keys_bytes)
+result_bytes = evaluator.forward(model, ct_bytes)
 
 # Decrypt and compare (using Lattigo directly)
-decryptor = rlwe.new_decryptor(ckks_params, sk)
-result_pt = decryptor.decrypt(rlwe.unmarshal_ciphertext(result_bytes))
-out_fhe = encoder.decode(result_pt)[:out_clear.numel()]
+decryptor = rlwe.Decryptor.new(ckks_params, sk)
+result_ct = rlwe.Ciphertext.unmarshal_binary(result_bytes)
+result_pt = decryptor.decrypt_new(result_ct)
+out_fhe = encoder.decode(result_pt, ckks_params.max_slots())[:out_clear.numel()]
 print(f"Cleartext: {out_clear}")
 print(f"FHE:       {out_fhe}")
 print(f"MAE:       {np.mean(np.abs(out_clear.detach().numpy().flatten() - out_fhe)):.6f}")

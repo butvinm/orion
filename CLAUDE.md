@@ -8,47 +8,11 @@ An opinionated fork of [baahl-nyu/orion](https://github.com/baahl-nyu/orion), a 
 
 Orion takes PyTorch neural networks, analyzes them, and produces artifacts that enable encrypted inference using the CKKS scheme. The core pipeline is: **fit** (collect value range statistics) → **compile** (assign FHE levels, place bootstraps, pack data) → **encrypt & infer** (run on ciphertexts).
 
-See `ARCH.md` for the full target architecture, compiled model format specification, evaluator API design, and repo structure plan.
+See `ARCH.md` for the full target architecture, compiled model format specification, evaluator API design, repo structure, and design rationale.
 
 ## Repository Structure
 
-Three independent Python packages plus a Go evaluator plus a JS/WASM package:
-
-```
-python/lattigo/           # pip install lattigo — Lattigo CKKS bindings
-  lattigo/                # Python: ckks.py, rlwe.py, ffi.py, gohandle.py
-  bridge/                 # Go CGO: lattigo.go, types.go, main.go → .so
-
-python/orion-compiler/    # pip install orion-compiler — Model compiler
-  orion_compiler/         # Python: compiler.py, params.py, compiled_model.py
-    nn/                   # Custom torch.nn.Module layers (Linear, Conv2d, etc.)
-    core/                 # Algorithms: tracer, packing, level_dag, auto_bootstrap, galois
-    models/               # Pre-built architectures (MLP, LeNet, VGG, etc.)
-
-python/orion-evaluator/   # pip install orion-evaluator — Python bindings to Go evaluator
-  orion_evaluator/        # Python: model.py, evaluator.py, ffi.py
-  bridge/                 # Go CGO: evaluator.go, main.go → .so
-
-evaluator/                # Pure Go FHE inference engine (subpackage of root module)
-client/                   # Go client logic (keygen, encrypt, decrypt)
-go.mod                    # Root module: github.com/baahl-nyu/orion
-python/tests/             # All Python tests
-
-js/lattigo/               # @orion/lattigo npm package — Lattigo WASM bindings
-  bridge/                 # Go WASM: builds to wasm/lattigo.wasm (GOOS=js GOARCH=wasm)
-  src/                    # TypeScript wrappers: ckks.ts, rlwe.ts, encoder.ts, loader.ts
-  wasm/                   # lattigo.wasm + wasm_exec.js runtime
-  tests/                  # vitest integration tests
-  dist/                   # Built output: index.js + index.d.ts
-
-js/examples/              # JS usage examples
-  node/                   # Node.js: roundtrip.ts, eval-keys.ts
-
-examples/wasm-demo/       # Browser demo: Go HTTP server + HTML/JS client
-  server/                 # Go server: /params, /session, /session/{id}/infer endpoints
-  client/                 # HTML/JS browser client
-  model.orion             # Pre-compiled demo model
-```
+Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). See `ARCH.md § Repo Structure` for the full directory tree.
 
 **Dependency graph:** `lattigo` ← `orion-compiler` (+ torch, networkx). `orion-evaluator` is independent. `js/lattigo` depends only on Lattigo (no Orion-specific code).
 
@@ -96,17 +60,7 @@ cd js/lattigo && npm run lint
 
 ## Design Principles
 
-### Don't Constrain Lattigo Usage
-
-Orion provides **model compilation**, **plaintext encoding**, and **model evaluation**. Encryption and decryption are the user's domain — Orion must not hide or restrict access to the underlying Lattigo primitives. Users may need per-ciphertext control for threshold encryption, custom key management, hybrid schemes, or any protocol Lattigo supports.
-
-### Compiled model stores raw numerical data, not Lattigo artifacts
-
-The compiled model is a portable mathematical description: raw float64 diagonal matrices, bias vectors, polynomial coefficients, and a computation graph with edges. No Lattigo `MarshalBinary` blobs. The evaluator CKKS-encodes the raw data into Lattigo format at load time.
-
-### No backward compatibility with legacy code
-
-This is a full refactor. Every line of code should serve the target architecture only. No compatibility shims, no legacy fallbacks.
+Orion provides **compilation**, **encoding**, and **evaluation** — never constrain the user's access to Lattigo primitives. No `Client` class, no `orion-client` package. Compiled model stores raw float64 data, not Lattigo artifacts. No backward compatibility with legacy code. See `ARCH.md § Components → No orion-client package` for full rationale.
 
 ## End-to-end Usage
 
@@ -137,8 +91,9 @@ ct_bytes = ct.marshal_binary()
 
 # 3. Server — Go evaluator via orion-evaluator
 model = Model.load(model_bytes)
+params_dict, _, _ = model.client_params()
 keys_bytes = evk.marshal_binary()  # MemEvaluationKeySet
-evaluator = Evaluator(model, keys_bytes)
+evaluator = Evaluator(params_dict, keys_bytes)
 result_bytes = evaluator.forward(model, ct_bytes)
 
 # 4. Client — decrypt
@@ -151,34 +106,23 @@ output = encoder.decode(result_pt, params.max_slots())
 
 ## Package Details
 
-### lattigo (Python Lattigo bindings)
+### Python packages
 
 - `lattigo.ckks` — `Parameters`, `Encoder`
 - `lattigo.rlwe` — `SecretKey`, `PublicKey`, `RelinearizationKey`, `GaloisKey`, `Ciphertext`, `Plaintext`, `KeyGenerator`, `Encryptor`, `Decryptor`, `MemEvaluationKeySet`
 - `lattigo.gohandle` — `GoHandle` RAII wrapper for cgo.Handle values
-- `lattigo.ffi` — Low-level ctypes bindings to bridge .so
-
-### orion-compiler
-
-- `orion_compiler.compiler` — `Compiler` class: traces, fits, compiles. `compile()` has zero Go/Lattigo dependency.
-- `orion_compiler.params` — `CKKSParams` (frozen dataclass), `CompilerConfig`, `CostProfile`
-- `orion_compiler.compiled_model` — `CompiledModel` (v2 format), `Graph`, `GraphNode`, `GraphEdge`, `KeyManifest`
-- `orion_compiler.nn` — Custom `torch.nn.Module` layers for FHE (cleartext-only forward)
-- `orion_compiler.core` — Compilation algorithms (tracer, packing, level assignment, auto-bootstrap, galois, compiler_backend)
-
-### orion-evaluator
-
+- `orion_compiler` — `Compiler`, `CKKSParams`, `CompiledModel`, `Graph`, `GraphNode`, `GraphEdge`, `KeyManifest`, `CompilerConfig`, `CostProfile`
+- `orion_compiler.nn` — FHE-compatible layers (cleartext-only forward)
+- `orion_compiler.core` — Compilation algorithms (tracer, packing, level assignment, auto-bootstrap, galois)
 - `orion_evaluator.Model` — `load()`, `client_params()`, `close()`
-- `orion_evaluator.Evaluator` — `__init__(model, keys_bytes)`, `forward(model, ct_bytes) → bytes`, `close()`
+- `orion_evaluator.Evaluator` — `__init__(params, keys_bytes)`, `forward(model, ct_bytes) → bytes`, `close()`
 
 ### Go evaluator (`evaluator/`)
-
-Pure Go FHE inference engine. Reads `.orion` v2 files, CKKS-encodes diagonals at load time, walks the computation graph.
 
 - `evaluator/format.go` — Binary format parser
 - `evaluator/graph.go` — Computation graph with topological ordering
 - `evaluator/model.go` — `Model` (immutable, shareable): `LoadModel`, `ClientParams()`
-- `evaluator/evaluator.go` — `Evaluator` (per-client): `NewEvaluator`, `Forward`
+- `evaluator/evaluator.go` — `Evaluator` (per-client): `NewEvaluatorFromKeySet`, `Forward`
 
 ### GoHandle — Go object lifecycle management
 
