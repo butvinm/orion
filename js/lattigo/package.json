@@ -15,7 +15,8 @@
     "build": "npm run build:wasm && npm run build:ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/ tests/*.test.ts tests/helpers.ts tests/setup.ts",
-    "test": "node --experimental-vm-modules node_modules/.bin/vitest run"
+    "test:go-wasm": "cd bridge && GOOS=js GOARCH=wasm go test -v . -exec ./go_wasm_test_exec.sh",
+    "test": "npm run test:go-wasm && node --experimental-vm-modules node_modules/.bin/vitest run"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
