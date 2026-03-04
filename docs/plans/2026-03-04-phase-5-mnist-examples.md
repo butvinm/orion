@@ -69,12 +69,12 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 ### Task 4: Remove MNIST models from `orion_compiler/models/`
 
-- [ ] Remove MLP, LeNet, LoLA imports from `orion_compiler/models/__init__.py` (keep AlexNet, VGG, ResNet, YOLO)
-- [ ] Delete `orion_compiler/models/mlp.py`, `lenet.py`, `lola.py`
-- [ ] Update `python/tests/models/test_mlp.py` — remove `import orion_compiler.models`, delete the skipped test (it's been replaced by the examples). Check if `python/tests/models/` directory has other test files; clean up if empty
-- [ ] Update `CLAUDE.md` — fix the `from orion_compiler.models import MLP` example to use inline model definition pattern instead
-- [ ] Grep for any remaining `orion_compiler.models.mlp`, `orion_compiler.models.lenet`, `orion_compiler.models.lola` imports — fix or remove
-- [ ] Run `pytest python/tests/` — all tests pass
+- [x] Remove MLP, LeNet, LoLA imports from `models/__init__.py` (keep AlexNet, VGG, ResNet, YOLO). Note: `orion_compiler/models/` was already removed in commit 11158e4; the legacy `models/` at repo root was updated instead.
+- [x] Delete `models/mlp.py`, `models/lenet.py`, `models/lola.py` from repo root
+- [x] Update `python/tests/models/test_mlp.py` — file did not exist; only `test_chebyshev_model.py` remains in that directory, no cleanup needed
+- [x] Update `CLAUDE.md` — already uses inline model definition pattern, no change needed
+- [x] Grep for any remaining `orion.models.mlp`, `orion.models.lenet`, `orion.models.lola` imports — found 3 in `experiments/`, inlined MLP definition in each
+- [x] Run `pytest python/tests/` — all tests pass (206 passed, 1 skipped)
 
 ### Task 5: Add Phase 6 to ARCH.md
 
@@ -102,11 +102,11 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 **CKKS Parameters (MNIST models, no bootstrap):**
 
-| Model | logn | logq                                 | logp    | logscale | h    | ring_type           |
-| ----- | ---- | ------------------------------------ | ------- | -------- | ---- | ------------------- |
-| MLP   | 13   | [29,26,26,26,26,26]                  | [29,29] | 26       | 8192 | conjugate_invariant |
-| LeNet | 13   | [29,26,26,26,26,26,26,26,26,26]      | [29,29] | 26       | 8192 | conjugate_invariant |
-| LoLA  | 13   | [29,26,26,26,26,26,26,26,26,26]      | [29,29] | 26       | 8192 | conjugate_invariant |
+| Model | logn | logq                            | logp    | logscale | h    | ring_type           |
+| ----- | ---- | ------------------------------- | ------- | -------- | ---- | ------------------- |
+| MLP   | 13   | [29,26,26,26,26,26]             | [29,29] | 26       | 8192 | conjugate_invariant |
+| LeNet | 13   | [29,26,26,26,26,26,26,26,26,26] | [29,29] | 26       | 8192 | conjugate_invariant |
+| LoLA  | 13   | [29,26,26,26,26,26,26,26,26,26] | [29,29] | 26       | 8192 | conjugate_invariant |
 
 **`run.py` pipeline flow:**
 
