@@ -78,12 +78,12 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 ### Task 5: Add Phase 6 to ARCH.md
 
-- [ ] Add Phase 6 section after Phase 5 in ARCH.md: "Phase 6: Bootstrapping and CIFAR-10 examples"
-- [ ] Document scope: implement bootstrapping support in Go evaluator, then create `examples/alexnet/`, `examples/vgg/`, `examples/resnet/`, `examples/yolo/`
-- [ ] Include acceptance checklist for Phase 6
-- [ ] Update Phase 5 description text (lines 1216-1226) to reflect the split into Phase 5 (MNIST) and Phase 6 (CIFAR/YOLO)
-- [ ] Update Phase 5 acceptance checklist to reflect partial scope (MNIST models only, `models/` directory kept for remaining models)
-- [ ] Format with `npx prettier --write ARCH.md`
+- [x] Add Phase 6 section after Phase 5 in ARCH.md: "Phase 6: Bootstrapping and CIFAR-10 examples"
+- [x] Document scope: implement bootstrapping support in Go evaluator, then create `examples/alexnet/`, `examples/vgg/`, `examples/resnet/`, `examples/yolo/`
+- [x] Include acceptance checklist for Phase 6
+- [x] Update Phase 5 description text (lines 1216-1226) to reflect the split into Phase 5 (MNIST) and Phase 6 (CIFAR/YOLO)
+- [x] Update Phase 5 acceptance checklist to reflect partial scope (MNIST models only, `models/` directory kept for remaining models)
+- [x] Format with `npx prettier --write ARCH.md`
 
 ### Task 6: Verify acceptance criteria
 

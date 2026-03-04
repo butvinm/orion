@@ -1213,9 +1213,11 @@ Tensor-to-slot mapping (flatten, pad, split) is trivial user code — no JS libr
 
 ---
 
-### Phase 5: Examples and model zoo
+### Phase 5: MNIST examples (MLP, LeNet, LoLA)
 
-Model architectures move out of the library into `examples/`. The `orion-compiler` package ships no pre-built models — it provides `orion_compiler.nn` layers, and users compose their own architectures. The `examples/` directory serves as both documentation and a model zoo: each example is a self-contained project showing how to define, train, compile, and run encrypted inference for a specific architecture.
+MNIST model architectures move out of the library into `examples/`. The `orion-compiler` package ships no pre-built models — it provides `orion_compiler.nn` layers, and users compose their own architectures. Each example is a self-contained project showing how to define, train, compile, and run encrypted inference for a specific architecture.
+
+This phase covers MNIST models only (MLP, LeNet, LoLA) — they use `Quad` activations and require no bootstrapping. CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO require bootstrapping support in the Go evaluator and are deferred to Phase 6.
 
 Starts after Phase 3 (packages split, `orion-evaluator` available).
 
@@ -1365,19 +1367,51 @@ These can stay in `orion_compiler.core.utils` (the compiler package still depend
 
 #### Phase 5 acceptance checklist
 
-- [ ] `orion/models/` (or `orion_compiler/models/`) deleted — no model architectures in the library
-- [ ] `examples/mlp/` — model.py, train.py, run.py, README.md all present and working
-- [ ] `examples/lenet/` — same structure, working
-- [ ] `examples/lola/` — same structure, working
-- [ ] `examples/alexnet/` — same structure, working
+- [x] MNIST models (`mlp.py`, `lenet.py`, `lola.py`) removed from `models/` — remaining models (AlexNet, VGG, ResNet, YOLO) stay until Phase 6
+- [x] `examples/mlp/` — model.py, train.py, run.py, README.md all present and working
+- [x] `examples/lenet/` — same structure, working
+- [x] `examples/lola/` — same structure, working
+- [x] Each MNIST `run.py` produces correct FHE output end-to-end (MAE < 0.1)
+- [x] Each `train.py` trains to reasonable accuracy on MNIST
+- [x] Each `README.md` documents CKKS parameter choices and expected performance
+- [x] No imports of `orion_compiler.models.{mlp,lenet,lola}` anywhere in the codebase
+- [x] `examples/wasm-demo/` still works (Phase 4 deliverable, not modified here)
+
+---
+
+### Phase 6: Bootstrapping and CIFAR-10 examples
+
+Implement bootstrapping support in the Go evaluator, then create examples for the deeper CIFAR-10 architectures and YOLO. These models require bootstrapping because their activation functions (SiLU via Chebyshev polynomials, ReLU via minimax sign approximation) consume many more levels than the simple `Quad` activation used by MNIST models.
+
+Starts after Phase 5 (MNIST examples complete, Go evaluator proven end-to-end).
+
+#### 6.1 Bootstrapping in Go evaluator
+
+Add bootstrap op handling to `evaluator/evaluator.go`. The compiler already inserts `bootstrap` nodes in the computation graph when the modulus chain is exhausted — the Go evaluator needs to execute them using Lattigo's `bootstrapping.Evaluator`.
+
+#### 6.2 CIFAR-10 and YOLO examples
+
+| Example             | Dataset  | Key FHE features                                 |
+| ------------------- | -------- | ------------------------------------------------ |
+| `examples/alexnet/` | CIFAR-10 | Deeper CNN, SiLU (Chebyshev polynomial)          |
+| `examples/vgg/`     | CIFAR-10 | Deep CNN, ReLU (minimax sign approximation)      |
+| `examples/resnet/`  | CIFAR-10 | Residual connections (`Add`), bootstrapping      |
+| `examples/yolo/`    | Custom   | Object detection, ResNet34 backbone, large model |
+
+Each example follows the same structure as Phase 5: `model.py`, `train.py`, `run.py`, `README.md`.
+
+#### Phase 6 acceptance checklist
+
+- [ ] Go evaluator handles `bootstrap` ops correctly
+- [ ] `examples/alexnet/` — model.py, train.py, run.py, README.md all present and working
 - [ ] `examples/vgg/` — same structure, working
 - [ ] `examples/resnet/` — same structure, working (includes bootstrap)
 - [ ] `examples/yolo/` — same structure, working (or documented limitations for multi-CT)
-- [ ] Each `run.py` produces correct FHE output when run end-to-end (MAE within expected tolerance)
-- [ ] Each `train.py` trains to reasonable accuracy on its dataset
+- [ ] Each `run.py` produces correct FHE output end-to-end (MAE within expected tolerance)
+- [ ] Each `train.py` trains to reasonable accuracy on CIFAR-10
 - [ ] Each `README.md` documents CKKS parameter choices and expected performance
+- [ ] Remaining models removed from `models/` directory — `models/` deleted entirely
 - [ ] No imports of `orion_compiler.models` anywhere in the codebase
-- [ ] `examples/wasm-demo/` still works (Phase 4 deliverable, not modified here)
 
 ---
 
@@ -1398,7 +1432,11 @@ Phase 2 (Go eval)  Phase 3 (package split, except 3.5/3.6)
      ┌─────┴─────┐
      ▼           ▼
 Phase 4       Phase 5
-(JS/WASM)     (examples)
+(JS/WASM)     (MNIST examples)
+                 │
+                 ▼
+              Phase 6
+              (bootstrapping + CIFAR/YOLO examples)
 ```
 
 ## Resolved Questions
