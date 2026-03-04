@@ -51,12 +51,12 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 ### Task 2: Create `examples/lenet/`
 
-- [ ] Create `examples/lenet/model.py` — copy `LeNet` class, strip `__main__` block
-- [ ] Create `examples/lenet/train.py` — MNIST training script
-- [ ] Create `examples/lenet/run.py` — full FHE pipeline. Determine correct CKKS params (LeNet has 2 Conv2d+Quad + 1 Linear+Quad + 1 Linear — may need deeper modulus chain than MLP). Start with MLP params, add levels to `logq` if compiler requires deeper chain
-- [ ] Create `examples/lenet/README.md` — architecture, CKKS params, expected MAE. Include run instructions: `cd examples/lenet && python run.py`
-- [ ] Run `cd examples/lenet && python run.py` end-to-end — must complete and print MAE < 0.1
-- [ ] Run `pytest python/tests/` — all existing tests pass
+- [x] Create `examples/lenet/model.py` — copy `LeNet` class, strip `__main__` block
+- [x] Create `examples/lenet/train.py` — MNIST training script
+- [x] Create `examples/lenet/run.py` — full FHE pipeline. Same CKKS params as MLP (9 levels sufficient, input_level=7, 0 bootstraps). 178 galois elements from Conv2d rotations produce ~1.3 GB key material.
+- [x] Create `examples/lenet/README.md` — architecture, CKKS params, expected MAE. Include run instructions: `cd examples/lenet && python run.py`
+- [x] Run `cd examples/lenet && python run.py` end-to-end — must complete and print MAE < 0.1 (actual MAE: 0.015088)
+- [x] Run `pytest python/tests/` — all existing tests pass (206 passed, 1 skipped)
 
 ### Task 3: Create `examples/lola/`
 
@@ -93,7 +93,6 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 - [ ] Verify no imports of `orion_compiler.models.{mlp,lenet,lola}` anywhere
 - [ ] Run full test suite: `pytest python/tests/`
 
-
 ### Task 7: Update documentation
 
 - [ ] Update CLAUDE.md if new patterns discovered (e.g., example-specific CKKS params)
@@ -103,11 +102,11 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 **CKKS Parameters (MNIST models, no bootstrap):**
 
-| Model | logn | logq                                          | logp    | logscale | h    | ring_type           |
-| ----- | ---- | --------------------------------------------- | ------- | -------- | ---- | ------------------- |
-| MLP   | 13   | [29,26,26,26,26,26]                           | [29,29] | 26       | 8192 | conjugate_invariant |
-| LeNet | 13   | TBD (may need deeper chain for 2 Conv layers) | [29,29] | 26       | 8192 | conjugate_invariant |
-| LoLA  | 13   | TBD (similar to MLP — 1 Conv + 1 FC)          | [29,29] | 26       | 8192 | conjugate_invariant |
+| Model | logn | logq                                 | logp    | logscale | h    | ring_type           |
+| ----- | ---- | ------------------------------------ | ------- | -------- | ---- | ------------------- |
+| MLP   | 13   | [29,26,26,26,26,26]                  | [29,29] | 26       | 8192 | conjugate_invariant |
+| LeNet | 13   | [29,26,26,26,26,26,26,26,26,26]      | [29,29] | 26       | 8192 | conjugate_invariant |
+| LoLA  | 13   | TBD (similar to MLP — 1 Conv + 1 FC) | [29,29] | 26       | 8192 | conjugate_invariant |
 
 **`run.py` pipeline flow:**
 
