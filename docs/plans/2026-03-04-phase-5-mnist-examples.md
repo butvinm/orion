@@ -87,11 +87,11 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] Verify all 3 examples have `model.py`, `train.py`, `run.py`, `README.md`
-- [ ] Verify each `run.py` produces correct FHE output (MAE < 0.1)
-- [ ] Verify `orion_compiler/models/` no longer contains `mlp.py`, `lenet.py`, `lola.py`
-- [ ] Verify no imports of `orion_compiler.models.{mlp,lenet,lola}` anywhere
-- [ ] Run full test suite: `pytest python/tests/`
+- [x] Verify all 3 examples have `model.py`, `train.py`, `run.py`, `README.md`
+- [x] Verify each `run.py` produces correct FHE output (MAE < 0.1)
+- [x] Verify `orion_compiler/models/` no longer contains `mlp.py`, `lenet.py`, `lola.py`
+- [x] Verify no imports of `orion_compiler.models.{mlp,lenet,lola}` anywhere
+- [x] Run full test suite: `pytest python/tests/`
 
 ### Task 7: Update documentation
 
