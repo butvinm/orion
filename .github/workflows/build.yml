@@ -144,7 +144,7 @@ jobs:
           # Create temp directory
           cd $RUNNER_TEMP
           echo "Testing from directory: $RUNNER_TEMP"
-          python -m pytest $GITHUB_WORKSPACE/tests/
+          python -m pytest $GITHUB_WORKSPACE/python/tests/
 
   publish:
     needs: [test]

@@ -104,7 +104,7 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 | Model | logn | logq                            | logp    | logscale | h    | ring_type           |
 | ----- | ---- | ------------------------------- | ------- | -------- | ---- | ------------------- |
-| MLP   | 13   | [29,26,26,26,26,26]             | [29,29] | 26       | 8192 | conjugate_invariant |
+| MLP   | 13   | [29,26,26,26,26,26,26,26,26,26] | [29,29] | 26       | 8192 | conjugate_invariant |
 | LeNet | 13   | [29,26,26,26,26,26,26,26,26,26] | [29,29] | 26       | 8192 | conjugate_invariant |
 | LoLA  | 13   | [29,26,26,26,26,26,26,26,26,26] | [29,29] | 26       | 8192 | conjugate_invariant |
 

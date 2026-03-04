@@ -24,19 +24,29 @@ go version # go version go1.22.3 linux/amd64
 
 ### Install Orion
 
-```
+```bash
 git clone https://github.com/baahl-nyu/orion.git
 cd orion/
-pip install -e .
+
+# Build the Go shared library
+python tools/build_lattigo.py
+
+# Install Python packages
+cd python/lattigo && pip install -e .
+cd python/orion-compiler && pip install -e .
+cd python/orion-evaluator && pip install -e .
 ```
 
 ### Run the examples!
 
-```
-cd examples/
-python3 run_lola.py
+Each example is self-contained in `examples/<model>/` with `model.py`, `train.py`, `run.py`, and `README.md`.
+
+```bash
+cd examples/mlp && python run.py
+cd examples/lenet && python run.py
+cd examples/lola && python run.py
 ```
 
 ### Browser Demo
 
-See [`demo/wasm-fhe-demo/`](demo/wasm-fhe-demo/) for a browser-based demo that performs encrypted MNIST inference. The client runs Lattigo compiled to WASM — the secret key never leaves the browser.
+See [`examples/wasm-demo/`](examples/wasm-demo/) for a browser-based demo that performs encrypted MNIST inference. The client runs Lattigo compiled to WASM — the secret key never leaves the browser.

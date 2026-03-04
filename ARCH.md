@@ -518,8 +518,11 @@ orion/
 │   └── examples/                   # JS example code (tensor-to-slot mapping is user code)
 │
 ├── examples/
-│   └── wasm-demo/                  # Browser demo: Go server + WASM client
-│   # Phase 5 (planned): mlp/, lenet/, lola/, alexnet/, vgg/, resnet/, yolo/
+│   ├── mlp/                        # MNIST MLP: Linear + Quad, simplest FHE example
+│   ├── lenet/                      # MNIST LeNet: Conv2d + pooling via strided conv
+│   ├── lola/                       # MNIST LoLA: lightweight single-conv architecture
+│   ├── wasm-demo/                  # Browser demo: Go server + WASM client
+│   # Phase 6 (planned): alexnet/, vgg/, resnet/, yolo/
 │
 └── docs/
 ```
