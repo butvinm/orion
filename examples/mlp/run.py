@@ -26,7 +26,8 @@ def main():
     net = MLP()
     weights_path = os.path.join(os.path.dirname(__file__), "weights.pt")
     if os.path.exists(weights_path):
-        net.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
+        checkpoint = torch.load(weights_path, map_location="cpu", weights_only=True)
+        net.load_state_dict(checkpoint["model_state_dict"])
         print("Loaded trained weights from weights.pt")
     else:
         print("No weights.pt found, using random weights")
