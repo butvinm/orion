@@ -95,8 +95,8 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 ### Task 7: Update documentation
 
-- [ ] Update CLAUDE.md if new patterns discovered (e.g., example-specific CKKS params)
-- [ ] Format all new Markdown files with `npx prettier --write`
+- [x] Update CLAUDE.md if new patterns discovered (e.g., example-specific CKKS params)
+- [x] Format all new Markdown files with `npx prettier --write`
 
 ## Technical Details
 
