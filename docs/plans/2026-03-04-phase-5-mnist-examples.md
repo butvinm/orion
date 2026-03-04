@@ -42,12 +42,12 @@ This is a partial Phase 5 — CIFAR-10 models (AlexNet, VGG, ResNet) and YOLO re
 
 ### Task 1: Create `examples/mlp/` — first working example
 
-- [ ] Create `examples/mlp/model.py` — copy `MLP` class from `orion_compiler/models/mlp.py`, strip `__main__` block, keep only the model definition with `orion_compiler.nn` imports
-- [ ] Create `examples/mlp/train.py` — MNIST training script using `orion_compiler.core.utils.train_on_mnist()`, saves `weights.pt`
-- [ ] Create `examples/mlp/run.py` — full FHE pipeline following ARCH.md template: compile → keygen → encrypt → evaluate → decrypt → print MAE. Use `Parameters.from_logn(**params_dict)` pattern from working E2E test. Must be run from `examples/mlp/` directory (`from model import MLP` is a local import)
-- [ ] Create `examples/mlp/README.md` — architecture description, CKKS params rationale (logn=13, 5 levels, Quad, no bootstrap), expected MAE. Include run instructions: `cd examples/mlp && python run.py`
-- [ ] Run `cd examples/mlp && python run.py` end-to-end — must complete and print MAE < 0.1
-- [ ] Run `pytest python/tests/` — all existing tests pass
+- [x] Create `examples/mlp/model.py` — copy `MLP` class from `orion_compiler/models/mlp.py`, strip `__main__` block, keep only the model definition with `orion_compiler.nn` imports
+- [x] Create `examples/mlp/train.py` — MNIST training script using `orion_compiler.core.utils.train_on_mnist()`, saves `weights.pt`
+- [x] Create `examples/mlp/run.py` — full FHE pipeline following ARCH.md template: compile → keygen → encrypt → evaluate → decrypt → print MAE. Use `Parameters.from_logn(**params_dict)` pattern from working E2E test. Must be run from `examples/mlp/` directory (`from model import MLP` is a local import)
+- [x] Create `examples/mlp/README.md` — architecture description, CKKS params rationale (logn=13, 9 levels, Quad, no bootstrap), expected MAE. Include run instructions: `cd examples/mlp && python run.py`
+- [x] Run `cd examples/mlp && python run.py` end-to-end — must complete and print MAE < 0.1 (actual MAE: 0.001111)
+- [x] Run `pytest python/tests/` — all existing tests pass (206 passed, 1 skipped)
 
 ### Task 2: Create `examples/lenet/`
 
