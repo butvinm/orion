@@ -65,20 +65,34 @@ Orion provides **compilation**, **encoding**, and **evaluation** — never const
 ## End-to-end Usage
 
 ```python
+import orion_compiler.nn as on
 from orion_compiler import Compiler, CKKSParams, CompiledModel
-from orion_compiler.models import MLP
 from lattigo.ckks import Parameters, Encoder
 from lattigo.rlwe import KeyGenerator, Encryptor, Decryptor, MemEvaluationKeySet
 from orion_evaluator import Model, Evaluator
 
-# 1. Compile
+# 1. Define model using orion_compiler.nn layers
+class MLP(on.Module):
+    def __init__(self):
+        super().__init__()
+        self.flatten = on.Flatten()
+        self.fc1 = on.Linear(784, 128)
+        self.act1 = on.Quad()
+        self.fc2 = on.Linear(128, 10)
+
+    def forward(self, x):
+        x = self.flatten(x)
+        x = self.act1(self.fc1(x))
+        return self.fc2(x)
+
+# 2. Compile
 net = MLP()
 compiler = Compiler(net, CKKSParams(logn=14, logq=[...], logp=[...], logscale=40))
 compiler.fit(dataloader)
 compiled = compiler.compile()
 model_bytes = compiled.to_bytes()
 
-# 2. Client — keygen + encrypt using Lattigo primitives directly
+# 3. Client — keygen + encrypt using Lattigo primitives directly
 params = Parameters.from_logn(logn=14, logq=[...], logp=[...], logscale=40)
 kg = KeyGenerator.new(params)
 sk = kg.gen_secret_key()
@@ -89,14 +103,14 @@ pt = encoder.encode(input_values, level=compiled.input_level, scale=params.defau
 ct = encryptor.encrypt_new(pt)
 ct_bytes = ct.marshal_binary()
 
-# 3. Server — Go evaluator via orion-evaluator
+# 4. Server — Go evaluator via orion-evaluator
 model = Model.load(model_bytes)
 params_dict, _, _ = model.client_params()
 keys_bytes = evk.marshal_binary()  # MemEvaluationKeySet
 evaluator = Evaluator(params_dict, keys_bytes)
 result_bytes = evaluator.forward(model, ct_bytes)
 
-# 4. Client — decrypt
+# 5. Client — decrypt
 from lattigo.rlwe import Ciphertext as RLWECiphertext
 result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
 decryptor = Decryptor.new(params, sk)
