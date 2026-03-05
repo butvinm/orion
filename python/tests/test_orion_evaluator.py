@@ -373,15 +373,8 @@ class TestE2EForward:
         del compiler
         _cleanup()
 
-    @pytest.mark.xfail(reason="packing bug with small Conv2d channel counts — see examples/lola/model.py")
     def test_forward_conv2d_small_channels(self):
-        """E2E: Conv2d(1,5,k=2,s=2,p=0) produces systematic error from packing bug.
-
-        The original LoLA architecture uses Conv2d with 5 output channels, kernel 2,
-        stride 2, no padding. This configuration triggers a deterministic computation
-        error in the compiler's diagonal packing — MAE ~0.65 regardless of CKKS
-        precision. This test pins the bug so it can be fixed.
-        """
+        """E2E: Conv2d(1,5,k=2,s=2,p=0) with small channel count and output rotations."""
         from orion_compiler.params import CKKSParams
         from orion_compiler.compiler import Compiler
         import orion_compiler.nn as on
@@ -461,12 +454,10 @@ class TestE2EForward:
         with torch.no_grad():
             cleartext = net(test_input).flatten().tolist()
 
-        # This SHOULD pass at tolerance 0.1, but the packing bug causes MAE ~0.65
         tolerance = 0.1
         max_diff = max(abs(cleartext[i] - decoded[i]) for i in range(len(cleartext)))
         assert max_diff < tolerance, (
-            f"Conv2d small channels: max diff {max_diff:.6f} exceeds tolerance {tolerance}. "
-            f"This is the known packing bug with Conv2d(1,5,k=2,s=2,p=0)."
+            f"Conv2d small channels: max diff {max_diff:.6f} exceeds tolerance {tolerance}"
         )
 
         # Cleanup

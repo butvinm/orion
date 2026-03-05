@@ -59,17 +59,21 @@ func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphert
 
 	results := make(map[string]*rlwe.Ciphertext)
 
-	// Assign input ciphertext to the graph's input node.
-	results[model.graph.Input] = input
+	// Make the raw input available under a virtual key so the graph's input
+	// node can consume it like any other node.
+	const virtualInput = "__input__"
+	results[virtualInput] = input
 
 	// Walk the graph in topological order.
 	for _, name := range model.graph.Order {
-		if name == model.graph.Input {
-			continue
-		}
-
 		node := model.graph.Nodes[name]
 		inputs := model.graph.Inputs[name]
+
+		// The graph's input node has no predecessors in the edge list;
+		// wire it to the raw input ciphertext.
+		if name == model.graph.Input && len(inputs) == 0 {
+			inputs = []string{virtualInput}
+		}
 
 		var err error
 		var result *rlwe.Ciphertext

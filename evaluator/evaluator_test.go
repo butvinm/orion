@@ -446,6 +446,24 @@ func TestForwardSigmoidUnfused(t *testing.T) {
 	}
 }
 
+func TestForwardConv2d(t *testing.T) {
+	decoded, expected := loadModelAndEvaluate(t,
+		"testdata/conv2d.orion", "testdata/conv2d.input.json", "testdata/conv2d.expected.json")
+
+	tolerance := 0.1
+
+	t.Logf("Conv2d output (first %d values):", len(expected))
+	for i, v := range expected {
+		diff := math.Abs(v - decoded[i])
+		t.Logf("  [%d] expected=%.6f got=%.6f diff=%.6f", i, v, decoded[i], diff)
+	}
+
+	for i, v := range expected {
+		assert.InDelta(t, v, decoded[i], tolerance,
+			"slot %d: expected %f, got %f", i, v, decoded[i])
+	}
+}
+
 func TestMultipleEvaluatorsShareModel(t *testing.T) {
 	data, err := os.ReadFile("testdata/mlp.orion")
 	require.NoError(t, err)
