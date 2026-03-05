@@ -1382,17 +1382,45 @@ These can stay in `orion_compiler.core.utils` (the compiler package still depend
 
 ---
 
-### Phase 6: Bootstrapping and CIFAR-10 examples
+### Phase 6: Stream evaluation keys in WASM demo
+
+The WASM demo assembles all Galois keys into a single `MemEvaluationKeySet`, marshals the entire blob, and uploads it in one HTTP POST. For models with many Galois elements (e.g., LeNet's 178 keys → ~1.3 GB), this creates a large single transfer and high peak memory in the browser.
+
+Change the WASM demo to upload keys individually and have the server assemble the `MemEvaluationKeySet` incrementally.
+
+#### 6.1 Server-side key accumulation
+
+Add endpoints to the Go server (`examples/wasm-demo/server/`) for incremental key upload:
+
+- `POST /session/keys/relin` — upload relinearization key
+- `POST /session/keys/galois` — upload a single Galois key
+- `POST /session/keys/finalize` — signal that all keys have been sent, server assembles `MemEvaluationKeySet`
+
+#### 6.2 Client-side streaming
+
+Update `client.ts` to upload each key as it is generated rather than waiting for all keys to be ready. Show per-key upload progress.
+
+#### Phase 6 acceptance checklist
+
+- [ ] Server accepts individual key uploads and assembles `MemEvaluationKeySet`
+- [ ] Client uploads keys one at a time with progress indication
+- [ ] Peak browser memory reduced (no full key set blob in memory)
+- [ ] WASM demo still works end-to-end for MLP inference
+- [ ] Existing single-blob `POST /session` path still works (backwards compatibility)
+
+---
+
+### Phase 7: Bootstrapping and CIFAR-10 examples
 
 Implement bootstrapping support in the Go evaluator, then create examples for the deeper CIFAR-10 architectures and YOLO. These models require bootstrapping because their activation functions (SiLU via Chebyshev polynomials, ReLU via minimax sign approximation) consume many more levels than the simple `Quad` activation used by MNIST models.
 
 Starts after Phase 5 (MNIST examples complete, Go evaluator proven end-to-end).
 
-#### 6.1 Bootstrapping in Go evaluator
+#### 7.1 Bootstrapping in Go evaluator
 
 Add bootstrap op handling to `evaluator/evaluator.go`. The compiler already inserts `bootstrap` nodes in the computation graph when the modulus chain is exhausted — the Go evaluator needs to execute them using Lattigo's `bootstrapping.Evaluator`.
 
-#### 6.2 CIFAR-10 and YOLO examples
+#### 7.2 CIFAR-10 and YOLO examples
 
 | Example             | Dataset  | Key FHE features                                 |
 | ------------------- | -------- | ------------------------------------------------ |
@@ -1403,7 +1431,7 @@ Add bootstrap op handling to `evaluator/evaluator.go`. The compiler already inse
 
 Each example follows the same structure as Phase 5: `model.py`, `train.py`, `run.py`, `README.md`.
 
-#### Phase 6 acceptance checklist
+#### Phase 7 acceptance checklist
 
 - [ ] Go evaluator handles `bootstrap` ops correctly
 - [ ] `examples/alexnet/` — model.py, train.py, run.py, README.md all present and working
@@ -1417,30 +1445,6 @@ Each example follows the same structure as Phase 5: `model.py`, `train.py`, `run
 - [ ] No imports of `orion_compiler.models` anywhere in the codebase
 
 ---
-
-### Dependency graph
-
-```
-Phase 1 (format)
-    │
-    ├──────────────────┐
-    ▼                  ▼
-Phase 2 (Go eval)  Phase 3 (package split, except 3.5/3.6)
-    │                  │
-    └──────┬───────────┘
-           ▼
-    Phase 3.5 (move Go evaluator)
-    Phase 3.6 (orion-evaluator Python bindings)
-           │
-     ┌─────┴─────┐
-     ▼           ▼
-Phase 4       Phase 5
-(JS/WASM)     (MNIST examples)
-                 │
-                 ▼
-              Phase 6
-              (bootstrapping + CIFAR/YOLO examples)
-```
 
 ## Resolved Questions
 
