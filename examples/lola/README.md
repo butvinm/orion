@@ -6,7 +6,7 @@ Conv2d(1, 32, 5, s=2, p=2) → BatchNorm2d → Quad → Flatten → Linear(6272,
 
 A single-conv architecture inspired by LoLA ("Low-Latency"), using Quad (x²) activations — FHE-compatible alternative to ReLU. BatchNorm layers fuse into the preceding linear/conv layers during compilation.
 
-The original LoLA used Conv2d(1, 5, k=2, s=2, p=0) but small channel counts trigger a systematic packing error in the compiler. Adapted to 32 channels with k=5 for FHE compatibility.
+Adapted from the original LoLA Conv2d(1, 5, k=2, s=2, p=0) to 32 channels with k=5 for better accuracy.
 
 ## CKKS Parameters
 

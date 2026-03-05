@@ -2,10 +2,9 @@
 
 Architecture: Conv2d(1,32,5,s=2,p=2) → BN2d → Quad → Flatten → Linear(6272,100) → BN1d → Quad → Linear(100,10)
 
-Based on LoLA ("Low-Latency") — a single-conv architecture. The original LoLA used
-Conv2d(1,5,k=2,s=2,p=0) but small channel counts trigger a packing bug in the
-compiler (systematic error regardless of CKKS precision). Adapted to 32 channels
-with k=5 padding for FHE compatibility.
+Based on LoLA ("Low-Latency") — a single-conv architecture. Adapted from the
+original Conv2d(1,5,k=2,s=2,p=0) to 32 channels with k=5 padding for better
+accuracy.
 """
 
 import orion_compiler.nn as on

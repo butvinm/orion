@@ -380,7 +380,7 @@ class TestE2EForward:
         import orion_compiler.nn as on
 
         class SmallConvNet(on.Module):
-            """Minimal Conv2d model with small channel count (triggers packing bug)."""
+            """Minimal Conv2d model with small channel count and output rotations."""
             def __init__(self):
                 super().__init__()
                 self.conv1 = on.Conv2d(1, 5, kernel_size=2, stride=2, padding=0)
