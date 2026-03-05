@@ -2,11 +2,9 @@
 
 ## Architecture
 
-Conv2d(1, 32, 5, s=2, p=2) → BatchNorm2d → Quad → Flatten → Linear(6272, 100) → BatchNorm1d → Quad → Linear(100, 10)
+Conv2d(1, 5, 2, s=2) → BN2d → Quad → Flatten → Linear(980, 100) → BN1d → Quad → Linear(100, 10)
 
-A single-conv architecture inspired by LoLA ("Low-Latency"), using Quad (x²) activations — FHE-compatible alternative to ReLU. BatchNorm layers fuse into the preceding linear/conv layers during compilation.
-
-Adapted from the original LoLA Conv2d(1, 5, k=2, s=2, p=0) to 32 channels with k=5 for better accuracy.
+LoLA ("Low-Latency") — a single-conv architecture from the original orion repo. Uses BatchNorm layers that fuse into the preceding linear/conv layers during compilation.
 
 ## CKKS Parameters
 
@@ -36,4 +34,4 @@ python run.py
 ## Expected Output
 
 - MAE < 0.1 (cleartext vs FHE output difference)
-- With trained weights, the model achieves ~96% accuracy on MNIST in cleartext
+- With trained weights, the model achieves ~98% accuracy on MNIST in cleartext

@@ -40,10 +40,7 @@ def main():
         cleartext = net(test_input).flatten().tolist()
 
     # 3. Compile
-    # LoLA: Conv2d(1,32,5,s=2,p=2) + BN2d + Quad
-    #     → Flatten → Linear(6272,100) + BN1d + Quad
-    #     → Linear(100,10)
-    # Single-conv architecture — simpler than LeNet, same 9-level chain suffices
+    # LoLA: Conv2d(1,5,2,s=2) → BN2d → Quad → Flatten → Linear(980,100) → BN1d → Quad → Linear(100,10)
     ckks_params = CKKSParams(
         logn=13,
         logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
