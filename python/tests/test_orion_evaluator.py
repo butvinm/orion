@@ -372,3 +372,121 @@ class TestE2EForward:
         model.close()
         del compiler
         _cleanup()
+
+    @pytest.mark.xfail(reason="packing bug with small Conv2d channel counts — see examples/lola/model.py")
+    def test_forward_conv2d_small_channels(self):
+        """E2E: Conv2d(1,5,k=2,s=2,p=0) produces systematic error from packing bug.
+
+        The original LoLA architecture uses Conv2d with 5 output channels, kernel 2,
+        stride 2, no padding. This configuration triggers a deterministic computation
+        error in the compiler's diagonal packing — MAE ~0.65 regardless of CKKS
+        precision. This test pins the bug so it can be fixed.
+        """
+        from orion_compiler.params import CKKSParams
+        from orion_compiler.compiler import Compiler
+        import orion_compiler.nn as on
+
+        class SmallConvNet(on.Module):
+            """Minimal Conv2d model with small channel count (triggers packing bug)."""
+            def __init__(self):
+                super().__init__()
+                self.conv1 = on.Conv2d(1, 5, kernel_size=2, stride=2, padding=0)
+                self.act1 = on.Quad()
+                self.flatten = on.Flatten()
+                self.fc1 = on.Linear(5 * 14 * 14, 10)
+
+            def forward(self, x):
+                x = self.act1(self.conv1(x))
+                x = self.flatten(x)
+                return self.fc1(x)
+
+        # Compile
+        torch.manual_seed(42)
+        net = SmallConvNet()
+        conv_params = CKKSParams(
+            logn=13,
+            logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
+            logp=[29, 29],
+            logscale=26,
+            h=8192,
+            ring_type="conjugate_invariant",
+        )
+        compiler = Compiler(net, conv_params)
+        compiler.fit(torch.randn(1, 1, 28, 28))
+        compiled = compiler.compile()
+        model_bytes = compiled.to_bytes()
+
+        # Load in evaluator
+        model = Model.load(model_bytes)
+        params_dict, manifest, input_level = model.client_params()
+
+        # Create lattigo objects
+        params = Parameters.from_logn(**params_dict)
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
+        pk = kg.gen_public_key(sk)
+        encoder = Encoder.new(params)
+        encryptor = Encryptor.new(params, pk)
+        decryptor = Decryptor.new(params, sk)
+
+        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
+        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        keys_bytes = evk.marshal_binary()
+
+        evaluator = Evaluator(params_dict, keys_bytes)
+
+        # Encode, encrypt, forward
+        torch.manual_seed(123)
+        test_input = torch.randn(1, 1, 28, 28)
+        max_slots = params.max_slots()
+        flat = test_input.flatten().double().tolist()
+        padded = flat + [0.0] * (max_slots - len(flat))
+        scale = params.default_scale()
+
+        pt = encoder.encode(padded, input_level, scale)
+        ct = encryptor.encrypt_new(pt)
+        ct_bytes = ct.marshal_binary()
+
+        result_bytes = evaluator.forward(model, ct_bytes)
+
+        # Decrypt
+        from lattigo.rlwe import Ciphertext as RLWECiphertext
+        result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
+        result_pt = decryptor.decrypt_new(result_ct)
+        decoded = encoder.decode(result_pt, max_slots)
+
+        # Compare with cleartext
+        net.eval()
+        with torch.no_grad():
+            cleartext = net(test_input).flatten().tolist()
+
+        # This SHOULD pass at tolerance 0.1, but the packing bug causes MAE ~0.65
+        tolerance = 0.1
+        max_diff = max(abs(cleartext[i] - decoded[i]) for i in range(len(cleartext)))
+        assert max_diff < tolerance, (
+            f"Conv2d small channels: max diff {max_diff:.6f} exceeds tolerance {tolerance}. "
+            f"This is the known packing bug with Conv2d(1,5,k=2,s=2,p=0)."
+        )
+
+        # Cleanup
+        result_pt.close()
+        result_ct.close()
+        evaluator.close()
+        evk.close()
+        for gk in gks:
+            gk.close()
+        if rlk:
+            rlk.close()
+        ct.close()
+        pt.close()
+        decryptor.close()
+        encryptor.close()
+        pk.close()
+        sk.close()
+        kg.close()
+        encoder.close()
+        params.close()
+        model.close()
+        del compiler
+        _cleanup()
