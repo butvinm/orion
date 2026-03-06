@@ -59,11 +59,11 @@ Refactor `examples/wasm-demo/server/main.go` to support incremental key upload w
 
 ### Task 2: Session cleanup goroutine
 
-- [ ] Add cleanup goroutine that sweeps pending sessions with no key upload for 5 minutes (check `lastActivity`)
-- [ ] Update `lastActivity` on every key upload and finalize call
-- [ ] Ready sessions are NOT cleaned up (persist until server shutdown, same as current behavior)
-- [ ] Write Go test for session timeout cleanup (use short timeout for test)
-- [ ] Run `go test ./examples/wasm-demo/server/...` — must pass
+- [x] Add cleanup goroutine that sweeps pending sessions with no key upload for 5 minutes (check `lastActivity`)
+- [x] Update `lastActivity` on every key upload and finalize call
+- [x] Ready sessions are NOT cleaned up (persist until server shutdown, same as current behavior)
+- [x] Write Go test for session timeout cleanup (use short timeout for test)
+- [x] Run `go test ./examples/wasm-demo/server/...` — must pass
 
 ### Task 3: Client streaming loop
 

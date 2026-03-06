@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
@@ -726,6 +728,106 @@ func TestCORSMiddleware(t *testing.T) {
 	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
 		t.Errorf("OPTIONS: expected Access-Control-Allow-Origin: *, got %q", got)
 	}
+}
+
+func TestCleanupExpiredPendingSessions(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	// Use a very short timeout for the test.
+	srv.sessionTimeout = 50 * time.Millisecond
+
+	// Create two sessions: one pending (should be cleaned up), one will be finalized (should survive).
+	pendingID := createSession(t, handler)
+
+	// Create and finalize a second session so it becomes ready.
+	readyID := createSession(t, handler)
+	kg := rlwe.NewKeyGenerator(srv.CKKSParams())
+	sk := kg.GenSecretKeyNew()
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
+	uploadRLK(t, handler, readyID, rlkBytes)
+	finalizeSession(t, handler, readyID)
+
+	// Wait for timeout to expire.
+	time.Sleep(100 * time.Millisecond)
+
+	// Run cleanup.
+	srv.cleanupExpired()
+
+	// Pending session should be gone.
+	srv.mu.Lock()
+	_, pendingExists := srv.sessions[pendingID]
+	_, readyExists := srv.sessions[readyID]
+	srv.mu.Unlock()
+
+	if pendingExists {
+		t.Error("expected pending session to be cleaned up after timeout")
+	}
+	if !readyExists {
+		t.Error("ready session should NOT be cleaned up")
+	}
+}
+
+func TestCleanupDoesNotRemoveActiveSession(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	srv.sessionTimeout = 50 * time.Millisecond
+
+	id := createSession(t, handler)
+
+	// Wait a bit, then do a key upload to refresh lastActivity.
+	time.Sleep(30 * time.Millisecond)
+	kg := rlwe.NewKeyGenerator(srv.CKKSParams())
+	sk := kg.GenSecretKeyNew()
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
+	uploadRLK(t, handler, id, rlkBytes)
+
+	// Wait so the original creation time would have expired, but lastActivity was refreshed.
+	time.Sleep(30 * time.Millisecond)
+
+	srv.cleanupExpired()
+
+	srv.mu.Lock()
+	_, exists := srv.sessions[id]
+	srv.mu.Unlock()
+
+	if !exists {
+		t.Error("session with recent activity should NOT be cleaned up")
+	}
+}
+
+func TestStartCleanupGoroutine(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	srv.sessionTimeout = 50 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start cleanup with a short interval.
+	srv.StartCleanup(ctx, 30*time.Millisecond)
+
+	id := createSession(t, handler)
+
+	// Wait for the timeout + cleanup interval to pass.
+	time.Sleep(150 * time.Millisecond)
+
+	// The pending session should have been cleaned up automatically.
+	srv.mu.Lock()
+	_, exists := srv.sessions[id]
+	srv.mu.Unlock()
+
+	if exists {
+		t.Error("expected cleanup goroutine to remove expired pending session")
+	}
+
+	// Cancel and verify the goroutine stops (no panic/leak).
+	cancel()
+	time.Sleep(50 * time.Millisecond)
 }
 
 func TestKeyUploadToNonexistentSession(t *testing.T) {

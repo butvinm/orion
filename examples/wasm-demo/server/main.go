@@ -11,6 +11,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -60,13 +61,17 @@ type session struct {
 	eval *evaluator.Evaluator
 }
 
+// Default session timeout for pending sessions with no activity.
+const defaultSessionTimeout = 5 * time.Minute
+
 // Server holds shared state for the HTTP handlers.
 type Server struct {
-	model      *evaluator.Model
-	ckksParams ckks.Parameters  // cached at construction time
-	manifest   orion.Manifest   // cached at construction time
-	mu         sync.Mutex
-	sessions   map[string]*session
+	model          *evaluator.Model
+	ckksParams     ckks.Parameters // cached at construction time
+	manifest       orion.Manifest  // cached at construction time
+	sessionTimeout time.Duration   // inactivity timeout for pending sessions
+	mu             sync.Mutex
+	sessions       map[string]*session
 }
 
 // NewServer creates a Server with a loaded model.
@@ -77,10 +82,11 @@ func NewServer(model *evaluator.Model) (*Server, error) {
 		return nil, fmt.Errorf("creating CKKS params: %w", err)
 	}
 	return &Server{
-		model:      model,
-		ckksParams: ckksParams,
-		manifest:   manifest,
-		sessions:   make(map[string]*session),
+		model:          model,
+		ckksParams:     ckksParams,
+		manifest:       manifest,
+		sessionTimeout: defaultSessionTimeout,
+		sessions:       make(map[string]*session),
 	}, nil
 }
 
@@ -395,6 +401,40 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// StartCleanup launches a background goroutine that periodically removes
+// pending sessions that have been inactive for longer than sessionTimeout.
+// Ready sessions are never cleaned up. The goroutine stops when ctx is cancelled.
+func (s *Server) StartCleanup(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.cleanupExpired()
+			}
+		}
+	}()
+}
+
+// cleanupExpired removes pending sessions whose lastActivity exceeds sessionTimeout.
+func (s *Server) cleanupExpired() {
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, sess := range s.sessions {
+		sess.mu.Lock()
+		expired := sess.state == sessionPending && now.Sub(sess.lastActivity) > s.sessionTimeout
+		sess.mu.Unlock()
+		if expired {
+			log.Printf("cleaning up expired session %s", id)
+			delete(s.sessions, id)
+		}
+	}
+}
+
 // Handler returns an http.Handler with all routes registered.
 func (s *Server) Handler(clientDir string) http.Handler {
 	mux := http.NewServeMux()
@@ -456,6 +496,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("creating server: %v", err)
 	}
+
+	// Start background cleanup of stale pending sessions.
+	srv.StartCleanup(context.Background(), 30*time.Second)
 
 	// Enable CORS for browser demo.
 	handler := corsMiddleware(srv.Handler(clientDir))
