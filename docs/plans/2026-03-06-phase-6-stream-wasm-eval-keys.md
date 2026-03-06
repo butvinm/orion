@@ -94,8 +94,8 @@ Update `examples/wasm-demo/client/client.ts` to use generate-marshal-upload-free
 
 ### Task 5: [Final] Update documentation
 
-- [ ] Document bootstrap key limitation (6.4): current demo uses no bootstrap, Phase 7 will need blob upload endpoint
-- [ ] Update `examples/wasm-demo/README.md` if it documents the key upload flow
+- [x] Document bootstrap key limitation (6.4): current demo uses no bootstrap, Phase 7 will need blob upload endpoint
+- [x] Update `examples/wasm-demo/README.md` if it documents the key upload flow
 
 ## Technical Details
 

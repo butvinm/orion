@@ -59,11 +59,17 @@ Navigate to http://localhost:8080. Click **Initialize Keys** (takes 1–5s for k
 
 1. Browser fetches CKKS parameters and key manifest from the server
 2. Lattigo WASM loads in the browser (~8 MB, ~3 MB gzipped)
-3. Browser generates SK, PK, RLK, and Galois keys locally
-4. Browser POSTs the evaluation key set to the server to create a session
-5. Browser encodes and encrypts the input, POSTs the ciphertext
-6. Server runs the Orion evaluator on the ciphertext and returns the result
-7. Browser decrypts and decodes the result — the secret key never left the browser
+3. Browser creates a pending session on the server (`POST /session`)
+4. Browser generates and uploads keys one at a time in a streaming loop:
+   - RLK via `POST /session/{id}/keys/relin` (if needed)
+   - Each Galois key via `POST /session/{id}/keys/galois/{element}`
+   - Each key is freed from browser memory immediately after upload
+5. Browser finalizes the session (`POST /session/{id}/keys/finalize`) — server validates all required keys are present and creates the evaluator
+6. Browser encodes and encrypts the input, POSTs the ciphertext
+7. Server runs the Orion evaluator on the ciphertext and returns the result
+8. Browser decrypts and decodes the result — the secret key never left the browser
+
+**Note on bootstrap keys:** The current demo does not use bootstrap evaluation keys (bootstrap_slots is always empty for supported models). Bootstrap keys are generated as a single `MemEvaluationKeySet` blob and will require a separate bulk upload endpoint in a future phase.
 
 ## Server tests
 
