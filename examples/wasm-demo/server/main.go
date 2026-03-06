@@ -1,10 +1,13 @@
 // Package main implements an HTTP server for the WASM browser demo.
 //
 // Endpoints:
-//   - GET  /params             — CKKS params, key manifest, input level
-//   - POST /session            — accepts MemEvaluationKeySet bytes, returns session ID
-//   - POST /session/{id}/infer — accepts ciphertext bytes, returns result ciphertext bytes
-//   - GET  /                   — static files from client directory
+//   - GET  /params                            — CKKS params, key manifest, input level
+//   - POST /session                           — creates pending session, returns session ID
+//   - POST /session/{id}/keys/relin           — uploads relinearization key
+//   - POST /session/{id}/keys/galois/{element} — uploads individual Galois key
+//   - POST /session/{id}/keys/finalize        — validates keys, creates evaluator
+//   - POST /session/{id}/infer                — accepts ciphertext bytes, returns result
+//   - GET  /                                  — static files from client directory
 package main
 
 import (
@@ -16,7 +19,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
+	"time"
+
+	orion "github.com/baahl-nyu/orion"
 
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
@@ -26,28 +33,45 @@ import (
 
 // Maximum request body sizes.
 const (
-	maxKeySetBytes    = 512 * 1024 * 1024 // 512 MB — key sets can be large
+	maxKeySetBytes     = 512 * 1024 * 1024 // 512 MB — key sets can be large
+	maxSingleKeyBytes  = 16 * 1024 * 1024  // 16 MB — individual key upload
 	maxCiphertextBytes = 32 * 1024 * 1024  // 32 MB — ciphertexts are much smaller
 )
 
-// session holds an evaluator created from client-provided keys.
-// mu serializes Forward calls — Lattigo evaluators are not goroutine-safe.
+// sessionState represents the state of a session in the key upload state machine.
+type sessionState int
+
+const (
+	sessionPending sessionState = iota // keys being uploaded
+	sessionReady                       // evaluator created, ready for inference
+)
+
+// session holds per-session state during key upload and inference.
 type session struct {
-	mu   sync.Mutex
+	mu           sync.Mutex
+	state        sessionState
+	lastActivity time.Time
+
+	// Key storage (populated during pending state).
+	rlk        *rlwe.RelinearizationKey
+	galoisKeys map[uint64]*rlwe.GaloisKey
+
+	// Evaluator (populated after finalize).
 	eval *evaluator.Evaluator
 }
 
 // Server holds shared state for the HTTP handlers.
 type Server struct {
 	model      *evaluator.Model
-	ckksParams ckks.Parameters // cached at construction time
+	ckksParams ckks.Parameters  // cached at construction time
+	manifest   orion.Manifest   // cached at construction time
 	mu         sync.Mutex
 	sessions   map[string]*session
 }
 
 // NewServer creates a Server with a loaded model.
 func NewServer(model *evaluator.Model) (*Server, error) {
-	orionParams, _, _ := model.ClientParams()
+	orionParams, manifest, _ := model.ClientParams()
 	ckksParams, err := orionParams.NewCKKSParameters()
 	if err != nil {
 		return nil, fmt.Errorf("creating CKKS params: %w", err)
@@ -55,6 +79,7 @@ func NewServer(model *evaluator.Model) (*Server, error) {
 	return &Server{
 		model:      model,
 		ckksParams: ckksParams,
+		manifest:   manifest,
 		sessions:   make(map[string]*session),
 	}, nil
 }
@@ -103,54 +128,211 @@ type sessionResponse struct {
 	SessionID string `json:"session_id"`
 }
 
-// HandleSession creates a new session from uploaded evaluation keys.
+// HandleSession creates a new pending session (no body required).
 func (s *Server) HandleSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxKeySetBytes)
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
-		return
-	}
-	if len(body) == 0 {
-		http.Error(w, "empty body: expected MemEvaluationKeySet bytes", http.StatusBadRequest)
-		return
-	}
-
-	// Unmarshal evaluation keys.
-	evk := &rlwe.MemEvaluationKeySet{}
-	if err := evk.UnmarshalBinary(body); err != nil {
-		http.Error(w, fmt.Sprintf("unmarshaling evaluation keys: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	// Create evaluator using cached CKKS params.
-	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("creating evaluator: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// Generate a random session ID.
 	id, err := newSessionID()
 	if err != nil {
 		http.Error(w, "generating session ID", http.StatusInternalServerError)
 		return
 	}
 
-	// Store session.
 	s.mu.Lock()
-	s.sessions[id] = &session{eval: eval}
+	s.sessions[id] = &session{
+		state:        sessionPending,
+		lastActivity: time.Now(),
+		galoisKeys:   make(map[uint64]*rlwe.GaloisKey),
+	}
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(sessionResponse{SessionID: id}); err != nil {
 		log.Printf("HandleSession: encode response: %v", err)
 	}
+}
+
+// getSession looks up a session by ID from the request path.
+func (s *Server) getSession(w http.ResponseWriter, r *http.Request) (*session, bool) {
+	sessionID := r.PathValue("id")
+	if sessionID == "" {
+		http.Error(w, "missing session ID", http.StatusBadRequest)
+		return nil, false
+	}
+
+	s.mu.Lock()
+	sess, ok := s.sessions[sessionID]
+	s.mu.Unlock()
+	if !ok {
+		http.Error(w, fmt.Sprintf("session %q not found", sessionID), http.StatusNotFound)
+		return nil, false
+	}
+	return sess, true
+}
+
+// HandleRelinKey uploads a relinearization key for a pending session.
+func (s *Server) HandleRelinKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess, ok := s.getSession(w, r)
+	if !ok {
+		return
+	}
+
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+
+	if sess.state == sessionReady {
+		http.Error(w, "session already finalized", http.StatusConflict)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxSingleKeyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
+		return
+	}
+	if len(body) == 0 {
+		http.Error(w, "empty body: expected RelinearizationKey bytes", http.StatusBadRequest)
+		return
+	}
+
+	rlk := &rlwe.RelinearizationKey{}
+	if err := rlk.UnmarshalBinary(body); err != nil {
+		http.Error(w, fmt.Sprintf("unmarshaling relinearization key: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	sess.rlk = rlk
+	sess.lastActivity = time.Now()
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleGaloisKey uploads an individual Galois key for a pending session.
+func (s *Server) HandleGaloisKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess, ok := s.getSession(w, r)
+	if !ok {
+		return
+	}
+
+	elementStr := r.PathValue("element")
+	element, err := strconv.ParseUint(elementStr, 10, 64)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid Galois element %q: %v", elementStr, err), http.StatusBadRequest)
+		return
+	}
+
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+
+	if sess.state == sessionReady {
+		http.Error(w, "session already finalized", http.StatusConflict)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxSingleKeyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
+		return
+	}
+	if len(body) == 0 {
+		http.Error(w, "empty body: expected GaloisKey bytes", http.StatusBadRequest)
+		return
+	}
+
+	gk := &rlwe.GaloisKey{}
+	if err := gk.UnmarshalBinary(body); err != nil {
+		http.Error(w, fmt.Sprintf("unmarshaling Galois key: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	sess.galoisKeys[element] = gk
+	sess.lastActivity = time.Now()
+	w.WriteHeader(http.StatusOK)
+}
+
+// finalizeErrorResponse is the JSON response for finalize validation errors.
+type finalizeErrorResponse struct {
+	Error           string   `json:"error"`
+	MissingRLK      bool     `json:"missing_rlk,omitempty"`
+	MissingElements []uint64 `json:"missing_elements,omitempty"`
+}
+
+// HandleFinalize validates all required keys are present and creates the evaluator.
+func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess, ok := s.getSession(w, r)
+	if !ok {
+		return
+	}
+
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+
+	if sess.state == sessionReady {
+		http.Error(w, "session already finalized", http.StatusConflict)
+		return
+	}
+
+	// Validate completeness against cached manifest.
+	var missingElements []uint64
+	for _, ge := range s.manifest.GaloisElements {
+		if _, ok := sess.galoisKeys[ge]; !ok {
+			missingElements = append(missingElements, ge)
+		}
+	}
+
+	missingRLK := s.manifest.NeedsRLK && sess.rlk == nil
+
+	if missingRLK || len(missingElements) > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(finalizeErrorResponse{
+			Error:           "incomplete keys",
+			MissingRLK:      missingRLK,
+			MissingElements: missingElements,
+		})
+		return
+	}
+
+	// Assemble MemEvaluationKeySet.
+	galKeys := make([]*rlwe.GaloisKey, 0, len(sess.galoisKeys))
+	for _, gk := range sess.galoisKeys {
+		galKeys = append(galKeys, gk)
+	}
+	evk := rlwe.NewMemEvaluationKeySet(sess.rlk, galKeys...)
+
+	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("creating evaluator: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	sess.eval = eval
+	sess.state = sessionReady
+	// Free key storage — no longer needed.
+	sess.rlk = nil
+	sess.galoisKeys = nil
+	sess.lastActivity = time.Now()
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // HandleInfer runs inference on a ciphertext using the session's evaluator.
@@ -160,21 +342,18 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract session ID from path: /session/{id}/infer
-	// Using Go 1.22+ ServeMux pattern matching.
-	sessionID := r.PathValue("id")
-	if sessionID == "" {
-		http.Error(w, "missing session ID", http.StatusBadRequest)
+	sess, ok := s.getSession(w, r)
+	if !ok {
 		return
 	}
 
-	s.mu.Lock()
-	sess, ok := s.sessions[sessionID]
-	s.mu.Unlock()
-	if !ok {
-		http.Error(w, fmt.Sprintf("session %q not found", sessionID), http.StatusNotFound)
+	sess.mu.Lock()
+	if sess.state != sessionReady {
+		sess.mu.Unlock()
+		http.Error(w, "session not finalized: upload keys and call /keys/finalize first", http.StatusConflict)
 		return
 	}
+	sess.mu.Unlock()
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxCiphertextBytes)
 	body, err := io.ReadAll(r.Body)
@@ -221,6 +400,9 @@ func (s *Server) Handler(clientDir string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /params", s.HandleParams)
 	mux.HandleFunc("POST /session", s.HandleSession)
+	mux.HandleFunc("POST /session/{id}/keys/relin", s.HandleRelinKey)
+	mux.HandleFunc("POST /session/{id}/keys/galois/{element}", s.HandleGaloisKey)
+	mux.HandleFunc("POST /session/{id}/keys/finalize", s.HandleFinalize)
 	mux.HandleFunc("POST /session/{id}/infer", s.HandleInfer)
 
 	if clientDir != "" {

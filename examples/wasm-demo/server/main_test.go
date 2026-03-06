@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -78,6 +79,64 @@ func buildMinimalOrion() []byte {
 	return buf.Bytes()
 }
 
+// buildMinimalOrionWithGalois builds an .orion v2 binary that requires specific Galois elements.
+func buildMinimalOrionWithGalois(galoisElements []int) []byte {
+	header := evaluator.CompiledHeader{
+		Version: 2,
+		Params: evaluator.HeaderParams{
+			LogN:     12,
+			LogQ:     []int{40, 30, 30},
+			LogP:     []int{40},
+			LogScale: 30,
+			H:        192,
+			RingType: "conjugate_invariant",
+		},
+		Config: evaluator.HeaderConfig{
+			Margin:          1,
+			EmbeddingMethod: "hybrid",
+			FuseModules:     false,
+		},
+		Manifest: evaluator.HeaderManifest{
+			GaloisElements: galoisElements,
+			BootstrapSlots: []int{},
+			BootLogP:       []int{},
+			NeedsRLK:       true,
+		},
+		InputLevel: 2,
+		Cost: evaluator.HeaderCost{
+			BootstrapCount:    0,
+			GaloisKeyCount:    len(galoisElements),
+			BootstrapKeyCount: 0,
+		},
+		Graph: evaluator.HeaderGraph{
+			Input:  "input",
+			Output: "quad",
+			Nodes: []evaluator.HeaderNode{
+				{Name: "input", Op: "flatten", Level: 2, Depth: 0},
+				{Name: "quad", Op: "quad", Level: 2, Depth: 1},
+			},
+			Edges: []evaluator.HeaderEdge{
+				{Src: "input", Dst: "quad"},
+			},
+		},
+		BlobCount: 0,
+	}
+
+	headerJSON, _ := json.Marshal(header)
+
+	var buf bytes.Buffer
+	buf.Write([]byte("ORION\x00\x02\x00"))
+	headerLen := make([]byte, 4)
+	binary.LittleEndian.PutUint32(headerLen, uint32(len(headerJSON)))
+	buf.Write(headerLen)
+	buf.Write(headerJSON)
+	blobCount := make([]byte, 4)
+	binary.LittleEndian.PutUint32(blobCount, 0)
+	buf.Write(blobCount)
+
+	return buf.Bytes()
+}
+
 // testSetup creates a Server, CKKS params, and keygen context for tests.
 func testSetup(t *testing.T) (*Server, ckks.Parameters, *rlwe.SecretKey) {
 	t.Helper()
@@ -98,6 +157,88 @@ func testSetup(t *testing.T) (*Server, ckks.Parameters, *rlwe.SecretKey) {
 	sk := kg.GenSecretKeyNew()
 
 	return srv, ckksParams, sk
+}
+
+// testSetupWithGalois creates a Server with a model requiring specific Galois elements.
+func testSetupWithGalois(t *testing.T, galoisElements []int) (*Server, ckks.Parameters, *rlwe.SecretKey) {
+	t.Helper()
+
+	data := buildMinimalOrionWithGalois(galoisElements)
+	model, err := evaluator.LoadModel(data)
+	if err != nil {
+		t.Fatalf("LoadModel: %v", err)
+	}
+
+	srv, err := NewServer(model)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+
+	ckksParams := srv.CKKSParams()
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	sk := kg.GenSecretKeyNew()
+
+	return srv, ckksParams, sk
+}
+
+// createSession is a test helper that creates a pending session and returns its ID.
+func createSession(t *testing.T, handler http.Handler) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/session", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST /session: expected 200, got %d: %s", resp.StatusCode, body)
+	}
+
+	var result sessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("invalid session response JSON: %v", err)
+	}
+	return result.SessionID
+}
+
+// uploadRLK is a test helper that uploads a relinearization key to a session.
+func uploadRLK(t *testing.T, handler http.Handler, sessionID string, rlkBytes []byte) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/session/"+sessionID+"/keys/relin", bytes.NewReader(rlkBytes))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(w.Result().Body)
+		t.Fatalf("POST /keys/relin: expected 200, got %d: %s", w.Result().StatusCode, body)
+	}
+}
+
+// uploadGaloisKey is a test helper that uploads a Galois key to a session.
+func uploadGaloisKey(t *testing.T, handler http.Handler, sessionID string, element uint64, gkBytes []byte) {
+	t.Helper()
+	url := fmt.Sprintf("/session/%s/keys/galois/%d", sessionID, element)
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(gkBytes))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(w.Result().Body)
+		t.Fatalf("POST /keys/galois/%d: expected 200, got %d: %s", element, w.Result().StatusCode, body)
+	}
+}
+
+// finalizeSession is a test helper that finalizes a session.
+func finalizeSession(t *testing.T, handler http.Handler, sessionID string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/session/"+sessionID+"/keys/finalize", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(w.Result().Body)
+		t.Fatalf("POST /keys/finalize: expected 200, got %d: %s", w.Result().StatusCode, body)
+	}
 }
 
 func TestHandleParams(t *testing.T) {
@@ -157,16 +298,13 @@ func TestHandleParamsMethodNotAllowed(t *testing.T) {
 	}
 }
 
-func TestHandleSessionEmpty(t *testing.T) {
+func TestHandleSessionCreatesPendingSession(t *testing.T) {
 	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
 
-	// Empty body should fail.
-	req := httptest.NewRequest(http.MethodPost, "/session", bytes.NewReader(nil))
-	w := httptest.NewRecorder()
-	srv.HandleSession(w, req)
-
-	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Result().StatusCode)
+	id := createSession(t, handler)
+	if len(id) != 32 {
+		t.Errorf("expected session_id length 32, got %d: %q", len(id), id)
 	}
 }
 
@@ -182,39 +320,253 @@ func TestHandleSessionMethodNotAllowed(t *testing.T) {
 	}
 }
 
-func TestHandleSessionSuccess(t *testing.T) {
+func TestHandleRelinKey(t *testing.T) {
 	srv, ckksParams, sk := testSetup(t)
+	handler := srv.Handler("")
 
-	// Generate evaluation keys (RLK only, no Galois keys needed for quad).
 	kg := rlwe.NewKeyGenerator(ckksParams)
 	rlk := kg.GenRelinearizationKeyNew(sk)
-	evk := rlwe.NewMemEvaluationKeySet(rlk)
-
-	evkBytes, err := evk.MarshalBinary()
+	rlkBytes, err := rlk.MarshalBinary()
 	if err != nil {
 		t.Fatalf("MarshalBinary: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/session", bytes.NewReader(evkBytes))
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+}
+
+func TestHandleRelinKeyRejectReady(t *testing.T) {
+	srv, ckksParams, sk := testSetup(t)
+	handler := srv.Handler("")
+
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, err := rlk.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
+	}
+
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+	finalizeSession(t, handler, id)
+
+	// Upload to ready session should get 409.
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/relin", bytes.NewReader(rlkBytes))
 	w := httptest.NewRecorder()
-	srv.HandleSession(w, req)
+	handler.ServeHTTP(w, req)
 
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	if w.Result().StatusCode != http.StatusConflict {
+		t.Errorf("expected 409 for ready session, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleRelinKeyEmpty(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	id := createSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/relin", bytes.NewReader(nil))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty body, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleGaloisKey(t *testing.T) {
+	// Get a valid Galois element for the ring.
+	tmpSrv, tmpParams, _ := testSetup(t)
+	_ = tmpSrv
+	ge := tmpParams.GaloisElement(1)
+
+	srv, ckksParams, sk := testSetupWithGalois(t, []int{int(ge)})
+	handler := srv.Handler("")
+
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	gk := kg.GenGaloisKeyNew(ge, sk)
+	gkBytes, err := gk.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
 	}
 
-	var result sessionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		t.Fatalf("invalid JSON: %v", err)
+	id := createSession(t, handler)
+	uploadGaloisKey(t, handler, id, ge, gkBytes)
+}
+
+func TestHandleGaloisKeyIdempotent(t *testing.T) {
+	tmpSrv, tmpParams, _ := testSetup(t)
+	_ = tmpSrv
+	ge := tmpParams.GaloisElement(1)
+
+	srv, ckksParams, sk := testSetupWithGalois(t, []int{int(ge)})
+	handler := srv.Handler("")
+
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	gk := kg.GenGaloisKeyNew(ge, sk)
+	gkBytes, err := gk.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
 	}
-	if result.SessionID == "" {
-		t.Error("expected non-empty session_id")
+
+	id := createSession(t, handler)
+	// Upload same key twice — should succeed both times.
+	uploadGaloisKey(t, handler, id, ge, gkBytes)
+	uploadGaloisKey(t, handler, id, ge, gkBytes)
+}
+
+func TestHandleGaloisKeyRejectReady(t *testing.T) {
+	srv, ckksParams, sk := testSetup(t)
+	handler := srv.Handler("")
+
+	ge := ckksParams.GaloisElement(1)
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
+
+	gk := kg.GenGaloisKeyNew(ge, sk)
+	gkBytes, _ := gk.MarshalBinary()
+
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+	finalizeSession(t, handler, id)
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/session/%s/keys/galois/%d", id, ge), bytes.NewReader(gkBytes))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusConflict {
+		t.Errorf("expected 409 for ready session, got %d", w.Result().StatusCode)
 	}
-	// Session IDs are hex-encoded random bytes (32 hex chars = 16 bytes).
-	if len(result.SessionID) != 32 {
-		t.Errorf("expected session_id length 32, got %d: %q", len(result.SessionID), result.SessionID)
+}
+
+func TestHandleGaloisKeyInvalidElement(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	id := createSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/galois/notanumber", bytes.NewReader([]byte("data")))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid element, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleFinalizeSuccess(t *testing.T) {
+	srv, ckksParams, sk := testSetup(t)
+	handler := srv.Handler("")
+
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
+
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+	finalizeSession(t, handler, id)
+}
+
+func TestHandleFinalizeMissingRLK(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	id := createSession(t, handler)
+
+	// Finalize without uploading RLK — model needs RLK.
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/finalize", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Result().StatusCode)
+	}
+
+	var errResp finalizeErrorResponse
+	if err := json.NewDecoder(w.Result().Body).Decode(&errResp); err != nil {
+		t.Fatalf("decoding error response: %v", err)
+	}
+	if !errResp.MissingRLK {
+		t.Error("expected missing_rlk=true")
+	}
+}
+
+func TestHandleFinalizeMissingGaloisElements(t *testing.T) {
+	// Get two valid Galois elements.
+	tmpSrv, tmpParams, _ := testSetup(t)
+	_ = tmpSrv
+	ge1 := tmpParams.GaloisElement(1)
+	ge2 := tmpParams.GaloisElement(2)
+
+	srv, ckksParams, sk := testSetupWithGalois(t, []int{int(ge1), int(ge2)})
+	handler := srv.Handler("")
+
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
+
+	// Upload RLK but only ge1 (missing ge2).
+	gk1 := kg.GenGaloisKeyNew(ge1, sk)
+	gk1Bytes, _ := gk1.MarshalBinary()
+
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+	uploadGaloisKey(t, handler, id, ge1, gk1Bytes)
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/finalize", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Result().StatusCode)
+	}
+
+	var errResp finalizeErrorResponse
+	if err := json.NewDecoder(w.Result().Body).Decode(&errResp); err != nil {
+		t.Fatalf("decoding error response: %v", err)
+	}
+	if len(errResp.MissingElements) != 1 || errResp.MissingElements[0] != ge2 {
+		t.Errorf("expected missing_elements=[%d], got %v", ge2, errResp.MissingElements)
+	}
+}
+
+func TestHandleFinalizeAlreadyReady(t *testing.T) {
+	srv, ckksParams, sk := testSetup(t)
+	handler := srv.Handler("")
+
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
+
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+	finalizeSession(t, handler, id)
+
+	// Second finalize should get 409.
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/finalize", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusConflict {
+		t.Errorf("expected 409 for already-finalized session, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleInferRejectPendingSession(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	id := createSession(t, handler)
+
+	// Infer on a pending session should get 409.
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/infer", bytes.NewReader([]byte("data")))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusConflict {
+		t.Errorf("expected 409 for pending session, got %d", w.Result().StatusCode)
 	}
 }
 
@@ -234,31 +586,19 @@ func TestHandleInferNotFound(t *testing.T) {
 
 func TestHandleInferEmptyBody(t *testing.T) {
 	srv, ckksParams, sk := testSetup(t)
-
-	// Create a session first.
-	kg := rlwe.NewKeyGenerator(ckksParams)
-	rlk := kg.GenRelinearizationKeyNew(sk)
-	evk := rlwe.NewMemEvaluationKeySet(rlk)
-	evkBytes, err := evk.MarshalBinary()
-	if err != nil {
-		t.Fatalf("MarshalBinary: %v", err)
-	}
-
 	handler := srv.Handler("")
 
-	// Create session.
-	req := httptest.NewRequest(http.MethodPost, "/session", bytes.NewReader(evkBytes))
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
 
-	var sessResp sessionResponse
-	if err := json.NewDecoder(w.Result().Body).Decode(&sessResp); err != nil {
-		t.Fatalf("decoding session response: %v", err)
-	}
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+	finalizeSession(t, handler, id)
 
 	// Infer with empty body.
-	req = httptest.NewRequest(http.MethodPost, "/session/"+sessResp.SessionID+"/infer", bytes.NewReader(nil))
-	w = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/infer", bytes.NewReader(nil))
+	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	if w.Result().StatusCode != http.StatusBadRequest {
@@ -268,18 +608,16 @@ func TestHandleInferEmptyBody(t *testing.T) {
 
 func TestFullRoundtrip(t *testing.T) {
 	srv, ckksParams, sk := testSetup(t)
+	handler := srv.Handler("")
 
 	// Generate keys.
 	kg := rlwe.NewKeyGenerator(ckksParams)
 	pk := kg.GenPublicKeyNew(sk)
 	rlk := kg.GenRelinearizationKeyNew(sk)
-	evk := rlwe.NewMemEvaluationKeySet(rlk)
-	evkBytes, err := evk.MarshalBinary()
+	rlkBytes, err := rlk.MarshalBinary()
 	if err != nil {
-		t.Fatalf("MarshalBinary: %v", err)
+		t.Fatalf("MarshalBinary RLK: %v", err)
 	}
-
-	handler := srv.Handler("")
 
 	// 1. GET /params — verify response format.
 	req := httptest.NewRequest(http.MethodGet, "/params", nil)
@@ -290,22 +628,16 @@ func TestFullRoundtrip(t *testing.T) {
 		t.Fatalf("GET /params: expected 200, got %d", w.Result().StatusCode)
 	}
 
-	// 2. POST /session — create session.
-	req = httptest.NewRequest(http.MethodPost, "/session", bytes.NewReader(evkBytes))
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+	// 2. POST /session — create pending session.
+	id := createSession(t, handler)
 
-	if w.Result().StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(w.Result().Body)
-		t.Fatalf("POST /session: expected 200, got %d: %s", w.Result().StatusCode, body)
-	}
+	// 3. Upload RLK.
+	uploadRLK(t, handler, id, rlkBytes)
 
-	var sessResp sessionResponse
-	if err := json.NewDecoder(w.Result().Body).Decode(&sessResp); err != nil {
-		t.Fatalf("decoding session response: %v", err)
-	}
+	// 4. Finalize.
+	finalizeSession(t, handler, id)
 
-	// 3. Encrypt input — use distinct values to catch slot permutation bugs.
+	// 5. Encrypt input — use distinct values to catch slot permutation bugs.
 	encoder := ckks.NewEncoder(ckksParams)
 	encryptor := ckks.NewEncryptor(ckksParams, pk)
 	decryptor := ckks.NewDecryptor(ckksParams, sk)
@@ -328,8 +660,8 @@ func TestFullRoundtrip(t *testing.T) {
 		t.Fatalf("marshal CT: %v", err)
 	}
 
-	// 4. POST /session/{id}/infer.
-	req = httptest.NewRequest(http.MethodPost, "/session/"+sessResp.SessionID+"/infer", bytes.NewReader(ctBytes))
+	// 6. POST /session/{id}/infer.
+	req = httptest.NewRequest(http.MethodPost, "/session/"+id+"/infer", bytes.NewReader(ctBytes))
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -338,7 +670,7 @@ func TestFullRoundtrip(t *testing.T) {
 		t.Fatalf("POST /session/{id}/infer: expected 200, got %d: %s", w.Result().StatusCode, body)
 	}
 
-	// 5. Decrypt result.
+	// 7. Decrypt result.
 	resultBytes, _ := io.ReadAll(w.Result().Body)
 	if len(resultBytes) == 0 {
 		t.Fatal("empty response body")
@@ -393,5 +725,37 @@ func TestCORSMiddleware(t *testing.T) {
 	}
 	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
 		t.Errorf("OPTIONS: expected Access-Control-Allow-Origin: *, got %q", got)
+	}
+}
+
+func TestKeyUploadToNonexistentSession(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	// RLK upload to nonexistent session.
+	req := httptest.NewRequest(http.MethodPost, "/session/nonexistent/keys/relin", bytes.NewReader([]byte("data")))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Result().StatusCode)
+	}
+
+	// Galois key upload to nonexistent session.
+	req = httptest.NewRequest(http.MethodPost, "/session/nonexistent/keys/galois/3", bytes.NewReader([]byte("data")))
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Result().StatusCode)
+	}
+
+	// Finalize nonexistent session.
+	req = httptest.NewRequest(http.MethodPost, "/session/nonexistent/keys/finalize", nil)
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Result().StatusCode)
 	}
 }

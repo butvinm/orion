@@ -44,18 +44,18 @@ Change the WASM demo to upload keys individually in a generate-marshal-upload-fr
 
 Refactor `examples/wasm-demo/server/main.go` to support incremental key upload with session states.
 
-- [ ] Cache key manifest on `Server` struct at construction time (like `ckksParams` is already cached) — needed for finalize validation
-- [ ] Add `maxSingleKeyBytes` constant (~16 MB) for individual key upload endpoints (separate from `maxKeySetBytes`)
-- [ ] Add session state enum: `pending` (keys being uploaded), `ready` (evaluator created)
-- [ ] Add per-session key storage: `rlk *rlwe.RelinearizationKey`, `galoisKeys map[uint64]*rlwe.GaloisKey`, `lastActivity time.Time`
-- [ ] Change `POST /session` to accept no body — creates a pending session, returns `{"session_id": "..."}`
-- [ ] Add `POST /session/{id}/keys/relin` — reads body bytes (limit `maxSingleKeyBytes`), unmarshals `RelinearizationKey`, stores in session. Reject with 409 if session is already `ready`.
-- [ ] Add `POST /session/{id}/keys/galois/{element}` — parse `{element}` as uint64, reads body bytes, unmarshals `GaloisKey`, stores by element (idempotent: re-upload overwrites). Reject with 409 if session is already `ready`.
-- [ ] Add `POST /session/{id}/keys/finalize` — validates all required Galois elements present (against cached manifest), RLK present if `needs_rlk`. Assembles `rlwe.NewMemEvaluationKeySet(rlk, galKeys...)`, creates `Evaluator`, transitions to `ready`. Returns 400 with missing elements list if incomplete.
-- [ ] Register all new routes in `Handler()` method
-- [ ] Update `POST /session/{id}/infer` to reject requests unless session is `ready`
-- [ ] Manually test with `curl`: session creation, key upload to ready session (expect 409), finalize with missing keys (expect 400)
-- [ ] Run `go build ./examples/wasm-demo/server/... && go vet ./examples/wasm-demo/server/...` — must pass
+- [x] Cache key manifest on `Server` struct at construction time (like `ckksParams` is already cached) — needed for finalize validation
+- [x] Add `maxSingleKeyBytes` constant (~16 MB) for individual key upload endpoints (separate from `maxKeySetBytes`)
+- [x] Add session state enum: `pending` (keys being uploaded), `ready` (evaluator created)
+- [x] Add per-session key storage: `rlk *rlwe.RelinearizationKey`, `galoisKeys map[uint64]*rlwe.GaloisKey`, `lastActivity time.Time`
+- [x] Change `POST /session` to accept no body — creates a pending session, returns `{"session_id": "..."}`
+- [x] Add `POST /session/{id}/keys/relin` — reads body bytes (limit `maxSingleKeyBytes`), unmarshals `RelinearizationKey`, stores in session. Reject with 409 if session is already `ready`.
+- [x] Add `POST /session/{id}/keys/galois/{element}` — parse `{element}` as uint64, reads body bytes, unmarshals `GaloisKey`, stores by element (idempotent: re-upload overwrites). Reject with 409 if session is already `ready`.
+- [x] Add `POST /session/{id}/keys/finalize` — validates all required Galois elements present (against cached manifest), RLK present if `needs_rlk`. Assembles `rlwe.NewMemEvaluationKeySet(rlk, galKeys...)`, creates `Evaluator`, transitions to `ready`. Returns 400 with missing elements list if incomplete.
+- [x] Register all new routes in `Handler()` method
+- [x] Update `POST /session/{id}/infer` to reject requests unless session is `ready`
+- [x] Manually test with `curl`: session creation, key upload to ready session (expect 409), finalize with missing keys (expect 400)
+- [x] Run `go build ./examples/wasm-demo/server/... && go vet ./examples/wasm-demo/server/...` — must pass
 
 ### Task 2: Session cleanup goroutine
 
