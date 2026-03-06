@@ -80,17 +80,17 @@ Update `examples/wasm-demo/client/client.ts` to use generate-marshal-upload-free
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Verify WASM bridge exposes `GaloisKey.marshalBinary()` and `RelinearizationKey.marshalBinary()` (already done)
-- [ ] Verify `POST /session` creates pending session
-- [ ] Verify `POST /session/{id}/keys/relin` accepts and stores RLK
-- [ ] Verify `POST /session/{id}/keys/galois/{element}` accepts and stores individual Galois keys (idempotent)
-- [ ] Verify `POST /session/{id}/keys/finalize` validates completeness, returns 400 with missing elements if incomplete
-- [ ] Verify client uses generate-marshal-upload-free loop (one key in memory at a time)
-- [ ] Verify client shows per-key upload progress
-- [ ] Verify pending sessions cleaned up after 5-minute inactivity timeout
-- [ ] Verify `POST /session/{id}/infer` rejects non-finalized sessions
-- [ ] Run full Go test suite: `go test ./...`
-- [ ] Run JS lint/typecheck: `cd js/lattigo && npm run typecheck && npm run lint`
+- [x] Verify WASM bridge exposes `GaloisKey.marshalBinary()` and `RelinearizationKey.marshalBinary()` (already done)
+- [x] Verify `POST /session` creates pending session
+- [x] Verify `POST /session/{id}/keys/relin` accepts and stores RLK
+- [x] Verify `POST /session/{id}/keys/galois/{element}` accepts and stores individual Galois keys (idempotent)
+- [x] Verify `POST /session/{id}/keys/finalize` validates completeness, returns 400 with missing elements if incomplete
+- [x] Verify client uses generate-marshal-upload-free loop (one key in memory at a time)
+- [x] Verify client shows per-key upload progress
+- [x] Verify pending sessions cleaned up after 5-minute inactivity timeout
+- [x] Verify `POST /session/{id}/infer` rejects non-finalized sessions
+- [x] Run full Go test suite: `go test ./...`
+- [x] Run JS lint/typecheck: `cd js/lattigo && npm run typecheck && npm run lint`
 
 ### Task 5: [Final] Update documentation
 
