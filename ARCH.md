@@ -4,6 +4,8 @@
 
 Orion is an FHE framework for deep neural network inference. It takes PyTorch models, analyzes them, and produces artifacts that enable encrypted inference using the CKKS scheme.
 
+**Reference implementation:** The original Orion (`~/Dev/3rd-party/orion`, cloned from [baahl-nyu/orion](https://github.com/baahl-nyu/orion)) has working bootstrap and a complete FHE inference pipeline. It uses global state and a monolithic architecture — the v2 refactoring decouples these into separate packages with explicit context passing. Use the original as a reference for FHE correctness, especially bootstrap behavior and CKKS parameter choices.
+
 Three core components:
 
 1. **Compiler** — Python + Lattigo (via Go bridge). Analyzes PyTorch models and produces a portable compiled model with the FHE computation graph, packed numerical data, and all metadata needed for inference. Uses Lattigo for crypto-specific computations (polynomial generation, parameter validation, cost estimation) — no reimplementation.
@@ -937,17 +939,21 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 
 **ReLU:** No `evalReLU` handler — ReLU decomposes into sub-nodes (see "ReLU deviation" in 1.2). Total depth per ReLU: `sum(ceil(log2(d+1)) for d in degrees) + 2`. For default degrees `[15, 15, 27]`: depth = 4 + 4 + 5 + 2 = **15 levels**.
 
-**`bootstrap`** (not yet implemented — returns error):
+**`bootstrap`** (not yet implemented — returns error; see Phase 7 for full spec):
 
 ```go
-func (e *Evaluator) evalBootstrap(node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
 ```
 
-1. If `config.constant != 0`: `evaluator.AddScalar(ct, constant)`
-2. Encode `prescale` as plaintext, `evaluator.Mul(ct, prescalePt)`, `evaluator.Rescale(ct)`
-3. `bootstrappers[config.slots].Bootstrap(ct)` (Lattigo bootstrap)
-4. If `config.postscale != 1`: `evaluator.MulScalar(ct, postscale)`, `evaluator.Rescale(ct)`
-5. If `config.constant != 0`: `evaluator.AddScalar(ct, -constant)`
+Reference: original Orion's `bootstrapper.go:Bootstrap()` and `operations.py:Bootstrap.forward()`.
+
+1. If `config.constant != 0`: `eval.AddNew(ct, constant)` — center values around zero
+2. Encode `prescale` as plaintext at `ct.Level()` with scale = modulus at that level (errorless rescaling). `eval.MulNew(ct, prescalePt)`, `eval.Rescale(result, result)`. Zero unused slots in the prescale plaintext for sparse bootstrapping.
+3. Set `ct.LogDimensions.Cols = bootstrapper.LogMaxSlots()` (sparse slot trick)
+4. `bootstrappers[config.slots].Bootstrap(ct)` — Lattigo refreshes the modulus chain
+5. Sparse postscale: `postscale = 1 << (params.LogMaxSlots() - bootstrapper.LogMaxSlots())`. `eval.Mul(ct, postscale, ct)`. Integer multiply — no rescale needed, no level consumed. Restore `ct.LogDimensions.Cols = params.LogMaxSlots()`.
+6. If `config.postscale != 1`: `eval.MulNew(ct, postscale)`. Postscale from `Bootstrap.fit()` is `ceil(half_range)`, always an integer — no rescale needed.
+7. If `config.constant != 0`: `eval.AddNew(ct, -constant)` — shift back
 
 **`add`:**
 
@@ -1353,11 +1359,12 @@ model.close()
 - Bootstrap placement across residual blocks
 - Demonstrates how the compiler handles branching DAGs
 
-**YOLOv1** (object detection):
+**YOLOv1** (object detection, deferred to Phase 8):
 
 - Largest model — demonstrates scalability
 - ResNet34 backbone with detection head
-- Multi-ciphertext packing (if supported) or notes on limitations
+- Single-ciphertext output (7×7×30 = 1,470 values fits in standard slot counts)
+- Deferred: requires custom dataset (Pascal VOC/COCO), transfer learning, different evaluation metrics (mAP)
 
 #### 5.4 Update training utilities
 
@@ -1443,37 +1450,135 @@ Bootstrap evaluation keys (`btpParamsGenEvaluationKeys()`) are generated as a si
 
 ### Phase 7: Bootstrapping and CIFAR-10 examples
 
-Implement bootstrapping support in the Go evaluator, then create examples for the deeper CIFAR-10 architectures and YOLO. These models require bootstrapping because their activation functions (SiLU via Chebyshev polynomials, ReLU via minimax sign approximation) consume many more levels than the simple `Quad` activation used by MNIST models.
+Implement bootstrapping support in the Go evaluator, then create examples for the deeper CIFAR-10 architectures. These models require bootstrapping because their activation functions (SiLU via Chebyshev polynomials, ReLU via minimax sign approximation) consume many more levels than the simple `Quad` activation used by MNIST models.
 
-Starts after Phase 5 (MNIST examples complete, Go evaluator proven end-to-end).
+**Reference implementation:** The original Orion (`~/Dev/3rd-party/orion`, cloned from `baahl-nyu/orion`) has a working bootstrap pipeline. Key reference files:
+
+- `orion/backend/lattigo/bootstrapper.go` — Go-side bootstrap execution: `NewBootstrapper()` creates a `bootstrapping.Evaluator` per slot count (stored in a `map[int]*bootstrapping.Evaluator`), `Bootstrap()` executes it with sparse slot handling (`LogDimensions.Cols` trick) and integer postscale.
+- `orion/nn/operations.py` `Bootstrap.forward()` — Python-side bootstrap dispatch: constant shift → prescale multiply → `x.bootstrap()` → postscale → un-shift.
+- `orion/nn/operations.py` `Bootstrap.fit()` — computes prescale/postscale/constant from fitted input range: maps `[input_min, input_max]` into `[-1, 1]` using `prescale = 1/postscale` where `postscale = ceil(half_range)` (integer, so post-bootstrap multiply consumes no level).
+- `orion/nn/operations.py` `Bootstrap.compile()` — encodes prescale as a plaintext at `input_level` with scale = `q_L` (the modulus at that level) for errorless rescaling. Zeros out unused slots to enable sparse bootstrapping.
+- `orion/core/auto_bootstrap.py` — bootstrap placement algorithm (already ported to v2).
+- `configs/resnet.yml` — reference CKKS parameters for ResNet: `LogN=16`, `LogQ=[55,40×10]`, `LogP=[61,61,61]`, `boot_logp=[61×8]`.
+
+**Critical difference from original:** In the original, bootstrap keys are generated server-side (the server holds the secret key). In v2, the client generates and uploads keys. Bootstrap evaluation keys (`bootstrapping.EvaluationKeys`) include ring-switching keys that are separate from the regular `MemEvaluationKeySet`. This requires a new key transport mechanism.
+
+Starts after Phase 6 (streaming key upload complete, Go evaluator proven end-to-end with MNIST).
 
 #### 7.1 Bootstrapping in Go evaluator
 
-Add bootstrap op handling to `evaluator/evaluator.go`. The compiler already inserts `bootstrap` nodes in the computation graph when the modulus chain is exhausted — the Go evaluator needs to execute them using Lattigo's `bootstrapping.Evaluator`.
+Add bootstrap op handling to `evaluator/evaluator.go`. The compiler already inserts `bootstrap` nodes in the computation graph — the Go evaluator needs to execute them.
 
-#### 7.2 CIFAR-10 and YOLO examples
+**7.1.1 Evaluator changes:**
 
-| Example             | Dataset  | Key FHE features                                 |
-| ------------------- | -------- | ------------------------------------------------ |
-| `examples/alexnet/` | CIFAR-10 | Deeper CNN, SiLU (Chebyshev polynomial)          |
-| `examples/vgg/`     | CIFAR-10 | Deep CNN, ReLU (minimax sign approximation)      |
-| `examples/resnet/`  | CIFAR-10 | Residual connections (`Add`), bootstrapping      |
-| `examples/yolo/`    | Custom   | Object detection, ResNet34 backbone, large model |
+Add a `bootstrappers map[int]*bootstrapping.Evaluator` field to the `Evaluator` struct. Each entry is keyed by slot count (matching the original's `bootstrapperMap` pattern). The bootstrapper map is populated during evaluator construction from bootstrap parameters + bootstrap evaluation keys.
 
-Each example follows the same structure as Phase 5: `model.py`, `train.py`, `run.py`, `README.md`.
+Constructor signature change:
+
+```go
+func NewEvaluatorFromKeySet(
+    ckksParams ckks.Parameters,
+    keys *rlwe.MemEvaluationKeySet,
+    btpKeys *bootstrapping.EvaluationKeys,  // nil if no bootstrap needed
+    btpParams []bootstrapping.Parameters,   // one per unique slot count
+) (*Evaluator, error)
+```
+
+When `btpKeys` is non-nil, create a `bootstrapping.Evaluator` for each `btpParams` entry using `bootstrapping.NewEvaluator(params, btpKeys)`. Store in the `bootstrappers` map keyed by `params.LogMaxSlots()`.
+
+**7.1.2 `evalBootstrap` implementation:**
+
+Following the original's `Bootstrap()` function (`bootstrapper.go:61-79`):
+
+```go
+func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
+```
+
+1. Parse `BootstrapConfig` from node (already defined in `format.go`).
+2. If `config.constant != 0`: `eval.AddNew(ct, constant)` — shift into symmetric range.
+3. Prescale: encode `prescale` as plaintext at `ct.Level()` with scale = modulus at that level (for errorless rescaling). `eval.MulNew(ct, prescalePt)`, `eval.Rescale(result, result)`. This maps values into `[-1, 1]`. The prescale plaintext zeros out unused slots to enable sparse bootstrapping.
+4. Set `ct.LogDimensions.Cols = bootstrapper.LogMaxSlots()` (sparse bootstrap trick from original).
+5. `bootstrapper.Bootstrap(ct)` — Lattigo's bootstrap refreshes the ciphertext modulus chain.
+6. Integer postscale: `postscale = 1 << (params.LogMaxSlots() - bootstrapper.LogMaxSlots())`. `eval.Mul(ct, postscale, ct)`. Because postscale is a power-of-two integer, this does NOT consume a level (no rescale needed). Restore `ct.LogDimensions.Cols = params.LogMaxSlots()`.
+7. If `config.postscale != 1` (range rescaling, separate from sparse postscale): `eval.MulNew(ct, postscale)`, `eval.Rescale(result, result)`.
+8. If `config.constant != 0`: `eval.AddNew(ct, -constant)` — shift back.
+
+**Important:** Steps 6 and 7 are two different postscales. Step 6 is the sparse-slot correction (always integer, no level consumed). Step 7 is the range-mapping postscale from `Bootstrap.fit()` — also designed to be an integer (`ceil(half_range)`), so it should also not consume a level. Verify against the original: in `Bootstrap.forward()` line 81, `x *= self.postscale` multiplies by an integer with no rescale.
+
+**7.1.3 Bootstrap key transport:**
+
+The `Model.ClientParams()` already returns `bootstrap_slots` and `boot_logp` in the key manifest. The client uses these to construct `bootstrapping.Parameters` and generate `bootstrapping.EvaluationKeys` (the WASM bridge already supports this via `btpParamsGenEvaluationKeys` in `js/lattigo/bridge/bootstrap.go`).
+
+For the Go evaluator (Python `orion_evaluator` package):
+
+- `Evaluator.__init__` accepts an additional `btp_keys_bytes: bytes | None` parameter. When non-None, the Go side unmarshals it as `bootstrapping.EvaluationKeys`.
+- The `.orion` model file already contains `boot_logp` and `bootstrap_slots` in the manifest, which are sufficient to reconstruct `bootstrapping.Parameters` during evaluator construction.
+
+For the WASM demo server:
+
+- Add `POST /session/{id}/keys/bootstrap` endpoint accepting the serialized bootstrap evaluation keys as a blob. Bootstrap keys are generated as a single unit by `btpParamsGenEvaluationKeys()` — they cannot be streamed per-key like Galois keys.
+- `POST /session/{id}/keys/finalize` validates that bootstrap keys are present when the model's `bootstrap_slots` is non-empty.
+
+**7.1.4 Unit tests:**
+
+- `TestEvalBootstrap` — synthetic model with one bootstrap node, verify ciphertext level is refreshed and values are preserved within tolerance.
+- `TestForwardWithBootstrap` — compile a small model that triggers bootstrap (e.g., MLP with short `logq` chain forcing `num_bootstraps > 0`), run E2E. Reference: `python/tests/test_bootstrap_dag.py:TestBootstrapIntegration` already validates the compiler side.
+- Calibrate tolerance using `max_error_stats_test.go` pattern (N=30 runs). Bootstrap adds significant noise — expect wider tolerances than non-bootstrap models.
+
+#### 7.2 CIFAR-10 examples
+
+Port models from `models/` to `examples/` using `orion_compiler.nn` imports (the `models/` files use the old `orion.nn` API). Each follows the Phase 5 template: `model.py`, `train.py`, `run.py`, `README.md`.
+
+| Example             | Dataset  | Key FHE features                                        | Bootstrap needed                | Reference CKKS params                                                                                |
+| ------------------- | -------- | ------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `examples/alexnet/` | CIFAR-10 | Conv2d E2E validation, SiLU (degree-127 Chebyshev)      | Maybe (depends on param choice) | TBD — start with `logn=15`                                                                           |
+| `examples/vgg/`     | CIFAR-10 | ReLU (minimax sign, 15 levels/activation)               | Yes (heaviest activation)       | TBD — likely `logn=16`                                                                               |
+| `examples/resnet/`  | CIFAR-10 | Residual connections (`Add`), multi-bootstrap placement | Yes                             | `logn=16`, `logq=[55,40×10]`, `logp=[61×3]`, `boot_logp=[61×8]` (from original `configs/resnet.yml`) |
+
+**Model-specific notes:**
+
+**AlexNet:** First Conv2d model to run E2E with the Go evaluator. MNIST examples only validated Linear layers. AlexNet validates: Conv2d→linear_transform compilation, SiLU Chebyshev polynomial evaluation at degree 127, AvgPool2d and AdaptiveAvgPool2d as linear transforms, and CIFAR-10 input dimensions (3×32×32). May or may not trigger bootstrap depending on modulus chain depth — if it doesn't, that's fine; AlexNet's primary value is Conv2d + high-degree polynomial validation.
+
+**VGG:** Heaviest activation cost. Each ReLU decomposes to ~15 levels (degrees `[15, 15, 27]`). VGG16 has 13 ReLU activations → requires deep modulus chain and multiple bootstraps. This is the stress test for bootstrap correctness and noise accumulation across many bootstrap operations.
+
+**ResNet:** Validates bootstrap placement across residual (branching) DAGs. The `Add` op for skip connections is already implemented, but bootstrap nodes must be correctly placed on both the main path and shortcut path. Use ResNet20 (CIFAR-10 variant: `BasicBlock, [3,3,3], [16,32,64]`) — smallest ResNet that exercises all features.
+
+#### 7.3 YOLO (deferred to Phase 8)
+
+YOLO is deferred because it adds scope orthogonal to bootstrap validation:
+
+- **Custom dataset** — requires Pascal VOC or COCO, not CIFAR-10. Different training infrastructure, different evaluation metrics (mAP vs classification accuracy).
+- **Transfer learning** — YOLO depends on a pre-trained ResNet34 backbone. Requires loading external weights and fine-tuning the detection head.
+- **Architectural complexity** — detection head output (7×7×30 = 1,470 values) fits in a single ciphertext, but the model is the deepest in the collection with the most bootstrap operations. Better to validate bootstrap on simpler models first.
+
+Note: the earlier claim that YOLO requires "multi-ciphertext packing" is incorrect. The model produces a single flattened output tensor that fits within standard slot counts. Remove this claim when YOLO is re-scoped in Phase 8.
+
+#### 7.4 Cleanup
+
+- Delete `models/` directory entirely (AlexNet, VGG, ResNet, YOLO model definitions now live in `examples/` using `orion_compiler.nn`).
+- Remove any remaining imports of `orion_compiler.models` or `orion.nn`.
 
 #### Phase 7 acceptance checklist
 
-- [ ] Go evaluator handles `bootstrap` ops correctly
+- [ ] `Evaluator` struct has `bootstrappers map[int]*bootstrapping.Evaluator` field
+- [ ] `NewEvaluatorFromKeySet` accepts optional bootstrap keys and params
+- [ ] `evalBootstrap` implements the full bootstrap sequence (constant→prescale→sparse dims→bootstrap→postscale→restore dims→un-constant)
+- [ ] `TestEvalBootstrap` passes — synthetic model with bootstrap node, values preserved within calibrated tolerance
+- [ ] `TestForwardWithBootstrap` passes — compiled model triggering bootstrap, E2E with keygen+encrypt+evaluate+decrypt
+- [ ] Bootstrap tolerance calibrated via `max_error_stats_test.go` (N=30 runs, tolerance = max_observed × 1.5)
+- [ ] `orion_evaluator.Evaluator.__init__` accepts `btp_keys_bytes` parameter
+- [ ] WASM demo server has `POST /session/{id}/keys/bootstrap` endpoint
+- [ ] WASM demo client uploads bootstrap keys when `manifest.bootstrap_slots` is non-empty
 - [ ] `examples/alexnet/` — model.py, train.py, run.py, README.md all present and working
-- [ ] `examples/vgg/` — same structure, working
-- [ ] `examples/resnet/` — same structure, working (includes bootstrap)
-- [ ] `examples/yolo/` — same structure, working (or documented limitations for multi-CT)
-- [ ] Each `run.py` produces correct FHE output end-to-end (MAE within expected tolerance)
-- [ ] Each `train.py` trains to reasonable accuracy on CIFAR-10
-- [ ] Each `README.md` documents CKKS parameter choices and expected performance
-- [ ] Remaining models removed from `models/` directory — `models/` deleted entirely
-- [ ] No imports of `orion_compiler.models` anywhere in the codebase
+- [ ] `examples/vgg/` — same structure, working, includes bootstrap
+- [ ] `examples/resnet/` — same structure, working, includes bootstrap across residual paths
+- [ ] AlexNet `train.py` achieves ≥85% test accuracy on CIFAR-10
+- [ ] VGG `train.py` achieves ≥90% test accuracy on CIFAR-10
+- [ ] ResNet20 `train.py` achieves ≥90% test accuracy on CIFAR-10
+- [ ] Each `run.py` produces correct FHE output E2E (MAE within calibrated tolerance per model)
+- [ ] Each `README.md` documents CKKS parameter choices, bootstrap count, expected inference time, and FHE precision
+- [ ] `models/` directory deleted
+- [ ] No imports of `orion.nn` or `orion_compiler.models` anywhere in the codebase
 
 ---
 
