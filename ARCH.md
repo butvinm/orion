@@ -1386,27 +1386,58 @@ These can stay in `orion_compiler.core.utils` (the compiler package still depend
 
 The WASM demo assembles all Galois keys into a single `MemEvaluationKeySet`, marshals the entire blob, and uploads it in one HTTP POST. For models with many Galois elements (e.g., LeNet's 178 keys → ~1.3 GB), this creates a large single transfer and high peak memory in the browser.
 
-Change the WASM demo to upload keys individually and have the server assemble the `MemEvaluationKeySet` incrementally.
+Change the WASM demo to upload keys individually in a generate→marshal→upload→free loop, so only one key (~7 MB for logN=14) is in browser memory at a time.
 
-#### 6.1 Server-side key accumulation
+#### 6.1 WASM bridge: individual key marshaling
+
+Expose `GaloisKey.marshalBinary()` / `unmarshalBinary()` and `RelinearizationKey.marshalBinary()` / `unmarshalBinary()` in the WASM bridge (`js/lattigo/bridge/serialize.go`, `js/lattigo/src/rlwe.ts`). Currently only `MemEvaluationKeySet` has marshal/unmarshal in the WASM path.
+
+#### 6.2 Server-side key accumulation
 
 Add endpoints to the Go server (`examples/wasm-demo/server/`) for incremental key upload:
 
-- `POST /session/keys/relin` — upload relinearization key
-- `POST /session/keys/galois` — upload a single Galois key
-- `POST /session/keys/finalize` — signal that all keys have been sent, server assembles `MemEvaluationKeySet`
+- `POST /session` (no body) — create a new session, return `{"session_id": "..."}`. Session starts in `pending` state (keys not yet finalized).
+- `POST /session/{id}/keys/relin` — upload relinearization key bytes. Server unmarshals and stores.
+- `POST /session/{id}/keys/galois/{element}` — upload a single Galois key bytes for the given Galois element (uint64). Server unmarshals, stores by element. Idempotent (re-uploading same element overwrites).
+- `POST /session/{id}/keys/finalize` — validate completeness against the model's key manifest (all required Galois elements present, RLK present if `needs_rlk`). Assemble `MemEvaluationKeySet`, create `evaluator.Evaluator`, transition session to `ready` state. Return 400 with missing elements list if incomplete.
 
-#### 6.2 Client-side streaming
+`POST /session/{id}/infer` rejects requests unless session is in `ready` state.
 
-Update `client.ts` to upload each key as it is generated rather than waiting for all keys to be ready. Show per-key upload progress.
+**Session cleanup:** Pending sessions that receive no key upload for 5 minutes are deleted (a goroutine sweeps periodically). Ready sessions remain until server shutdown (same as current behavior).
+
+#### 6.3 Client-side streaming
+
+Update `client.ts` to use a generate→marshal→upload→free loop:
+
+```
+for each galois_element in manifest:
+    gk = kg.genGaloisKey(sk, element)   // generate
+    gkBytes = gk.marshalBinary()        // marshal
+    gk.close()                          // free Go handle
+    await POST /session/{id}/keys/galois/{element} body=gkBytes  // upload
+    gkBytes = null                      // free JS memory
+    update progress (i/total)
+```
+
+The client never holds more than one Galois key in memory. Progress is shown per-key (count, percentage, elapsed time) — matching the existing UI pattern at `client.ts:208-216`.
+
+#### 6.4 Bootstrap keys (forward-looking)
+
+Bootstrap evaluation keys (`btpParamsGenEvaluationKeys()`) are generated as a single `MemEvaluationKeySet`. Phase 7 will need an additional endpoint or a way to upload these as a blob. For now, document this limitation but don't implement it — the current WASM demo uses no bootstrap.
 
 #### Phase 6 acceptance checklist
 
-- [ ] Server accepts individual key uploads and assembles `MemEvaluationKeySet`
-- [ ] Client uploads keys one at a time with progress indication
-- [ ] Peak browser memory reduced (no full key set blob in memory)
-- [ ] WASM demo still works end-to-end for MLP inference
-- [ ] Existing single-blob `POST /session` path still works (backwards compatibility)
+- [ ] WASM bridge exposes `GaloisKey.marshalBinary()` and `RelinearizationKey.marshalBinary()`
+- [ ] `POST /session` (no body) creates pending session
+- [ ] `POST /session/{id}/keys/relin` accepts and stores RLK
+- [ ] `POST /session/{id}/keys/galois/{element}` accepts and stores individual Galois keys by element (idempotent)
+- [ ] `POST /session/{id}/keys/finalize` validates completeness against manifest, returns 400 with missing elements if incomplete
+- [ ] Client uses generate→marshal→upload→free loop (one key in memory at a time)
+- [ ] Client shows per-key upload progress
+- [ ] Pending sessions are cleaned up after 5-minute inactivity timeout
+- [ ] `POST /session/{id}/infer` rejects requests on non-finalized sessions
+- [ ] WASM demo works end-to-end for MLP inference
+- [ ] Integration tests cover: happy path, missing key on finalize, duplicate key upload, session timeout
 
 ---
 
