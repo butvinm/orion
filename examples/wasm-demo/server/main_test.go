@@ -19,70 +19,11 @@ import (
 )
 
 // buildMinimalOrion constructs a minimal .orion v2 binary with a single quad node.
-// Graph: input -> quad -> output. Needs RLK but no Galois keys or blobs.
-func buildMinimalOrion() []byte {
-	header := evaluator.CompiledHeader{
-		Version: 2,
-		Params: evaluator.HeaderParams{
-			LogN:     12,
-			LogQ:     []int{40, 30, 30},
-			LogP:     []int{40},
-			LogScale: 30,
-			H:        192,
-			RingType: "conjugate_invariant",
-		},
-		Config: evaluator.HeaderConfig{
-			Margin:          1,
-			EmbeddingMethod: "hybrid",
-			FuseModules:     false,
-		},
-		Manifest: evaluator.HeaderManifest{
-			GaloisElements: []int{},
-			BootstrapSlots: []int{},
-			BootLogP:       []int{},
-			NeedsRLK:       true,
-		},
-		InputLevel: 2,
-		Cost: evaluator.HeaderCost{
-			BootstrapCount:    0,
-			GaloisKeyCount:    0,
-			BootstrapKeyCount: 0,
-		},
-		Graph: evaluator.HeaderGraph{
-			Input:  "input",
-			Output: "quad",
-			Nodes: []evaluator.HeaderNode{
-				{Name: "input", Op: "flatten", Level: 2, Depth: 0},
-				{Name: "quad", Op: "quad", Level: 2, Depth: 1},
-			},
-			Edges: []evaluator.HeaderEdge{
-				{Src: "input", Dst: "quad"},
-			},
-		},
-		BlobCount: 0,
+// Graph: input -> quad -> output. Needs RLK. galoisElements may be nil for no Galois keys.
+func buildMinimalOrion(galoisElements []int) []byte {
+	if galoisElements == nil {
+		galoisElements = []int{}
 	}
-
-	headerJSON, _ := json.Marshal(header)
-
-	var buf bytes.Buffer
-	// Magic bytes.
-	buf.Write([]byte("ORION\x00\x02\x00"))
-	// Header length (uint32 LE).
-	headerLen := make([]byte, 4)
-	binary.LittleEndian.PutUint32(headerLen, uint32(len(headerJSON)))
-	buf.Write(headerLen)
-	// Header JSON.
-	buf.Write(headerJSON)
-	// Blob count (uint32 LE).
-	blobCount := make([]byte, 4)
-	binary.LittleEndian.PutUint32(blobCount, 0)
-	buf.Write(blobCount)
-
-	return buf.Bytes()
-}
-
-// buildMinimalOrionWithGalois builds an .orion v2 binary that requires specific Galois elements.
-func buildMinimalOrionWithGalois(galoisElements []int) []byte {
 	header := evaluator.CompiledHeader{
 		Version: 2,
 		Params: evaluator.HeaderParams{
@@ -140,32 +81,11 @@ func buildMinimalOrionWithGalois(galoisElements []int) []byte {
 }
 
 // testSetup creates a Server, CKKS params, and keygen context for tests.
-func testSetup(t *testing.T) (*Server, ckks.Parameters, *rlwe.SecretKey) {
+// galoisElements may be nil for a model with no Galois key requirements.
+func testSetup(t *testing.T, galoisElements ...int) (*Server, ckks.Parameters, *rlwe.SecretKey) {
 	t.Helper()
 
-	data := buildMinimalOrion()
-	model, err := evaluator.LoadModel(data)
-	if err != nil {
-		t.Fatalf("LoadModel: %v", err)
-	}
-
-	srv, err := NewServer(model)
-	if err != nil {
-		t.Fatalf("NewServer: %v", err)
-	}
-
-	ckksParams := srv.CKKSParams()
-	kg := rlwe.NewKeyGenerator(ckksParams)
-	sk := kg.GenSecretKeyNew()
-
-	return srv, ckksParams, sk
-}
-
-// testSetupWithGalois creates a Server with a model requiring specific Galois elements.
-func testSetupWithGalois(t *testing.T, galoisElements []int) (*Server, ckks.Parameters, *rlwe.SecretKey) {
-	t.Helper()
-
-	data := buildMinimalOrionWithGalois(galoisElements)
+	data := buildMinimalOrion(galoisElements)
 	model, err := evaluator.LoadModel(data)
 	if err != nil {
 		t.Fatalf("LoadModel: %v", err)
@@ -377,13 +297,57 @@ func TestHandleRelinKeyEmpty(t *testing.T) {
 	}
 }
 
-func TestHandleGaloisKey(t *testing.T) {
-	// Get a valid Galois element for the ring.
-	tmpSrv, tmpParams, _ := testSetup(t)
-	_ = tmpSrv
-	ge := tmpParams.GaloisElement(1)
+func TestHandleRelinKeyCorrupt(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
 
-	srv, ckksParams, sk := testSetupWithGalois(t, []int{int(ge)})
+	id := createSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/relin", bytes.NewReader([]byte("not a valid key")))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for corrupt RLK, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleGaloisKeyCorrupt(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	id := createSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/galois/3", bytes.NewReader([]byte("not a valid key")))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for corrupt Galois key, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleGaloisKeyEmpty(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	id := createSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/galois/3", bytes.NewReader(nil))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty Galois key body, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleGaloisKey(t *testing.T) {
+	// Use a no-galois setup just to get a valid Galois element for the ring params,
+	// then create the real server requiring that element.
+	srv, ckksParams, sk := testSetup(t)
+	ge := ckksParams.GaloisElement(1)
+	srv, ckksParams, sk = testSetup(t, int(ge))
 	handler := srv.Handler("")
 
 	kg := rlwe.NewKeyGenerator(ckksParams)
@@ -398,11 +362,9 @@ func TestHandleGaloisKey(t *testing.T) {
 }
 
 func TestHandleGaloisKeyIdempotent(t *testing.T) {
-	tmpSrv, tmpParams, _ := testSetup(t)
-	_ = tmpSrv
-	ge := tmpParams.GaloisElement(1)
-
-	srv, ckksParams, sk := testSetupWithGalois(t, []int{int(ge)})
+	srv, ckksParams, sk := testSetup(t)
+	ge := ckksParams.GaloisElement(1)
+	srv, ckksParams, sk = testSetup(t, int(ge))
 	handler := srv.Handler("")
 
 	kg := rlwe.NewKeyGenerator(ckksParams)
@@ -496,13 +458,12 @@ func TestHandleFinalizeMissingRLK(t *testing.T) {
 }
 
 func TestHandleFinalizeMissingGaloisElements(t *testing.T) {
-	// Get two valid Galois elements.
-	tmpSrv, tmpParams, _ := testSetup(t)
-	_ = tmpSrv
-	ge1 := tmpParams.GaloisElement(1)
-	ge2 := tmpParams.GaloisElement(2)
+	// Get two valid Galois elements, then create a server requiring both.
+	srv, ckksParams, _ := testSetup(t)
+	ge1 := ckksParams.GaloisElement(1)
+	ge2 := ckksParams.GaloisElement(2)
 
-	srv, ckksParams, sk := testSetupWithGalois(t, []int{int(ge1), int(ge2)})
+	srv, ckksParams, sk := testSetup(t, int(ge1), int(ge2))
 	handler := srv.Handler("")
 
 	kg := rlwe.NewKeyGenerator(ckksParams)
@@ -695,6 +656,85 @@ func TestFullRoundtrip(t *testing.T) {
 		if diff < -tolerance || diff > tolerance {
 			t.Errorf("slot %d: expected ~%.4f (%.1f^2), got %.4f (diff=%.6f)",
 				i, expected, inputValues[i], outputValues[i], diff)
+		}
+	}
+}
+
+func TestFullRoundtripWithGaloisKeys(t *testing.T) {
+	// Create a server requiring a Galois key, upload all keys via streaming, run inference.
+	srv, ckksParams, sk := testSetup(t)
+	ge := ckksParams.GaloisElement(1)
+	srv, ckksParams, sk = testSetup(t, int(ge))
+	handler := srv.Handler("")
+
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	pk := kg.GenPublicKeyNew(sk)
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, err := rlk.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary RLK: %v", err)
+	}
+
+	gk := kg.GenGaloisKeyNew(ge, sk)
+	gkBytes, err := gk.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary GK: %v", err)
+	}
+
+	// Stream keys: session → RLK → Galois key → finalize.
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+	uploadGaloisKey(t, handler, id, ge, gkBytes)
+	finalizeSession(t, handler, id)
+
+	// Encrypt and infer.
+	encoder := ckks.NewEncoder(ckksParams)
+	encryptor := ckks.NewEncryptor(ckksParams, pk)
+	decryptor := ckks.NewDecryptor(ckksParams, sk)
+
+	inputValues := make([]float64, ckksParams.MaxSlots())
+	for i := range inputValues {
+		inputValues[i] = float64(i%10) * 0.1
+	}
+
+	pt := ckks.NewPlaintext(ckksParams, 2)
+	pt.Scale = ckksParams.DefaultScale()
+	encoder.Encode(inputValues, pt)
+	ct, err := encryptor.EncryptNew(pt)
+	if err != nil {
+		t.Fatalf("encrypt: %v", err)
+	}
+	ctBytes, err := ct.MarshalBinary()
+	if err != nil {
+		t.Fatalf("marshal CT: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/infer", bytes.NewReader(ctBytes))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(w.Result().Body)
+		t.Fatalf("POST /infer: expected 200, got %d: %s", w.Result().StatusCode, body)
+	}
+
+	resultBytes, _ := io.ReadAll(w.Result().Body)
+	resultCT := &rlwe.Ciphertext{}
+	if err := resultCT.UnmarshalBinary(resultBytes); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	resultPT := decryptor.DecryptNew(resultCT)
+	outputValues := make([]float64, ckksParams.MaxSlots())
+	encoder.Decode(resultPT, outputValues)
+
+	// Quad = x^2.
+	tolerance := 0.01
+	for i := 0; i < 10; i++ {
+		expected := inputValues[i] * inputValues[i]
+		diff := outputValues[i] - expected
+		if diff < -tolerance || diff > tolerance {
+			t.Errorf("slot %d: expected ~%.4f, got %.4f (diff=%.6f)",
+				i, expected, outputValues[i], diff)
 		}
 	}
 }

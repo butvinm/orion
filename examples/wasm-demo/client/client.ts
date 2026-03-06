@@ -31,12 +31,9 @@ import {
   Encoder,
   Encryptor,
   Decryptor,
-  MemEvaluationKeySet,
   Ciphertext,
-  isError,
 } from "@orion/lattigo";
-import type { WasmBridge, Handle } from "@orion/lattigo";
-import type { RelinearizationKey, GaloisKey, SecretKey } from "@orion/lattigo";
+import type { WasmBridge, SecretKey } from "@orion/lattigo";
 
 // ============================================================
 // Types matching the /params response from the Go server
@@ -286,63 +283,9 @@ async function initializeKeys(): Promise<void> {
     );
   }
 
-  // 9. Bootstrap keys (if needed)
-  // NOTE: Bootstrap path is temporarily non-functional since the old single-upload
-  // POST /session with MemEvaluationKeySet blob is removed. This block never executes
-  // in practice (bootstrap_slots is always empty for current models). Phase 7 will add
-  // a dedicated bootstrap key upload endpoint.
-  if (
-    manifest.bootstrap_slots.length > 0 &&
-    manifest.boot_logp &&
-    manifest.boot_logp.length > 0
-  ) {
-    appendLine(
-      "Generating bootstrap evaluation keys (may take 5–30s)...",
-    );
+  // TODO: Phase 7 — bootstrap key upload (bootstrap_slots is always empty for current models)
 
-    // For ConjugateInvariant, bootstrap operates at LogN+1
-    const btpLogN =
-      ckksData.ring_type === "conjugate_invariant" ||
-      ckksData.ring_type === "ConjugateInvariant"
-        ? ckksData.logn + 1
-        : ckksData.logn;
-
-    const btpLogSlots = Math.round(
-      Math.log2(manifest.bootstrap_slots[0]),
-    );
-
-    const btpLiteral = {
-      LogN: btpLogN,
-      LogP: manifest.boot_logp,
-      H: ckksData.h,
-      LogSlots: btpLogSlots,
-    };
-
-    const btpParamsResult = bridge.newBootstrapParametersFromLiteral(
-      params.handle,
-      JSON.stringify(btpLiteral),
-    );
-    if (isError(btpParamsResult)) {
-      setStatus(`Bootstrap params error: ${btpParamsResult.error}`);
-      btnInit.disabled = false;
-      return;
-    }
-
-    const t5 = performance.now();
-    const btpKeys = await bridge.btpParamsGenEvaluationKeys(
-      btpParamsResult.handle,
-      sk.handle,
-    );
-    appendLine(
-      `Bootstrap eval keys in ${formatDuration(performance.now() - t5)}`,
-    );
-
-    bridge.deleteHandle(btpParamsResult.handle);
-    bridge.deleteHandle(btpKeys.evkHID);
-    bridge.deleteHandle(btpKeys.btpEvkHID);
-  }
-
-  // 10. Finalize session — server validates all keys present and creates evaluator
+  // 9. Finalize session — server validates all keys present and creates evaluator
   appendLine("Finalizing session...");
   try {
     const finalizeResp = await fetch(

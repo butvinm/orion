@@ -1200,8 +1200,8 @@ Tensor-to-slot mapping (flatten, pad, split) is trivial user code — no JS libr
 
 `examples/wasm-demo/`:
 
-- Go HTTP server: loads `.orion` model, exposes `/params`, `/session`, `/session/{id}/infer`
-- HTML/JS client: loads WASM, generates keys, encrypts input, sends to server, decrypts result
+- Go HTTP server: loads `.orion` model, exposes `/params`, `/session`, `/session/{id}/keys/relin`, `/session/{id}/keys/galois/{element}`, `/session/{id}/keys/finalize`, `/session/{id}/infer`. Keys are uploaded individually via streaming (one key at a time).
+- HTML/JS client: loads WASM, generates keys in a generate→marshal→upload→free loop (one key in browser memory at a time), encrypts input, sends to server, decrypts result
 - End-to-end demonstration: browser-side secret key never leaves the client
 
 #### Phase 4 acceptance checklist
@@ -1427,17 +1427,17 @@ Bootstrap evaluation keys (`btpParamsGenEvaluationKeys()`) are generated as a si
 
 #### Phase 6 acceptance checklist
 
-- [ ] WASM bridge exposes `GaloisKey.marshalBinary()` and `RelinearizationKey.marshalBinary()`
-- [ ] `POST /session` (no body) creates pending session
-- [ ] `POST /session/{id}/keys/relin` accepts and stores RLK
-- [ ] `POST /session/{id}/keys/galois/{element}` accepts and stores individual Galois keys by element (idempotent)
-- [ ] `POST /session/{id}/keys/finalize` validates completeness against manifest, returns 400 with missing elements if incomplete
-- [ ] Client uses generate→marshal→upload→free loop (one key in memory at a time)
-- [ ] Client shows per-key upload progress
-- [ ] Pending sessions are cleaned up after 5-minute inactivity timeout
-- [ ] `POST /session/{id}/infer` rejects requests on non-finalized sessions
-- [ ] WASM demo works end-to-end for MLP inference
-- [ ] Integration tests cover: happy path, missing key on finalize, duplicate key upload, session timeout
+- [x] WASM bridge exposes `GaloisKey.marshalBinary()` and `RelinearizationKey.marshalBinary()`
+- [x] `POST /session` (no body) creates pending session
+- [x] `POST /session/{id}/keys/relin` accepts and stores RLK
+- [x] `POST /session/{id}/keys/galois/{element}` accepts and stores individual Galois keys by element (idempotent)
+- [x] `POST /session/{id}/keys/finalize` validates completeness against manifest, returns 400 with missing elements if incomplete
+- [x] Client uses generate→marshal→upload→free loop (one key in memory at a time)
+- [x] Client shows per-key upload progress
+- [x] Pending sessions are cleaned up after 5-minute inactivity timeout
+- [x] `POST /session/{id}/infer` rejects requests on non-finalized sessions
+- [x] WASM demo works end-to-end for MLP inference
+- [x] Integration tests cover: happy path, missing key on finalize, duplicate key upload, session timeout
 
 ---
 

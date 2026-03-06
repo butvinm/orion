@@ -34,9 +34,8 @@ import (
 
 // Maximum request body sizes.
 const (
-	maxKeySetBytes     = 512 * 1024 * 1024 // 512 MB — key sets can be large
-	maxSingleKeyBytes  = 16 * 1024 * 1024  // 16 MB — individual key upload
-	maxCiphertextBytes = 32 * 1024 * 1024  // 32 MB — ciphertexts are much smaller
+	maxSingleKeyBytes  = 16 * 1024 * 1024 // 16 MB — individual key upload
+	maxCiphertextBytes = 32 * 1024 * 1024 // 32 MB — ciphertexts are much smaller
 )
 
 // sessionState represents the state of a session in the key upload state machine.
@@ -310,11 +309,13 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 	if missingRLK || len(missingElements) > 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(finalizeErrorResponse{
+		if err := json.NewEncoder(w).Encode(finalizeErrorResponse{
 			Error:           "incomplete keys",
 			MissingRLK:      missingRLK,
 			MissingElements: missingElements,
-		})
+		}); err != nil {
+			log.Printf("HandleFinalize: encode error response: %v", err)
+		}
 		return
 	}
 
