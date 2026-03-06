@@ -463,7 +463,7 @@ func newSessionID() (string, error) {
 }
 
 func main() {
-	modelPath := "model.orion"
+	modelPath := "../model.orion"
 	if len(os.Args) > 1 {
 		modelPath = os.Args[1]
 	}
