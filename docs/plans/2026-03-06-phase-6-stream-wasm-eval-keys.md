@@ -69,14 +69,14 @@ Refactor `examples/wasm-demo/server/main.go` to support incremental key upload w
 
 Update `examples/wasm-demo/client/client.ts` to use generate-marshal-upload-free loop.
 
-- [ ] After `POST /session` (no body), store `session_id`
-- [ ] If `manifest.needs_rlk`, generate RLK, marshal, POST to `/session/{id}/keys/relin`, free RLK handle
-- [ ] Replace Galois key batch with streaming loop: for each element in `manifest.galois_elements`, generate key, marshal, POST to `/session/{id}/keys/galois/{element}`, free key handle, update progress. Abort on any upload error (show error message, re-enable init button).
-- [ ] Call `POST /session/{id}/keys/finalize` after all keys uploaded
-- [ ] Remove `MemEvaluationKeySet` assembly for standard keys (keep import — needed for future bootstrap support)
-- [ ] Verify per-key progress display works (count, percentage, elapsed time)
-- [ ] Note in code comment: bootstrap path (lines 224-277) is temporarily non-functional since the old single-upload `POST /session` is removed. No code change needed — the block never executes (bootstrap_slots always empty for current models).
-- [ ] Run `cd js/lattigo && npm run typecheck && npm run lint` — must pass
+- [x] After `POST /session` (no body), store `session_id`
+- [x] If `manifest.needs_rlk`, generate RLK, marshal, POST to `/session/{id}/keys/relin`, free RLK handle
+- [x] Replace Galois key batch with streaming loop: for each element in `manifest.galois_elements`, generate key, marshal, POST to `/session/{id}/keys/galois/{element}`, free key handle, update progress. Abort on any upload error (show error message, re-enable init button).
+- [x] Call `POST /session/{id}/keys/finalize` after all keys uploaded
+- [x] Remove `MemEvaluationKeySet` assembly for standard keys (keep import — needed for future bootstrap support)
+- [x] Verify per-key progress display works (count, percentage, elapsed time)
+- [x] Note in code comment: bootstrap path (lines 224-277) is temporarily non-functional since the old single-upload `POST /session` is removed. No code change needed — the block never executes (bootstrap_slots always empty for current models).
+- [x] Run `cd js/lattigo && npm run typecheck && npm run lint` — must pass
 
 ### Task 4: Verify acceptance criteria
 

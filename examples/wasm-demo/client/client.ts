@@ -14,12 +14,14 @@
  *     6. Generate Galois keys from manifest.galois_elements (with progress)
  *     7. If manifest.bootstrap_slots non-empty: construct ParametersLiteral,
  *        call btpParamsGenEvaluationKeys (async, may take 5–30s)
- *     8. Assemble MemEvaluationKeySet, marshal, POST /session → session ID
+ *     8. POST /session (no body) → session ID
+ *     9. Stream keys: generate-marshal-upload-free loop (one key in memory at a time)
+ *    10. POST /session/{id}/keys/finalize
  *
  *   Run Inference:
- *     9.  Encode + encrypt user input
- *     10. POST /session/{id}/infer → result ciphertext bytes
- *     11. Decrypt + decode → display values with timing breakdown
+ *     11. Encode + encrypt user input
+ *     12. POST /session/{id}/infer → result ciphertext bytes
+ *     13. Decrypt + decode → display values with timing breakdown
  */
 
 import {
@@ -190,25 +192,89 @@ async function initializeKeys(): Promise<void> {
   encryptor = Encryptor.new(params, pk);
   decryptor = Decryptor.new(params, sk);
 
-  // 6. Generate RLK if needed
-  let rlk: RelinearizationKey | null = null;
+  // 6. Create session (no body — keys will be streamed individually)
+  appendLine("Creating session...");
+  let sessData: { session_id: string };
+  try {
+    const sessResp = await fetch("/session", { method: "POST" });
+    if (!sessResp.ok) {
+      const msg = await sessResp.text();
+      setStatus(`Session creation failed: ${msg}`);
+      btnInit.disabled = false;
+      return;
+    }
+    sessData = (await sessResp.json()) as { session_id: string };
+  } catch (err) {
+    setStatus(`Session error: ${(err as Error).message}`);
+    btnInit.disabled = false;
+    return;
+  }
+  sessionId = sessData.session_id;
+  appendLine(`Session created: ${sessionId}`);
+
+  // 7. Upload RLK if needed (generate → marshal → upload → free)
   if (manifest.needs_rlk) {
-    appendLine("Generating relinearization key...");
+    appendLine("Generating and uploading relinearization key...");
     const t3 = performance.now();
-    rlk = kg.genRelinKey(sk);
-    appendLine(`RLK in ${formatDuration(performance.now() - t3)}`);
+    const rlk = kg.genRelinKey(sk);
+    const rlkBytes = rlk.marshalBinary();
+    rlk.free();
+    try {
+      const resp = await fetch(`/session/${sessionId}/keys/relin`, {
+        method: "POST",
+        body: rlkBytes as unknown as ArrayBuffer,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      if (!resp.ok) {
+        const msg = await resp.text();
+        setStatus(`RLK upload failed: ${msg}`);
+        btnInit.disabled = false;
+        return;
+      }
+    } catch (err) {
+      setStatus(`RLK upload error: ${(err as Error).message}`);
+      btnInit.disabled = false;
+      return;
+    }
+    appendLine(
+      `RLK uploaded in ${formatDuration(performance.now() - t3)} (${formatBytes(rlkBytes.length)})`,
+    );
   }
 
-  // 7. Generate Galois keys
-  const galoisKeys: GaloisKey[] = [];
+  // 8. Stream Galois keys: generate → marshal → upload → free (one key in memory at a time)
   if (manifest.galois_elements.length > 0) {
     const total = manifest.galois_elements.length;
-    appendLine(`Generating ${total} Galois key(s)...`);
+    appendLine(`Uploading ${total} Galois key(s)...`);
     const t4 = performance.now();
     for (let i = 0; i < total; i++) {
       const ge = manifest.galois_elements[i];
       const gk = kg.genGaloisKey(sk, ge);
-      galoisKeys.push(gk);
+      const gkBytes = gk.marshalBinary();
+      gk.free();
+
+      try {
+        const resp = await fetch(
+          `/session/${sessionId}/keys/galois/${ge}`,
+          {
+            method: "POST",
+            body: gkBytes as unknown as ArrayBuffer,
+            headers: { "Content-Type": "application/octet-stream" },
+          },
+        );
+        if (!resp.ok) {
+          const msg = await resp.text();
+          setStatus(`Galois key upload failed (element=${ge}): ${msg}`);
+          btnInit.disabled = false;
+          return;
+        }
+      } catch (err) {
+        setStatus(
+          `Galois key upload error (element=${ge}): ${(err as Error).message}`,
+        );
+        btnInit.disabled = false;
+        return;
+      }
+
       const pct = Math.round(((i + 1) / total) * 100);
       setStatus(
         `Galois keys: ${i + 1}/${total} [${pct}%] — element=${ge} — ` +
@@ -216,11 +282,15 @@ async function initializeKeys(): Promise<void> {
       );
     }
     appendLine(
-      `${total} Galois key(s) in ${formatDuration(performance.now() - t4)}`,
+      `${total} Galois key(s) uploaded in ${formatDuration(performance.now() - t4)}`,
     );
   }
 
-  // 8. Bootstrap keys (if needed)
+  // 9. Bootstrap keys (if needed)
+  // NOTE: Bootstrap path is temporarily non-functional since the old single-upload
+  // POST /session with MemEvaluationKeySet blob is removed. This block never executes
+  // in practice (bootstrap_slots is always empty for current models). Phase 7 will add
+  // a dedicated bootstrap key upload endpoint.
   if (
     manifest.bootstrap_slots.length > 0 &&
     manifest.boot_logp &&
@@ -267,55 +337,32 @@ async function initializeKeys(): Promise<void> {
       `Bootstrap eval keys in ${formatDuration(performance.now() - t5)}`,
     );
 
-    // NOTE: This demo serves a non-bootstrapping model (bootstrap_slots is always
-    // empty), so this block never executes in practice. If you need bootstrap
-    // support, include btpKeys.evkHID in the MemEvaluationKeySet below instead
-    // of freeing it here.
     bridge.deleteHandle(btpParamsResult.handle);
     bridge.deleteHandle(btpKeys.evkHID);
     bridge.deleteHandle(btpKeys.btpEvkHID);
   }
 
-  // 9. Assemble MemEvaluationKeySet and POST to /session
-  appendLine("Assembling evaluation key set...");
-  const t6 = performance.now();
-  const evk = MemEvaluationKeySet.new(rlk, galoisKeys);
-  const evkBytes = evk.marshalBinary();
-  appendLine(
-    `EVK assembled in ${formatDuration(performance.now() - t6)} (${formatBytes(evkBytes.length)})`,
-  );
-
-  appendLine("Uploading keys to server...");
-  const t7 = performance.now();
-  let sessData: { session_id: string };
+  // 10. Finalize session — server validates all keys present and creates evaluator
+  appendLine("Finalizing session...");
   try {
-    const sessResp = await fetch("/session", {
-      method: "POST",
-      // Cast: Go WASM bridge always returns ArrayBuffer (never SharedArrayBuffer)
-      body: evkBytes as unknown as ArrayBuffer,
-      headers: { "Content-Type": "application/octet-stream" },
-    });
-    if (!sessResp.ok) {
-      const msg = await sessResp.text();
-      setStatus(`Session creation failed: ${msg}`);
+    const finalizeResp = await fetch(
+      `/session/${sessionId}/keys/finalize`,
+      { method: "POST" },
+    );
+    if (!finalizeResp.ok) {
+      const msg = await finalizeResp.text();
+      setStatus(`Finalize failed: ${msg}`);
       btnInit.disabled = false;
       return;
     }
-    sessData = (await sessResp.json()) as { session_id: string };
   } catch (err) {
-    setStatus(`Session error: ${(err as Error).message}`);
+    setStatus(`Finalize error: ${(err as Error).message}`);
     btnInit.disabled = false;
     return;
   }
-  sessionId = sessData.session_id;
-  appendLine(
-    `Session created in ${formatDuration(performance.now() - t7)}: ${sessionId}`,
-  );
+  appendLine("Session finalized — evaluator ready.");
 
-  // Cleanup (PK, EVK, individual key handles — SK/encoder/encryptor/decryptor kept for inference)
-  evk.free();
-  for (const gk of galoisKeys) gk.free();
-  if (rlk) rlk.free();
+  // Cleanup (PK, KG — SK/encoder/encryptor/decryptor kept for inference)
   pk.free();
   kg.free();
 
