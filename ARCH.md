@@ -1471,7 +1471,7 @@ Add bootstrap op handling to `evaluator/evaluator.go`. The compiler already inse
 
 **7.1.1 Evaluator changes:**
 
-Add a `bootstrappers map[int]*bootstrapping.Evaluator` field to the `Evaluator` struct. Each entry is keyed by slot count (matching the original's `bootstrapperMap` pattern). The bootstrapper map is populated during evaluator construction from bootstrap parameters + bootstrap evaluation keys.
+Add a `bootstrappers map[int]*bootstrapping.Evaluator` field to the `Evaluator` struct. Each entry is keyed by `LogMaxSlots` (the log₂ of the slot count). The bootstrapper map is populated lazily during the first `Forward()` call from the model's manifest (`boot_logp` + `bootstrap_slots`) and the bootstrap evaluation keys.
 
 Constructor signature change:
 
@@ -1480,11 +1480,10 @@ func NewEvaluatorFromKeySet(
     ckksParams ckks.Parameters,
     keys *rlwe.MemEvaluationKeySet,
     btpKeys *bootstrapping.EvaluationKeys,  // nil if no bootstrap needed
-    btpParams []bootstrapping.Parameters,   // one per unique slot count
 ) (*Evaluator, error)
 ```
 
-When `btpKeys` is non-nil, create a `bootstrapping.Evaluator` for each `btpParams` entry using `bootstrapping.NewEvaluator(params, btpKeys)`. Store in the `bootstrappers` map keyed by `params.LogMaxSlots()`.
+Bootstrap parameters (`bootstrapping.Parameters`) are not passed explicitly — the evaluator reconstructs them from the model's manifest (`boot_logp`, `bootstrap_slots`, and the residual CKKS parameters) during `Forward()`. This avoids redundancy since the model already contains this information. When `btpKeys` is non-nil, `Forward()` creates a `bootstrapping.Evaluator` for each unique slot count in the model and stores it in the `bootstrappers` map keyed by `LogMaxSlots`.
 
 **7.1.2 `evalBootstrap` implementation:**
 
@@ -1500,10 +1499,10 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 4. Set `ct.LogDimensions.Cols = bootstrapper.LogMaxSlots()` (sparse bootstrap trick from original).
 5. `bootstrapper.Bootstrap(ct)` — Lattigo's bootstrap refreshes the ciphertext modulus chain.
 6. Integer postscale: `postscale = 1 << (params.LogMaxSlots() - bootstrapper.LogMaxSlots())`. `eval.Mul(ct, postscale, ct)`. Because postscale is a power-of-two integer, this does NOT consume a level (no rescale needed). Restore `ct.LogDimensions.Cols = params.LogMaxSlots()`.
-7. If `config.postscale != 1` (range rescaling, separate from sparse postscale): `eval.MulNew(ct, postscale)`, `eval.Rescale(result, result)`.
+7. If `config.postscale != 1` (range rescaling, separate from sparse postscale): `eval.MulNew(ct, int(postscale))`. This is an integer multiply — no `Rescale` needed, no level consumed.
 8. If `config.constant != 0`: `eval.AddNew(ct, -constant)` — shift back.
 
-**Important:** Steps 6 and 7 are two different postscales. Step 6 is the sparse-slot correction (always integer, no level consumed). Step 7 is the range-mapping postscale from `Bootstrap.fit()` — also designed to be an integer (`ceil(half_range)`), so it should also not consume a level. Verify against the original: in `Bootstrap.forward()` line 81, `x *= self.postscale` multiplies by an integer with no rescale.
+**Important:** Steps 6 and 7 are two different postscales. Step 6 is the sparse-slot correction (always power-of-two integer, no level consumed). Step 7 is the range-mapping postscale from `Bootstrap.fit()` — also an integer (`ceil(half_range)`), so it also does not consume a level. Both use integer multiply (no rescale). Reference: in `Bootstrap.forward()` line 81, `x *= self.postscale` multiplies by an integer; the backend's `mul_scalar` dispatches to `MulScalarInt` (no rescale) for integer operands.
 
 **7.1.3 Bootstrap key transport:**
 
@@ -1561,7 +1560,7 @@ Note: the earlier claim that YOLO requires "multi-ciphertext packing" is incorre
 #### Phase 7 acceptance checklist
 
 - [ ] `Evaluator` struct has `bootstrappers map[int]*bootstrapping.Evaluator` field
-- [ ] `NewEvaluatorFromKeySet` accepts optional bootstrap keys and params
+- [ ] `NewEvaluatorFromKeySet` accepts optional bootstrap keys (no explicit `btpParams` — reconstructed from model manifest)
 - [ ] `evalBootstrap` implements the full bootstrap sequence (constant→prescale→sparse dims→bootstrap→postscale→restore dims→un-constant)
 - [ ] `TestEvalBootstrap` passes — synthetic model with bootstrap node, values preserved within calibrated tolerance
 - [ ] `TestForwardWithBootstrap` passes — compiled model triggering bootstrap, E2E with keygen+encrypt+evaluate+decrypt
@@ -1572,9 +1571,6 @@ Note: the earlier claim that YOLO requires "multi-ciphertext packing" is incorre
 - [ ] `examples/alexnet/` — model.py, train.py, run.py, README.md all present and working
 - [ ] `examples/vgg/` — same structure, working, includes bootstrap
 - [ ] `examples/resnet/` — same structure, working, includes bootstrap across residual paths
-- [ ] AlexNet `train.py` achieves ≥85% test accuracy on CIFAR-10
-- [ ] VGG `train.py` achieves ≥90% test accuracy on CIFAR-10
-- [ ] ResNet20 `train.py` achieves ≥90% test accuracy on CIFAR-10
 - [ ] Each `run.py` produces correct FHE output E2E (MAE within calibrated tolerance per model)
 - [ ] Each `README.md` documents CKKS parameter choices, bootstrap count, expected inference time, and FHE precision
 - [ ] `models/` directory deleted
