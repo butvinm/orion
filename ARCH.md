@@ -325,7 +325,8 @@ for each blob:
     "logscale": 40,
     "h": 192,
     "ring_type": "conjugate_invariant",
-    "boot_logp": []
+    "boot_logp": [],
+    "btp_logn": null
   },
   "config": {
     "margin": 2,
@@ -336,6 +337,7 @@ for each blob:
     "galois_elements": [1, 2, 4, 8, 16, 32, 64, 128],
     "bootstrap_slots": [],
     "boot_logp": [],
+    "btp_logn": null,
     "needs_rlk": true
   },
   "input_level": 7,
@@ -1459,9 +1461,21 @@ Implement bootstrapping support in the Go evaluator, then create examples for th
 - `orion/nn/operations.py` `Bootstrap.fit()` — computes prescale/postscale/constant from fitted input range: maps `[input_min, input_max]` into `[-1, 1]` using `prescale = 1/postscale` where `postscale = ceil(half_range)` (integer, so post-bootstrap multiply consumes no level).
 - `orion/nn/operations.py` `Bootstrap.compile()` — encodes prescale as a plaintext at `input_level` with scale = `q_L` (the modulus at that level) for errorless rescaling. Zeros out unused slots to enable sparse bootstrapping.
 - `orion/core/auto_bootstrap.py` — bootstrap placement algorithm (already ported to v2).
-- `configs/resnet.yml` — reference CKKS parameters for ResNet: `LogN=16`, `LogQ=[55,40×10]`, `LogP=[61,61,61]`, `boot_logp=[61×8]`.
+- `configs/resnet.yml` — reference CKKS parameters for ResNet: `LogN=16`, `LogQ=[55,40×10]`, `LogP=[61,61,61]`, `boot_logp=[61×8]`. Since `logn=16` matches the default bootstrap ring, `btp_logn=16` (no ring switching, no key size penalty).
 
 **Critical difference from original:** In the original, bootstrap keys are generated server-side (the server holds the secret key). In v2, the client generates and uploads keys. Bootstrap evaluation keys (`bootstrapping.EvaluationKeys`) include ring-switching keys that are separate from the regular `MemEvaluationKeySet`. This requires a new key transport mechanism.
+
+**Bootstrap key size:** Bootstrap keys are dominated by Galois keys for the homomorphic DFT/iDFT circuit inside Lattigo's bootstrap. Key size scales with the bootstrap ring dimension, **not** the residual model dimension. Experimentally measured (with `boot_logp=[61]*6`):
+
+| `btp_logn`           | Bootstrap Keys | Per Galois Key | Galois Count | Error (simple test) |
+| -------------------- | -------------- | -------------- | ------------ | ------------------- |
+| 14                   | 1.0 GB         | 27 MB          | 35           | 4.1e-08             |
+| 15                   | 2.6 GB         | 55 MB          | 43           | 1.3e-08             |
+| 16 (Lattigo default) | 5.8 GB         | 109 MB         | 48           | 2.9e-08             |
+
+Setting `btp_logn = residual logn` avoids ring-switching keys and dramatically reduces key size (5.8x reduction at `logn=14`). Precision is comparable across all three. The compiler should default `btp_logn` to the residual `logn` — there is no reason to use a larger bootstrap ring unless the model explicitly requires more bootstrap slots than the residual ring provides.
+
+**`LogNthRoot` constraint:** Lattigo requires all residual CKKS primes to satisfy `q ≡ 1 mod 2^(btp_logn+1)`. The compiler must set `LogNthRoot = btp_logn + 1` when constructing CKKS parameters if `boot_logp` is non-empty. Without this, `bootstrapping.NewParametersFromLiteral()` fails. This means CKKS parameters for bootstrap-enabled models are different from non-bootstrap models — the primes are chosen from a sparser set.
 
 Starts after Phase 6 (streaming key upload complete, Go evaluator proven end-to-end with MNIST).
 
@@ -1471,7 +1485,7 @@ Add bootstrap op handling to `evaluator/evaluator.go`. The compiler already inse
 
 **7.1.1 Evaluator changes:**
 
-Add a `bootstrappers map[int]*bootstrapping.Evaluator` field to the `Evaluator` struct. Each entry is keyed by `LogMaxSlots` (the log₂ of the slot count). The bootstrapper map is populated lazily during the first `Forward()` call from the model's manifest (`boot_logp` + `bootstrap_slots`) and the bootstrap evaluation keys.
+Add a `bootstrappers map[int]*bootstrapping.Evaluator` field to the `Evaluator` struct. Each entry is keyed by `log2(slots)` (from `bootstrap_slots`). The bootstrapper map is populated lazily during the first `Forward()` call from the model's manifest and the bootstrap evaluation keys. `Close()` must nil out the `bootstrappers` map to release memory (bootstrap evaluators hold large internal state).
 
 Constructor signature change:
 
@@ -1483,7 +1497,19 @@ func NewEvaluatorFromKeySet(
 ) (*Evaluator, error)
 ```
 
-Bootstrap parameters (`bootstrapping.Parameters`) are not passed explicitly — the evaluator reconstructs them from the model's manifest (`boot_logp`, `bootstrap_slots`, and the residual CKKS parameters) during `Forward()`. This avoids redundancy since the model already contains this information. When `btpKeys` is non-nil, `Forward()` creates a `bootstrapping.Evaluator` for each unique slot count in the model and stores it in the `bootstrappers` map keyed by `LogMaxSlots`.
+Bootstrap parameters (`bootstrapping.Parameters`) are not passed explicitly — the evaluator reconstructs them from the model's manifest (`boot_logp`, `btp_logn`, `bootstrap_slots`, and the residual CKKS parameters) during `Forward()`. This avoids redundancy since the model already contains this information. One `bootstrapping.Evaluator` is created per unique slot count in `bootstrap_slots` and stored in the `bootstrappers` map keyed by `log2(slots)`. Reconstruction for each slot count:
+
+```go
+btpLit := bootstrapping.ParametersLiteral{
+    LogN:     utils.Pointy(manifest.BtpLogN),
+    LogP:     manifest.BootLogP,
+    Xs:       ckksParams.Xs(),                           // must match residual H
+    LogSlots: utils.Pointy(int(math.Log2(float64(s)))),  // s from bootstrap_slots
+}
+btpParams, err := bootstrapping.NewParametersFromLiteral(ckksParams, btpLit)
+```
+
+`Xs` must match the residual parameters' secret key distribution (controlled by `CKKSParams.h`). If omitted, Lattigo defaults to `H=192` — which only works if the residual params also use `H=192`. `LogSlots` enables sparse bootstrapping: the bootstrap circuit only operates on `2^LogSlots` active slots instead of the full ring, reducing noise. Reference: `bootstrapper.go:33-38`.
 
 **7.1.2 `evalBootstrap` implementation:**
 
@@ -1498,7 +1524,7 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 3. Prescale: encode `prescale` as plaintext at `ct.Level()` with scale = modulus at that level (for errorless rescaling). `eval.MulNew(ct, prescalePt)`, `eval.Rescale(result, result)`. This maps values into `[-1, 1]`. The prescale plaintext zeros out unused slots to enable sparse bootstrapping.
 4. Set `ct.LogDimensions.Cols = bootstrapper.LogMaxSlots()` (sparse bootstrap trick from original).
 5. `bootstrapper.Bootstrap(ct)` — Lattigo's bootstrap refreshes the ciphertext modulus chain.
-6. Integer postscale: `postscale = 1 << (params.LogMaxSlots() - bootstrapper.LogMaxSlots())`. `eval.Mul(ct, postscale, ct)`. Because postscale is a power-of-two integer, this does NOT consume a level (no rescale needed). Restore `ct.LogDimensions.Cols = params.LogMaxSlots()`.
+6. Sparse-slot postscale: `postscale = 1 << (params.LogMaxSlots() - bootstrapper.LogMaxSlots())`. `eval.Mul(ct, postscale, ct)`. This corrects for the fact that bootstrap operated on fewer slots than the full ring — `bootstrapper.LogMaxSlots()` equals the `LogSlots` set during construction, while `params.LogMaxSlots()` is the residual ring's full capacity. When all slots are used, `postscale = 1` (no-op). Because postscale is a power-of-two integer, this does NOT consume a level (no rescale needed). Restore `ct.LogDimensions.Cols = params.LogMaxSlots()`.
 7. If `config.postscale != 1` (range rescaling, separate from sparse postscale): `eval.MulNew(ct, int(postscale))`. This is an integer multiply — no `Rescale` needed, no level consumed.
 8. If `config.constant != 0`: `eval.AddNew(ct, -constant)` — shift back.
 
@@ -1506,12 +1532,12 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 
 **7.1.3 Bootstrap key transport:**
 
-The `Model.ClientParams()` already returns `bootstrap_slots` and `boot_logp` in the key manifest. The client uses these to construct `bootstrapping.Parameters` and generate `bootstrapping.EvaluationKeys` (the WASM bridge already supports this via `btpParamsGenEvaluationKeys` in `js/lattigo/bridge/bootstrap.go`).
+The `Model.ClientParams()` already returns `bootstrap_slots`, `boot_logp`, and `btp_logn` in the key manifest. The client uses these to construct `bootstrapping.Parameters` and generate `bootstrapping.EvaluationKeys` (the WASM bridge already supports this via `btpParamsGenEvaluationKeys` in `js/lattigo/bridge/bootstrap.go`).
 
 For the Go evaluator (Python `orion_evaluator` package):
 
 - `Evaluator.__init__` accepts an additional `btp_keys_bytes: bytes | None` parameter. When non-None, the Go side unmarshals it as `bootstrapping.EvaluationKeys`.
-- The `.orion` model file already contains `boot_logp` and `bootstrap_slots` in the manifest, which are sufficient to reconstruct `bootstrapping.Parameters` during evaluator construction.
+- The `.orion` model file contains `boot_logp`, `btp_logn`, and `bootstrap_slots` in the manifest, which are sufficient to reconstruct `bootstrapping.Parameters` during evaluator construction.
 
 For the WASM demo server:
 
@@ -1559,8 +1585,19 @@ Note: the earlier claim that YOLO requires "multi-ciphertext packing" is incorre
 
 #### Phase 7 acceptance checklist
 
+**Bootstrap dimension and parameter plumbing:**
+
+- [ ] `CKKSParams` has `btp_logn: int | None` field (defaults to `logn` when `boot_logp` is set)
+- [ ] `CKKSParams.to_bridge_json()` includes `btp_logn`
+- [ ] Go bridge sets `LogNthRoot = btp_logn + 1` when constructing CKKS parameters (ensures primes satisfy `q ≡ 1 mod 2^(btp_logn+1)`)
+- [ ] `KeyManifest` includes `btp_logn` field
+- [ ] `.orion` format: `params.btp_logn` and `manifest.btp_logn` fields present
+- [ ] `HeaderParams` and `HeaderManifest` Go structs have `BtpLogN` field
+
+**Go evaluator bootstrap support:**
+
 - [ ] `Evaluator` struct has `bootstrappers map[int]*bootstrapping.Evaluator` field
-- [ ] `NewEvaluatorFromKeySet` accepts optional bootstrap keys (no explicit `btpParams` — reconstructed from model manifest)
+- [ ] `NewEvaluatorFromKeySet` accepts optional bootstrap keys (no explicit `btpParams` — reconstructed from model manifest using `btp_logn` + `boot_logp`)
 - [ ] `evalBootstrap` implements the full bootstrap sequence (constant→prescale→sparse dims→bootstrap→postscale→restore dims→un-constant)
 - [ ] `TestEvalBootstrap` passes — synthetic model with bootstrap node, values preserved within calibrated tolerance
 - [ ] `TestForwardWithBootstrap` passes — compiled model triggering bootstrap, E2E with keygen+encrypt+evaluate+decrypt
@@ -1568,11 +1605,17 @@ Note: the earlier claim that YOLO requires "multi-ciphertext packing" is incorre
 - [ ] `orion_evaluator.Evaluator.__init__` accepts `btp_keys_bytes` parameter
 - [ ] WASM demo server has `POST /session/{id}/keys/bootstrap` endpoint
 - [ ] WASM demo client uploads bootstrap keys when `manifest.bootstrap_slots` is non-empty
+
+**CIFAR-10 examples:**
+
 - [ ] `examples/alexnet/` — model.py, train.py, run.py, README.md all present and working
 - [ ] `examples/vgg/` — same structure, working, includes bootstrap
 - [ ] `examples/resnet/` — same structure, working, includes bootstrap across residual paths
 - [ ] Each `run.py` produces correct FHE output E2E (MAE within calibrated tolerance per model)
-- [ ] Each `README.md` documents CKKS parameter choices, bootstrap count, expected inference time, and FHE precision
+- [ ] Each `README.md` documents CKKS parameter choices (including `btp_logn`), bootstrap count, bootstrap key size, expected inference time, and FHE precision
+
+**Cleanup:**
+
 - [ ] `models/` directory deleted
 - [ ] No imports of `orion.nn` or `orion_compiler.models` anywhere in the codebase
 
