@@ -153,32 +153,39 @@ Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/
 
 ### Task 8: VGG CIFAR-10 example
 
-- [ ] Create `examples/vgg/model.py` — port from `models/vgg.py` using `orion_compiler.nn` (ReLU via minimax sign approximation, ~15 levels/activation)
-- [ ] Create `examples/vgg/train.py` — CIFAR-10 training
-- [ ] Create `examples/vgg/run.py` — FHE pipeline with bootstrap (VGG16 has 13 ReLU activations → multiple bootstraps)
-- [ ] Determine CKKS parameters (likely `logn=16` given depth)
-- [ ] Verify `run.py` compiles and produces correct compilation graph
-- [ ] Create `examples/vgg/README.md` — document CKKS params, bootstrap count, bootstrap key size, expected inference time, FHE precision
-- [ ] Run cleartext forward pass to verify model correctness (no FHE — see Note below)
+> **MEMORY WARNING:** VGG16 compilation at logn=16 OOMs on 38GB machines (diagonal
+> packing of 13 conv layers with up to 512 channels produces multi-GB weight matrices).
+> Do NOT attempt compilation on this machine. Only verify cleartext forward pass.
+> Compilation and FHE E2E are deferred to Post-Completion (64+ GB machine).
+
+- [x] Create `examples/vgg/model.py` — port from `models/vgg.py` using `orion_compiler.nn` (ReLU via minimax sign approximation, ~15 levels/activation)
+- [x] Create `examples/vgg/train.py` — CIFAR-10 training
+- [x] Create `examples/vgg/run.py` — FHE pipeline with bootstrap (cleartext-only path verified, FHE path present but untested)
+- [ ] Create `examples/vgg/README.md` — document expected CKKS params (logn=16), note that compilation/FHE requires 64+ GB RAM
+- [ ] Run cleartext forward pass to verify model correctness (`python run.py --cleartext-only`)
 
 ### Task 9: ResNet CIFAR-10 example
 
+> **MEMORY WARNING:** ResNet20 at logn=16 OOMs on 38GB machines — both compilation
+> (large diagonal matrices) and bootstrapper generation (38 bootstraps). Do NOT attempt
+> compilation on this machine. Only verify cleartext forward pass.
+
 - [ ] Create `examples/resnet/model.py` — ResNet20 (BasicBlock, [3,3,3], [16,32,64]) using `orion_compiler.nn`, port from `models/resnet.py`
 - [ ] Create `examples/resnet/train.py` — CIFAR-10 training
-- [ ] Create `examples/resnet/run.py` — FHE pipeline with bootstrap across residual (branching) DAG paths
-- [ ] Use reference CKKS params: `logn=16`, `logq=[55,40x10]`, `logp=[61x3]`, `boot_logp=[61x8]`
-- [ ] Verify bootstrap nodes are correctly placed on both main path and shortcut path (inspect compilation graph)
-- [ ] Create `examples/resnet/README.md` — document CKKS params, bootstrap count, bootstrap key size, expected inference time, FHE precision
-- [ ] Run cleartext forward pass to verify model correctness (no FHE — see Note below)
+- [ ] Create `examples/resnet/run.py` — FHE pipeline with bootstrap across residual (branching) DAG paths (cleartext-only path verified, FHE path present but untested). Use reference CKKS params: `logn=16`, `logq=[55,40x10]`, `logp=[61x3]`, `boot_logp=[61x8]`
+- [ ] Create `examples/resnet/README.md` — document expected CKKS params (logn=16), 38 bootstraps, note that compilation/FHE requires 64+ GB RAM
+- [ ] Run cleartext forward pass to verify model correctness (`python run.py --cleartext-only`)
 
-> **Note: CIFAR-10 FHE E2E is infeasible on <64GB machines.**
-> Benchmarked with original Orion: ResNet20 at logn=16 requires 38 bootstrap operations
-> (bootstrappers for logslots=14, 13, 12). The scheme OOMs during bootstrapper generation
-> on a 38GB machine — before keygen even starts. Bootstrap keys alone are ~5.8 GB at
-> logn=16. VGG would be heavier. Full FHE E2E verification is deferred to Post-Completion
-> (requires 64+ GB machine). During implementation, validate: (1) cleartext forward pass,
-> (2) compilation graph correctness (bootstrap placement, level assignment), and
-> (3) bootstrap correctness via Go evaluator unit tests at logn=14 (Task 4).
+> **Note: CIFAR-10 compilation and FHE E2E are infeasible on <64GB machines.**
+> VGG16 compilation at logn=16 OOMed on 38GB (diagonal packing of conv weight matrices).
+> ResNet20 at logn=16 OOMs during bootstrapper generation (38 bootstraps, logslots=14/13/12).
+> Bootstrap keys alone are ~5.8 GB at logn=16. Full compilation and FHE E2E verification
+> are deferred to Post-Completion (requires 64+ GB machine).
+>
+> Bootstrap correctness is validated by Go evaluator unit tests at logn=14 (Task 4):
+> MLP with 1 bootstrap, full E2E, 22.9 bits precision, 3 GB RSS.
+> Compilation graph correctness is validated by AlexNet at logn=15 (Task 7):
+> 3 bootstraps, input level 20, 4.5 GB model.
 
 ### Task 10: Cleanup legacy models
 
@@ -193,7 +200,7 @@ Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/
 - [ ] Verify bootstrap parameter plumbing: `btp_logn` flows through CKKSParams → bridge → .orion → Go structs
 - [ ] Verify Go evaluator: `evalBootstrap` handles full sequence, lazy bootstrapper init works
 - [ ] Verify key transport: Python evaluator accepts btp_keys_bytes, WASM demo has bootstrap endpoint
-- [ ] Verify all three CIFAR-10 examples compile correctly and pass cleartext forward
+- [ ] Verify all three CIFAR-10 examples pass cleartext forward (`python run.py --cleartext-only`). AlexNet compilation already verified (Task 7). VGG/ResNet compilation deferred to Post-Completion (OOMs at logn=16 on 38GB)
 - [ ] **Bootstrap E2E acceptance test:** MLP at logn=14 with 1 bootstrap runs through full v2 pipeline (compile → serialize .orion → load in Go evaluator → keygen → encrypt → forward with bootstrap → decrypt → compare). Params: `logn=14, logq=[55,40,40,40], logp=[61,61], logscale=40, boot_logp=[61x6], ring_type=standard, h=192`. Must achieve >=20 bits precision. Peak RSS must stay under 4 GB.
 - [ ] Run full test suite: `pytest python/tests/` + `go test ./evaluator/...` + `cd js/lattigo && npm test`
 - [ ] Run linter: `go vet ./...`
