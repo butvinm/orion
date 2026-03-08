@@ -47,6 +47,16 @@ cd examples/lenet && python run.py
 cd examples/lola && python run.py
 ```
 
+#### CIFAR-10 examples (bootstrap-enabled)
+
+Full FHE inference for CIFAR-10 models requires 64+ GB RAM. Use `--cleartext-only` to verify model correctness on any machine:
+
+```bash
+cd examples/alexnet && python run.py --cleartext-only
+cd examples/vgg && python run.py --cleartext-only
+cd examples/resnet && python run.py --cleartext-only
+```
+
 ### Browser Demo
 
 See [`examples/wasm-demo/`](examples/wasm-demo/) for a browser-based demo that performs encrypted MNIST inference. The client runs Lattigo compiled to WASM — the secret key never leaves the browser.

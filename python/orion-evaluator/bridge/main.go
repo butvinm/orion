@@ -52,6 +52,16 @@ func goSliceToCBytes(data []byte) (*C.char, C.ulong) {
 	return (*C.char)(ptr), C.ulong(len(data))
 }
 
+// cBytesToGoSlice copies C bytes to a Go byte slice.
+// Uses unsafe.Slice instead of C.GoBytes to support data larger than 2 GB
+// (C.GoBytes takes C.int which is 32-bit, truncating lengths > 2^31).
 func cBytesToGoSlice(data *C.char, dataLen C.ulong) []byte {
-	return C.GoBytes(unsafe.Pointer(data), C.int(dataLen))
+	n := int(dataLen)
+	if n == 0 {
+		return nil
+	}
+	src := unsafe.Slice((*byte)(unsafe.Pointer(data)), n)
+	dst := make([]byte, n)
+	copy(dst, src)
+	return dst
 }

@@ -117,9 +117,11 @@ def main():
     btp_keys_bytes = None
     bootstrap_slots = manifest.get("bootstrap_slots", [])
     if bootstrap_slots:
-        print(f"WARNING: Model requires bootstrap (slots: {bootstrap_slots})")
+        print(f"Model requires bootstrap (slots: {bootstrap_slots})")
         print("Bootstrap key generation not yet available in Python lattigo bindings")
-        print("Full FHE E2E requires 64+ GB RAM — skipping bootstrap keys")
+        print("Full FHE E2E requires 64+ GB RAM — skipping FHE inference")
+        print("Use --cleartext-only to verify model correctness")
+        return
 
     evaluator = Evaluator(params_dict, keys_bytes, btp_keys_bytes=btp_keys_bytes)
 

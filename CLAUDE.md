@@ -12,7 +12,7 @@ See `ARCH.md` for the full target architecture, compiled model format specificat
 
 ## Repository Structure
 
-Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). MNIST examples in `examples/{mlp,lenet,lola}/` — each has `model.py`, `train.py`, `run.py`, `README.md`. See `ARCH.md § Repo Structure` for the full directory tree.
+Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). MNIST examples in `examples/{mlp,lenet,lola}/`, CIFAR-10 examples in `examples/{alexnet,vgg,resnet}/` — each has `model.py`, `train.py`, `run.py`, `README.md`. See `ARCH.md § Repo Structure` for the full directory tree.
 
 **Dependency graph:** `lattigo` ← `orion-compiler` (+ torch, networkx). `orion-evaluator` is independent. `js/lattigo` depends only on Lattigo (no Orion-specific code).
 
@@ -129,7 +129,7 @@ output = encoder.decode(result_pt, params.max_slots())
 - `orion_compiler.nn` — FHE-compatible layers (cleartext-only forward)
 - `orion_compiler.core` — Compilation algorithms (tracer, packing, level assignment, auto-bootstrap, galois)
 - `orion_evaluator.Model` — `load()`, `client_params()`, `close()`
-- `orion_evaluator.Evaluator` — `__init__(params, keys_bytes)`, `forward(model, ct_bytes) → bytes`, `close()`
+- `orion_evaluator.Evaluator` — `__init__(params, keys_bytes, btp_keys_bytes=None)`, `forward(model, ct_bytes) → bytes`, `close()`
 
 ### Go evaluator (`evaluator/`)
 

@@ -1,13 +1,13 @@
-"""Full FHE pipeline for ResNet20 on CIFAR-10.
+"""Full FHE pipeline for VGG16 on CIFAR-10.
 
 Compile -> keygen -> encrypt -> evaluate -> decrypt -> print MAE.
 
-NOTE: ResNet20 at logn=16 with 38 bootstrap operations OOMs on machines with
-less than 64 GB RAM (during bootstrapper generation). Use --cleartext-only to
+NOTE: VGG16 at logn=16 with 13 ReLU activations triggers many bootstrap operations.
+Full FHE E2E requires 64+ GB RAM. On smaller machines, use --cleartext-only to
 verify model correctness without FHE encryption.
 
 Usage:
-    cd examples/resnet
+    cd examples/vgg
     python run.py                  # Full FHE pipeline
     python run.py --cleartext-only # Cleartext forward pass only
 """
@@ -15,7 +15,7 @@ Usage:
 import argparse
 import os
 import torch
-from model import ResNet20
+from model import VGG
 from orion_compiler import Compiler, CKKSParams
 
 
@@ -29,12 +29,12 @@ def compile_model(net, test_input):
     """Compile the model and return compiled model."""
     ckks_params = CKKSParams(
         logn=16,
-        logq=[55] + [40] * 10,
+        logq=[55] + [40] * 20,
         logp=[61, 61, 61],
         logscale=40,
         h=192,
         ring_type="standard",
-        boot_logp=[61] * 8,
+        boot_logp=[61] * 6,
     )
     compiler = Compiler(net, ckks_params)
     compiler.fit(test_input)
@@ -52,7 +52,7 @@ def main():
 
     # 1. Instantiate model, optionally load trained weights
     torch.manual_seed(42)
-    net = ResNet20()
+    net = VGG("VGG16")
     weights_path = os.path.join(os.path.dirname(__file__), "weights.pt")
     if os.path.exists(weights_path):
         checkpoint = torch.load(weights_path, map_location="cpu", weights_only=True)
@@ -109,7 +109,7 @@ def main():
     evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
     keys_bytes = evk.marshal_binary()
 
-    # Bootstrap keys — ResNet20 at logn=16 triggers ~38 bootstrap operations.
+    # Bootstrap keys — VGG16 at logn=16 triggers many bootstrap operations.
     # Bootstrap key generation requires lattigo bootstrap bindings (not yet
     # exposed in Python lattigo package) and ~5.8 GB RAM for keys alone.
     # Full FHE E2E at logn=16 requires 64+ GB RAM.
