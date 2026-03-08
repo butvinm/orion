@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/bits"
 	"os"
 	"sort"
 	"testing"
@@ -262,7 +263,7 @@ func TestForwardWithBootstrap(t *testing.T) {
 
 	var btpKeys *bootstrapping.EvaluationKeys
 	if len(manifest.BootstrapSlots) > 0 {
-		logSlots := int(math.Log2(float64(manifest.BootstrapSlots[0])))
+		logSlots := bits.Len(uint(manifest.BootstrapSlots[0])) - 1
 		btpLit := bootstrapping.ParametersLiteral{
 			LogN:     utils.Pointy(manifest.BtpLogN),
 			LogP:     manifest.BootLogP,

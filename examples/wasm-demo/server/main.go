@@ -285,14 +285,17 @@ func (s *Server) HandleBootstrapKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Quick state check before expensive body read to reject finalized sessions early.
 	sess.mu.Lock()
-	defer sess.mu.Unlock()
-
-	if sess.state == sessionReady {
+	ready := sess.state == sessionReady
+	sess.mu.Unlock()
+	if ready {
 		http.Error(w, "session already finalized", http.StatusConflict)
 		return
 	}
 
+	// Read and unmarshal body without holding session lock to avoid blocking
+	// other operations during a potentially slow multi-GB network read.
 	r.Body = http.MaxBytesReader(w, r.Body, maxBootstrapKeyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -307,6 +310,14 @@ func (s *Server) HandleBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	btpKeys := &bootstrapping.EvaluationKeys{}
 	if err := btpKeys.UnmarshalBinary(body); err != nil {
 		http.Error(w, fmt.Sprintf("unmarshaling bootstrap keys: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+
+	if sess.state == sessionReady {
+		http.Error(w, "session already finalized", http.StatusConflict)
 		return
 	}
 
@@ -470,17 +481,22 @@ func (s *Server) StartCleanup(ctx context.Context, interval time.Duration) {
 	}()
 }
 
-// cleanupExpired removes pending sessions whose lastActivity exceeds sessionTimeout.
+// cleanupExpired removes sessions whose lastActivity exceeds sessionTimeout.
+// Both pending and ready sessions are cleaned up to prevent memory leaks.
 func (s *Server) cleanupExpired() {
 	now := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, sess := range s.sessions {
 		sess.mu.Lock()
-		expired := sess.state == sessionPending && now.Sub(sess.lastActivity) > s.sessionTimeout
+		expired := now.Sub(sess.lastActivity) > s.sessionTimeout
+		eval := sess.eval
 		sess.mu.Unlock()
 		if expired {
 			log.Printf("cleaning up expired session %s", id)
+			if eval != nil {
+				eval.Close()
+			}
 			delete(s.sessions, id)
 		}
 	}

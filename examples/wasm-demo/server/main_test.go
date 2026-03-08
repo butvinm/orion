@@ -855,7 +855,8 @@ func TestCleanupExpiredPendingSessions(t *testing.T) {
 	// Run cleanup.
 	srv.cleanupExpired()
 
-	// Pending session should be gone.
+	// Both sessions should be gone after timeout (ready sessions are also
+	// cleaned up to prevent memory leaks from accumulated evaluators).
 	srv.mu.Lock()
 	_, pendingExists := srv.sessions[pendingID]
 	_, readyExists := srv.sessions[readyID]
@@ -864,8 +865,8 @@ func TestCleanupExpiredPendingSessions(t *testing.T) {
 	if pendingExists {
 		t.Error("expected pending session to be cleaned up after timeout")
 	}
-	if !readyExists {
-		t.Error("ready session should NOT be cleaned up")
+	if readyExists {
+		t.Error("expected ready session to be cleaned up after timeout")
 	}
 }
 

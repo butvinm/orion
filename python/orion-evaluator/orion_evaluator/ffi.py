@@ -97,9 +97,12 @@ def _setup_prototypes(lib):
 
 def _ensure_prototypes():
     global _prototypes_set
+    if _prototypes_set:
+        return
+    lib = _get_lib()  # acquires/releases _lib_lock internally
     with _lib_lock:
         if not _prototypes_set:
-            _setup_prototypes(_get_lib())
+            _setup_prototypes(lib)
             _prototypes_set = True
 
 
