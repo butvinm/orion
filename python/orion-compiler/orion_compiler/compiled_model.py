@@ -159,6 +159,7 @@ class KeyManifest:
     galois_elements: frozenset[int]
     bootstrap_slots: tuple[int, ...]
     boot_logp: tuple[int, ...] | None
+    btp_logn: int | None
     needs_rlk: bool
 
     def __post_init__(self):
@@ -183,6 +184,7 @@ class KeyManifest:
             "galois_elements": sorted(self.galois_elements),
             "bootstrap_slots": list(self.bootstrap_slots),
             "boot_logp": list(self.boot_logp) if self.boot_logp else None,
+            "btp_logn": self.btp_logn,
             "needs_rlk": self.needs_rlk,
         }
 
@@ -192,6 +194,7 @@ class KeyManifest:
             galois_elements=frozenset(d["galois_elements"]),
             bootstrap_slots=tuple(d["bootstrap_slots"]),
             boot_logp=tuple(d["boot_logp"]) if d.get("boot_logp") else None,
+            btp_logn=d.get("btp_logn"),
             needs_rlk=d["needs_rlk"],
         )
 
@@ -338,6 +341,7 @@ class CompiledModel:
                     if self.params.boot_logp
                     else None
                 ),
+                "btp_logn": self.params.btp_logn,
             },
             "config": {
                 "margin": self.config.margin,
@@ -365,6 +369,7 @@ class CompiledModel:
             h=p["h"],
             ring_type=p["ring_type"],
             boot_logp=tuple(p["boot_logp"]) if p.get("boot_logp") else None,
+            btp_logn=p.get("btp_logn"),
         )
 
         c = metadata["config"]

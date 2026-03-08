@@ -25,6 +25,7 @@ class CKKSParams:
     h: int = 192
     ring_type: Literal["conjugate_invariant", "standard"] = "conjugate_invariant"
     boot_logp: tuple[int, ...] | None = None
+    btp_logn: int | None = None
 
     def __post_init__(self):
         if self.logn <= 0:
@@ -51,6 +52,9 @@ class CKKSParams:
             object.__setattr__(self, "logp", tuple(self.logp))
         if isinstance(self.boot_logp, list):
             object.__setattr__(self, "boot_logp", tuple(self.boot_logp))
+        # Default btp_logn to logn when boot_logp is set
+        if self.btp_logn is None and self.boot_logp is not None:
+            object.__setattr__(self, "btp_logn", self.logn)
 
     @property
     def max_level(self) -> int:
@@ -85,6 +89,8 @@ class CKKSParams:
         }
         if self.boot_logp is not None:
             d["boot_logp"] = list(self.boot_logp)
+        if self.btp_logn is not None:
+            d["btp_logn"] = self.btp_logn
         return json.dumps(d)
 
 

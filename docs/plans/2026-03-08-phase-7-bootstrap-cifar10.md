@@ -51,18 +51,18 @@ Key deliverables:
 
 ### Task 1: Add `btp_logn` to CKKSParams and KeyManifest (Python)
 
-- [ ] Add `btp_logn: int | None = None` field to `CKKSParams` in `params.py` (after `boot_logp`)
-- [ ] In `CKKSParams.__post_init__`: default `btp_logn` to `logn` when `boot_logp` is set and `btp_logn` is None. **Note:** `CKKSParams` is `frozen=True` — must use `object.__setattr__(self, "btp_logn", self.logn)`
-- [ ] Add `btp_logn` to `CKKSParams.to_bridge_json()` (params.py:76-88). Only include when not None (same pattern as `boot_logp`), otherwise Go gets `"btp_logn": null` which won't unmarshal to `int`
-- [ ] Add `btp_logn: int | None` field to `KeyManifest` in `compiled_model.py`
-- [ ] Add `btp_logn` to `KeyManifest.to_dict()` (compiled_model.py:181)
-- [ ] Parse `btp_logn` in `KeyManifest.from_dict()` (compiled_model.py:189)
-- [ ] Add `btp_logn` to `CompiledModel.to_bytes()` params dict (compiled_model.py:329)
-- [ ] Parse `btp_logn` in `CompiledModel.from_bytes()` CKKSParams construction (compiled_model.py:360)
-- [ ] Populate `btp_logn` in `KeyManifest` during compilation (wherever manifest is constructed)
-- [ ] Write tests for `CKKSParams` btp_logn defaulting behavior (None→logn when boot_logp set, None stays None when no boot_logp)
-- [ ] Write tests for round-trip serialization of btp_logn in CompiledModel (both with and without bootstrap)
-- [ ] Run `pytest python/tests/` — must pass before next task
+- [x] Add `btp_logn: int | None = None` field to `CKKSParams` in `params.py` (after `boot_logp`)
+- [x] In `CKKSParams.__post_init__`: default `btp_logn` to `logn` when `boot_logp` is set and `btp_logn` is None. **Note:** `CKKSParams` is `frozen=True` — must use `object.__setattr__(self, "btp_logn", self.logn)`
+- [x] Add `btp_logn` to `CKKSParams.to_bridge_json()` (params.py:76-88). Only include when not None (same pattern as `boot_logp`), otherwise Go gets `"btp_logn": null` which won't unmarshal to `int`
+- [x] Add `btp_logn: int | None` field to `KeyManifest` in `compiled_model.py`
+- [x] Add `btp_logn` to `KeyManifest.to_dict()` (compiled_model.py:181)
+- [x] Parse `btp_logn` in `KeyManifest.from_dict()` (compiled_model.py:189)
+- [x] Add `btp_logn` to `CompiledModel.to_bytes()` params dict (compiled_model.py:329)
+- [x] Parse `btp_logn` in `CompiledModel.from_bytes()` CKKSParams construction (compiled_model.py:360)
+- [x] Populate `btp_logn` in `KeyManifest` during compilation (wherever manifest is constructed)
+- [x] Write tests for `CKKSParams` btp_logn defaulting behavior (None→logn when boot_logp set, None stays None when no boot_logp)
+- [x] Write tests for round-trip serialization of btp_logn in CompiledModel (both with and without bootstrap)
+- [x] Run `pytest python/tests/` — must pass before next task
 
 ### Task 2: Add `BtpLogN` to Go structs (params.go, keys.go, format.go, model.go)
 

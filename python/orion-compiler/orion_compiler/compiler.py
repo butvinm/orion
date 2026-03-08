@@ -349,6 +349,9 @@ class Compiler:
             boot_logp=tuple(self.params.get_boot_logp())
             if bootstrapper_slots
             else None,
+            btp_logn=self.ckks_params.btp_logn
+            if bootstrapper_slots
+            else None,
             needs_rlk=True,
         )
 

@@ -85,6 +85,30 @@ class TestCKKSParams:
         with pytest.raises(ValueError, match="ring_type must be one of"):
             self._default_params(ring_type="invalid")
 
+    def test_btp_logn_defaults_to_logn_when_boot_logp_set(self):
+        p = self._default_params(boot_logp=(61, 61))
+        assert p.btp_logn == 14  # defaults to logn
+
+    def test_btp_logn_stays_none_when_no_boot_logp(self):
+        p = self._default_params()
+        assert p.btp_logn is None
+
+    def test_btp_logn_explicit_overrides_default(self):
+        p = self._default_params(boot_logp=(61, 61), btp_logn=16)
+        assert p.btp_logn == 16
+
+    def test_btp_logn_in_bridge_json(self):
+        import json
+        p = self._default_params(boot_logp=(61, 61), btp_logn=15)
+        d = json.loads(p.to_bridge_json())
+        assert d["btp_logn"] == 15
+
+    def test_btp_logn_absent_from_bridge_json_when_none(self):
+        import json
+        p = self._default_params()
+        d = json.loads(p.to_bridge_json())
+        assert "btp_logn" not in d
+
 
 # ---------------------------------------------------------------------------
 # CompilerConfig
@@ -120,10 +144,12 @@ class TestKeyManifest:
             galois_elements=frozenset({5, 25, 125}),
             bootstrap_slots=(4096,),
             boot_logp=(61, 61),
+            btp_logn=14,
             needs_rlk=True,
         )
         assert m.galois_elements == frozenset({5, 25, 125})
         assert m.bootstrap_slots == (4096,)
+        assert m.btp_logn == 14
         assert m.needs_rlk is True
 
     def test_no_bootstrap(self):
@@ -131,10 +157,12 @@ class TestKeyManifest:
             galois_elements=frozenset({5}),
             bootstrap_slots=(),
             boot_logp=None,
+            btp_logn=None,
             needs_rlk=False,
         )
         assert m.bootstrap_slots == ()
         assert m.boot_logp is None
+        assert m.btp_logn is None
 
     def test_bootstrap_without_boot_logp_raises(self):
         with pytest.raises(ValueError, match="boot_logp must not be None"):
@@ -142,6 +170,7 @@ class TestKeyManifest:
                 galois_elements=frozenset(),
                 bootstrap_slots=(4096,),
                 boot_logp=None,
+                btp_logn=14,
                 needs_rlk=True,
             )
 
@@ -150,6 +179,7 @@ class TestKeyManifest:
             galois_elements={5, 25},
             bootstrap_slots=[4096],
             boot_logp=[61],
+            btp_logn=14,
             needs_rlk=True,
         )
         assert isinstance(m.galois_elements, frozenset)
@@ -161,6 +191,7 @@ class TestKeyManifest:
             galois_elements=frozenset({5, 25, 125}),
             bootstrap_slots=(4096,),
             boot_logp=(61, 61),
+            btp_logn=14,
             needs_rlk=True,
         )
         d = m.to_dict()
@@ -168,6 +199,7 @@ class TestKeyManifest:
         assert m2.galois_elements == m.galois_elements
         assert m2.bootstrap_slots == m.bootstrap_slots
         assert m2.boot_logp == m.boot_logp
+        assert m2.btp_logn == m.btp_logn
         assert m2.needs_rlk == m.needs_rlk
 
 
@@ -196,6 +228,7 @@ def _sample_compiled_model():
         galois_elements=frozenset({5, 25}),
         bootstrap_slots=(),
         boot_logp=None,
+        btp_logn=None,
         needs_rlk=True,
     )
     cost = CostProfile(bootstrap_count=0, galois_key_count=2, bootstrap_key_count=0)
@@ -265,6 +298,7 @@ class TestCompiledModel:
                 galois_elements=frozenset(),
                 bootstrap_slots=(),
                 boot_logp=None,
+                btp_logn=None,
                 needs_rlk=False,
             ),
             input_level=1,
@@ -294,6 +328,7 @@ class TestCompiledModel:
                 galois_elements=frozenset(),
                 bootstrap_slots=(),
                 boot_logp=None,
+                btp_logn=None,
                 needs_rlk=False,
             ),
             input_level=1,
@@ -305,6 +340,52 @@ class TestCompiledModel:
         data = cm.to_bytes()
         cm2 = CompiledModel.from_bytes(data)
         assert cm2.blobs[0] == big_blob
+
+    def test_serialization_roundtrip_with_bootstrap(self):
+        """Verify btp_logn round-trips through to_bytes/from_bytes."""
+        params = CKKSParams(
+            logn=14, logq=(55, 40, 40, 40), logp=(61, 61),
+            logscale=40, ring_type="standard",
+            boot_logp=(61, 61, 61, 61, 61, 61),
+        )
+        graph = Graph(
+            input="x", output="x",
+            nodes=[GraphNode(name="x", op="flatten", level=0, depth=0)],
+            edges=[],
+        )
+        manifest = KeyManifest(
+            galois_elements=frozenset({5}),
+            bootstrap_slots=(128,),
+            boot_logp=(61, 61, 61, 61, 61, 61),
+            btp_logn=14,
+            needs_rlk=True,
+        )
+        cm = CompiledModel(
+            params=params,
+            config=CompilerConfig(),
+            manifest=manifest,
+            input_level=3,
+            cost=CostProfile(bootstrap_count=1, galois_key_count=1,
+                             bootstrap_key_count=1),
+            graph=graph,
+            blobs=[],
+        )
+        data = cm.to_bytes()
+        cm2 = CompiledModel.from_bytes(data)
+        assert cm2.params.btp_logn == 14
+        assert cm2.params.boot_logp == (61, 61, 61, 61, 61, 61)
+        assert cm2.manifest.btp_logn == 14
+        assert cm2.manifest.boot_logp == (61, 61, 61, 61, 61, 61)
+        assert cm2.manifest.bootstrap_slots == (128,)
+
+    def test_serialization_roundtrip_without_bootstrap(self):
+        """Verify btp_logn=None round-trips correctly."""
+        cm = _sample_compiled_model()
+        data = cm.to_bytes()
+        cm2 = CompiledModel.from_bytes(data)
+        assert cm2.params.btp_logn is None
+        assert cm2.params.boot_logp is None
+        assert cm2.manifest.btp_logn is None
 
 
 # ---------------------------------------------------------------------------
