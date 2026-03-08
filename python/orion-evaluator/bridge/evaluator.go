@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"runtime/cgo"
 
+	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 
 	orion "github.com/baahl-nyu/orion"
@@ -80,10 +81,11 @@ func EvalModelClose(modelH C.uintptr_t) {
 // =====================================================================
 
 // EvalNewEvaluator creates a new Evaluator from CKKS params JSON and
-// MemEvaluationKeySet binary bytes.
+// MemEvaluationKeySet binary bytes. btpKeysData/btpKeysDataLen are optional
+// bootstrap evaluation keys (pass NULL/0 when not needed).
 //
 //export EvalNewEvaluator
-func EvalNewEvaluator(paramsJSON *C.char, keysData *C.char, keysDataLen C.ulong, errOut **C.char) C.uintptr_t {
+func EvalNewEvaluator(paramsJSON *C.char, keysData *C.char, keysDataLen C.ulong, btpKeysData *C.char, btpKeysDataLen C.ulong, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 
 	// Parse CKKS params.
@@ -106,7 +108,18 @@ func EvalNewEvaluator(paramsJSON *C.char, keysData *C.char, keysDataLen C.ulong,
 		return 0
 	}
 
-	eval, err := evaluator.NewEvaluatorFromKeySet(ckksParams, evk, nil)
+	// Unmarshal bootstrap keys if provided.
+	var btpKeys *bootstrapping.EvaluationKeys
+	if btpKeysData != nil && btpKeysDataLen > 0 {
+		goBtpData := cBytesToGoSlice(btpKeysData, btpKeysDataLen)
+		btpKeys = new(bootstrapping.EvaluationKeys)
+		if err := btpKeys.UnmarshalBinary(goBtpData); err != nil {
+			setErr(errOut, "unmarshalling bootstrap keys: "+err.Error())
+			return 0
+		}
+	}
+
+	eval, err := evaluator.NewEvaluatorFromKeySet(ckksParams, evk, btpKeys)
 	if err != nil {
 		setErr(errOut, "creating evaluator: "+err.Error())
 		return 0

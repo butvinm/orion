@@ -77,6 +77,7 @@ def _setup_prototypes(lib):
     lib.EvalNewEvaluator.argtypes = [
         ctypes.c_char_p,  # params JSON
         ctypes.c_void_p, ctypes.c_ulong,  # keys data
+        ctypes.c_void_p, ctypes.c_ulong,  # btp keys data (optional, NULL/0 when not needed)
         _errout,
     ]
     lib.EvalNewEvaluator.restype = _uintptr
@@ -181,14 +182,22 @@ def delete_handle(handle: int):
 # =========================================================================
 
 
-def new_evaluator(params_json: str, keys_bytes: bytes) -> int:
+def new_evaluator(params_json: str, keys_bytes: bytes, btp_keys_bytes: bytes | None = None) -> int:
     """Create evaluator from params JSON and MemEvaluationKeySet bytes. Returns raw handle."""
     lib = _lib_call()
     err = _make_errout()
     ptr, length = _bytes_ptr(keys_bytes)
+
+    if btp_keys_bytes is not None:
+        btp_ptr, btp_length = _bytes_ptr(btp_keys_bytes)
+    else:
+        btp_ptr = None
+        btp_length = ctypes.c_ulong(0)
+
     h = lib.EvalNewEvaluator(
         params_json.encode("utf-8"),
         ptr, length,
+        btp_ptr, btp_length,
         ctypes.byref(err),
     )
     _check_err(err)

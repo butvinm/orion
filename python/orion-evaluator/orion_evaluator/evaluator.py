@@ -21,15 +21,16 @@ class Evaluator:
     """
     __slots__ = ('_handle',)
 
-    def __init__(self, params: dict, keys_bytes: bytes):
+    def __init__(self, params: dict, keys_bytes: bytes, btp_keys_bytes: bytes | None = None):
         """Create evaluator from CKKS params dict and MemEvaluationKeySet binary bytes.
 
         Args:
             params: CKKS params dict (as returned by Model.client_params()[0])
             keys_bytes: MemEvaluationKeySet.MarshalBinary() output
+            btp_keys_bytes: bootstrapping.EvaluationKeys.MarshalBinary() output (optional)
         """
         params_json = json.dumps(params)
-        self._handle = ffi.new_evaluator(params_json, keys_bytes)
+        self._handle = ffi.new_evaluator(params_json, keys_bytes, btp_keys_bytes)
 
     def forward(self, model: Model, ct_bytes: bytes) -> bytes:
         """Run FHE forward pass.

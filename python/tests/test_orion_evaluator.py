@@ -173,6 +173,140 @@ class TestEvaluatorLifecycle:
 
 
 # -----------------------------------------------------------------------
+# Bootstrap key parameter tests
+# -----------------------------------------------------------------------
+
+
+class TestBootstrapKeyParameter:
+    def test_evaluator_without_btp_keys_on_non_bootstrap_model(self):
+        """Evaluator(params, keys, btp_keys_bytes=None) works for non-bootstrap model."""
+        data = open(MLP_ORION, "rb").read()
+        model = Model.load(data)
+        params_dict, manifest, input_level = model.client_params()
+        params = Parameters.from_logn(**params_dict)
+
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
+        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
+        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        keys_bytes = evk.marshal_binary()
+
+        # Explicitly pass btp_keys_bytes=None
+        evaluator = Evaluator(params_dict, keys_bytes, btp_keys_bytes=None)
+        assert evaluator._handle != 0
+
+        evaluator.close()
+        evk.close()
+        for gk in gks:
+            gk.close()
+        if rlk:
+            rlk.close()
+        sk.close()
+        kg.close()
+        params.close()
+        model.close()
+        _cleanup()
+
+    def test_evaluator_positional_btp_keys_none(self):
+        """Evaluator(params, keys, None) works same as omitting btp_keys_bytes."""
+        data = open(MLP_ORION, "rb").read()
+        model = Model.load(data)
+        params_dict, manifest, input_level = model.client_params()
+        params = Parameters.from_logn(**params_dict)
+
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
+        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
+        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        keys_bytes = evk.marshal_binary()
+
+        # Pass None positionally (not keyword)
+        evaluator = Evaluator(params_dict, keys_bytes, None)
+        assert evaluator._handle != 0
+
+        evaluator.close()
+        evk.close()
+        for gk in gks:
+            gk.close()
+        if rlk:
+            rlk.close()
+        sk.close()
+        kg.close()
+        params.close()
+        model.close()
+        _cleanup()
+
+    def test_forward_without_btp_keys_e2e(self):
+        """E2E forward pass with explicit btp_keys_bytes=None works on non-bootstrap model."""
+        model_data = open(MLP_ORION, "rb").read()
+        model = Model.load(model_data)
+        params_dict, manifest, input_level = model.client_params()
+
+        params = Parameters.from_logn(**params_dict)
+        kg = KeyGenerator.new(params)
+        sk = kg.gen_secret_key()
+        pk = kg.gen_public_key(sk)
+        encoder = Encoder.new(params)
+        encryptor = Encryptor.new(params, pk)
+        decryptor = Decryptor.new(params, sk)
+
+        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
+        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        keys_bytes = evk.marshal_binary()
+
+        evaluator = Evaluator(params_dict, keys_bytes, btp_keys_bytes=None)
+
+        with open(MLP_INPUT) as f:
+            input_values = json.load(f)
+        max_slots = params.max_slots()
+        padded = input_values + [0.0] * (max_slots - len(input_values))
+        scale = params.default_scale()
+
+        pt = encoder.encode(padded, input_level, scale)
+        ct = encryptor.encrypt_new(pt)
+        ct_bytes = ct.marshal_binary()
+
+        result_bytes = evaluator.forward(model, ct_bytes)
+        assert isinstance(result_bytes, bytes)
+        assert len(result_bytes) > 0
+
+        from lattigo.rlwe import Ciphertext as RLWECiphertext
+        result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
+        result_pt = decryptor.decrypt_new(result_ct)
+        decoded = encoder.decode(result_pt, max_slots)
+
+        with open(MLP_EXPECTED) as f:
+            expected = json.load(f)
+
+        tolerance = 0.025
+        for i, v in enumerate(expected):
+            assert abs(v - decoded[i]) < tolerance
+
+        result_pt.close()
+        result_ct.close()
+        evaluator.close()
+        evk.close()
+        for gk in gks:
+            gk.close()
+        if rlk:
+            rlk.close()
+        ct.close()
+        pt.close()
+        decryptor.close()
+        encryptor.close()
+        pk.close()
+        sk.close()
+        kg.close()
+        encoder.close()
+        params.close()
+        model.close()
+        _cleanup()
+
+
+# -----------------------------------------------------------------------
 # E2E test: compile -> keygen+encrypt -> forward -> decrypt
 # -----------------------------------------------------------------------
 

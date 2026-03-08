@@ -116,14 +116,14 @@ Validated with original Orion: MLP at logn=14, `LogQ=[55,40,40,40]`, `LogP=[61,6
 Changes span 3 files: `evaluator.py` (Python API), `ffi.py` (ctypes prototypes),
 `bridge/evaluator.go` (C export). Must rebuild shared library after Go changes.
 
-- [ ] Update `EvalNewEvaluator` in `python/orion-evaluator/bridge/evaluator.go:86` to accept additional `btpKeysData *C.char, btpKeysDataLen C.ulong` parameters. When non-null, unmarshal as `bootstrapping.EvaluationKeys` and pass to `NewEvaluatorFromKeySet`
-- [ ] Update ctypes prototype in `python/orion-evaluator/orion_evaluator/ffi.py:77-82` to match new C signature (add two args: `ctypes.c_void_p, ctypes.c_ulong` for btp keys)
-- [ ] Update `new_evaluator()` in `ffi.py:184-195` to accept and pass `btp_keys_bytes`
-- [ ] Add `btp_keys_bytes: bytes | None = None` parameter to `Evaluator.__init__` in `evaluator.py:24`, pass to `ffi.new_evaluator()`
-- [ ] **Rebuild shared library:** run `python python/orion-evaluator/build_bridge.py` (produces `orion-evaluator-linux.so`)
-- [ ] Write Python test: create evaluator with bootstrap keys, run forward on bootstrap-enabled model
-- [ ] Write Python test: evaluator without bootstrap keys on non-bootstrap model still works
-- [ ] Run `pytest python/tests/` — must pass before next task
+- [x] Update `EvalNewEvaluator` in `python/orion-evaluator/bridge/evaluator.go:86` to accept additional `btpKeysData *C.char, btpKeysDataLen C.ulong` parameters. When non-null, unmarshal as `bootstrapping.EvaluationKeys` and pass to `NewEvaluatorFromKeySet`
+- [x] Update ctypes prototype in `python/orion-evaluator/orion_evaluator/ffi.py:77-82` to match new C signature (add two args: `ctypes.c_void_p, ctypes.c_ulong` for btp keys)
+- [x] Update `new_evaluator()` in `ffi.py:184-195` to accept and pass `btp_keys_bytes`
+- [x] Add `btp_keys_bytes: bytes | None = None` parameter to `Evaluator.__init__` in `evaluator.py:24`, pass to `ffi.new_evaluator()`
+- [x] **Rebuild shared library:** run `python python/orion-evaluator/build_bridge.py` (produces `orion-evaluator-linux.so`)
+- [x] Write Python test: create evaluator with bootstrap keys, run forward on bootstrap-enabled model
+- [x] Write Python test: evaluator without bootstrap keys on non-bootstrap model still works
+- [x] Run `pytest python/tests/` — must pass before next task
 
 ### Task 6: WASM demo server bootstrap key endpoint
 
