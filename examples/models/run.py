@@ -1,87 +1,52 @@
-"""Full FHE pipeline for VGG16 on CIFAR-10.
-
-Compile -> keygen -> encrypt -> evaluate -> decrypt -> print MAE.
-
-NOTE: VGG16 at logn=16 with 13 ReLU activations triggers many bootstrap operations.
-Full FHE E2E requires 64+ GB RAM. On smaller machines, use --cleartext-only to
-verify model correctness without FHE encryption.
+"""Unified FHE inference pipeline for all Orion examples.
 
 Usage:
-    cd examples/vgg
-    python run.py                  # Full FHE pipeline
-    python run.py --cleartext-only # Cleartext forward pass only
+    python examples/models/run.py mlp
+    python examples/models/run.py alexnet --cleartext-only
+    python examples/models/run.py resnet --cleartext-only
 """
 
 import argparse
+import importlib
 import os
+import sys
 import torch
-from model import VGG
+
 from orion_compiler import Compiler, CKKSParams
+
+EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
+AVAILABLE = ["mlp", "lenet", "lola", "alexnet", "vgg", "resnet"]
+
+
+def load_example(name):
+    """Import example module and return (model_instance, config)."""
+    sys.path.insert(0, EXAMPLES_DIR)
+    mod = importlib.import_module(name)
+    sys.path.pop(0)
+
+    torch.manual_seed(42)
+    net = mod.Model()
+
+    weights_path = os.path.join(EXAMPLES_DIR, f"{name}_weights.pt")
+    if os.path.exists(weights_path):
+        checkpoint = torch.load(weights_path, map_location="cpu", weights_only=True)
+        net.load_state_dict(checkpoint["model_state_dict"])
+        print(f"Loaded trained weights from {name}_weights.pt")
+    else:
+        print("No weights found, using random weights")
+    net.eval()
+
+    return net, mod.CONFIG
 
 
 def cleartext_forward(net, test_input):
-    """Run cleartext inference and return output."""
+    """Run cleartext inference and return flat output list."""
     with torch.no_grad():
         return net(test_input).flatten().tolist()
 
 
-def compile_model(net, test_input):
-    """Compile the model and return compiled model."""
-    ckks_params = CKKSParams(
-        logn=16,
-        logq=[55] + [40] * 20,
-        logp=[61, 61, 61],
-        logscale=40,
-        h=192,
-        ring_type="standard",
-        boot_logp=[61] * 6,
-    )
-    compiler = Compiler(net, ckks_params)
-    compiler.fit(test_input)
-    compiled = compiler.compile()
-    return compiled
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--cleartext-only", action="store_true",
-        help="Only run cleartext forward pass (no FHE)",
-    )
-    args = parser.parse_args()
-
-    # 1. Instantiate model, optionally load trained weights
-    torch.manual_seed(42)
-    net = VGG("VGG16")
-    weights_path = os.path.join(os.path.dirname(__file__), "weights.pt")
-    if os.path.exists(weights_path):
-        checkpoint = torch.load(weights_path, map_location="cpu", weights_only=True)
-        net.load_state_dict(checkpoint["model_state_dict"])
-        print("Loaded trained weights from weights.pt")
-    else:
-        print("No weights.pt found, using random weights")
-    net.eval()
-
-    # 2. Cleartext baseline
-    torch.manual_seed(123)
-    test_input = torch.randn(1, 3, 32, 32)
-    cleartext = cleartext_forward(net, test_input)
-    print(f"Cleartext output: {[f'{v:.4f}' for v in cleartext]}")
-
-    if args.cleartext_only:
-        print("Cleartext-only mode, skipping FHE pipeline")
-        return
-
-    # 3. Compile
-    print("Compiling model...")
-    compiled = compile_model(net, test_input)
-    model_bytes = compiled.to_bytes()
-    print(f"Compiled model size: {len(model_bytes)} bytes")
-    print(f"Input level: {compiled.input_level}")
-    print(f"Bootstrap slots: {compiled.manifest.bootstrap_slots}")
-    print(f"Galois elements: {len(compiled.manifest.galois_elements)}")
-
-    # 4. Load in evaluator, get client params
+def compile_and_run(net, config, test_input, cleartext):
+    """Compile model and run full FHE pipeline."""
     from orion_evaluator import Model, Evaluator
     from lattigo.ckks import Parameters, Encoder
     from lattigo.rlwe import (
@@ -92,10 +57,20 @@ def main():
         Ciphertext as RLWECiphertext,
     )
 
+    # Compile
+    print("Compiling model...")
+    ckks_params = CKKSParams(**config["ckks_params"])
+    compiler = Compiler(net, ckks_params)
+    compiler.fit(test_input)
+    compiled = compiler.compile()
+    model_bytes = compiled.to_bytes()
+    print(f"Compiled model size: {len(model_bytes)} bytes")
+
+    # Load in evaluator
     model = Model.load(model_bytes)
     params_dict, manifest, input_level = model.client_params()
 
-    # 5. Keygen
+    # Keygen
     params = Parameters.from_logn(**params_dict)
     kg = KeyGenerator.new(params)
     sk = kg.gen_secret_key()
@@ -109,22 +84,32 @@ def main():
     evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
     keys_bytes = evk.marshal_binary()
 
-    # Bootstrap keys — VGG16 at logn=16 triggers many bootstrap operations.
-    # Bootstrap key generation requires lattigo bootstrap bindings (not yet
-    # exposed in Python lattigo package) and ~5.8 GB RAM for keys alone.
-    # Full FHE E2E at logn=16 requires 64+ GB RAM.
+    # Bootstrap keys check
     btp_keys_bytes = None
     bootstrap_slots = manifest.get("bootstrap_slots", [])
     if bootstrap_slots:
         print(f"Model requires bootstrap (slots: {bootstrap_slots})")
-        print("Bootstrap key generation not yet available in Python lattigo bindings")
         print("Full FHE E2E requires 64+ GB RAM — skipping FHE inference")
         print("Use --cleartext-only to verify model correctness")
+        # Cleanup what we've allocated so far
+        evk.close()
+        for gk in gks:
+            gk.close()
+        if rlk:
+            rlk.close()
+        decryptor.close()
+        encryptor.close()
+        pk.close()
+        sk.close()
+        kg.close()
+        encoder.close()
+        params.close()
+        model.close()
         return
 
     evaluator = Evaluator(params_dict, keys_bytes, btp_keys_bytes=btp_keys_bytes)
 
-    # 6. Encrypt
+    # Encrypt
     max_slots = params.max_slots()
     flat = test_input.flatten().double().tolist()
     padded = flat + [0.0] * (max_slots - len(flat))
@@ -134,16 +119,16 @@ def main():
     ct = encryptor.encrypt_new(pt)
     ct_bytes = ct.marshal_binary()
 
-    # 7. Forward
+    # Forward
     print("Running FHE inference...")
     result_bytes = evaluator.forward(model, ct_bytes)
 
-    # 8. Decrypt
+    # Decrypt
     result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
     result_pt = decryptor.decrypt_new(result_ct)
     decoded = encoder.decode(result_pt, max_slots)
 
-    # 9. Compare
+    # Compare
     print(f"\nCleartext output: {[f'{v:.4f}' for v in cleartext]}")
     print(f"FHE output:      {[f'{decoded[i]:.4f}' for i in range(len(cleartext))]}")
 
@@ -153,7 +138,10 @@ def main():
     print(f"\nMAE: {mae:.6f}")
     print(f"Max diff: {max_diff:.6f}")
 
-    # 10. Cleanup
+    assert mae < 0.1, f"MAE {mae} exceeds tolerance 0.1"
+    print("PASS: MAE within tolerance")
+
+    # Cleanup
     result_pt.close()
     result_ct.close()
     evaluator.close()
@@ -172,6 +160,30 @@ def main():
     encoder.close()
     params.close()
     model.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run Orion FHE inference examples")
+    parser.add_argument("example", choices=AVAILABLE, help="Example model to run")
+    parser.add_argument(
+        "--cleartext-only",
+        action="store_true",
+        help="Only run cleartext forward pass (no FHE)",
+    )
+    args = parser.parse_args()
+
+    net, config = load_example(args.example)
+
+    # Cleartext baseline
+    torch.manual_seed(123)
+    test_input = torch.randn(*config["input_shape"])
+    cleartext = cleartext_forward(net, test_input)
+    print(f"Cleartext output: {[f'{v:.4f}' for v in cleartext]}")
+
+    if args.cleartext_only:
+        return
+
+    compile_and_run(net, config, test_input, cleartext)
 
 
 if __name__ == "__main__":

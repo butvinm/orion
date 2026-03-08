@@ -1240,27 +1240,33 @@ Delete `orion/models/` (or `orion_compiler/models/` after Phase 3). Each model b
 
 | Current location          | New location        | Dataset  | Key FHE features                                 |
 | ------------------------- | ------------------- | -------- | ------------------------------------------------ |
-| `orion/models/mlp.py`     | `examples/mlp/`     | MNIST    | Simplest: Linear + Quad                          |
-| `orion/models/lenet.py`   | `examples/lenet/`   | MNIST    | Conv2d + pooling                                 |
-| `orion/models/lola.py`    | `examples/lola/`    | MNIST    | Lightweight: 1 Conv + 1 FC                       |
-| `orion/models/alexnet.py` | `examples/alexnet/` | CIFAR-10 | Deeper CNN, SiLU (Chebyshev polynomial)          |
-| `orion/models/vgg.py`     | `examples/vgg/`     | CIFAR-10 | Deep CNN, ReLU (minimax sign approximation)      |
-| `orion/models/resnet.py`  | `examples/resnet/`  | CIFAR-10 | Residual connections (`Add`), bootstrapping      |
-| `orion/models/yolo.py`    | `examples/yolo/`    | Custom   | Object detection, ResNet34 backbone, large model |
+| `orion/models/mlp.py`     | `examples/models/mlp.py`   | MNIST    | Simplest: Linear + Quad                          |
+| `orion/models/lenet.py`   | `examples/models/lenet.py` | MNIST    | Conv2d + pooling                                 |
+| `orion/models/lola.py`    | `examples/models/lola.py`  | MNIST    | Lightweight: 1 Conv + 1 FC                       |
+| `orion/models/alexnet.py` | `examples/models/alexnet.py` | CIFAR-10 | Deeper CNN, SiLU (Chebyshev polynomial)        |
+| `orion/models/vgg.py`     | `examples/models/vgg.py`   | CIFAR-10 | Deep CNN, ReLU (minimax sign approximation)      |
+| `orion/models/resnet.py`  | `examples/models/resnet.py` | CIFAR-10 | Residual connections (`Add`), bootstrapping     |
+| `orion/models/yolo.py`    | `examples/models/yolo.py`  | Custom   | Object detection, ResNet34 backbone, large model |
 
 #### 5.2 Example directory structure
 
-Each example directory contains:
+Each model is a single file exporting `Model` and `CONFIG`, grouped under `examples/models/`. Shared `run.py` and `train.py` handle the pipeline:
 
 ```
-examples/<model>/
-├── model.py          # Model definition using orion_compiler.nn layers
-├── train.py          # Training script (standard PyTorch training loop)
-├── run.py            # Full pipeline: compile → encrypt → evaluate → decrypt
-└── README.md         # What the model does, CKKS params rationale, expected output
+examples/
+├── models/
+│   ├── mlp.py        # Model definition + CONFIG (input_shape, ckks_params, dataset)
+│   ├── lenet.py
+│   ├── lola.py
+│   ├── alexnet.py
+│   ├── vgg.py
+│   ├── resnet.py
+│   ├── run.py        # Unified pipeline: compile → encrypt → evaluate → decrypt
+│   └── train.py      # Unified training: python examples/models/train.py <model>
+└── wasm-demo/        # Browser demo (Phase 4)
 ```
 
-**`model.py`** — the architecture definition. Imports only from `orion_compiler.nn`. No training logic, no FHE parameters. Users can copy this file into their own project and modify it.
+**`<model>.py`** — the architecture definition plus a `CONFIG` dict with CKKS params, input shape, and dataset type. Imports only from `orion_compiler.nn`. Exports `Model` alias for the main class. Users can copy this file into their own project and modify it.
 
 **`train.py`** — standard PyTorch training. Downloads dataset, trains the model, saves weights to `weights.pt`. Uses `orion.core.utils` helpers (`get_mnist_datasets`, `get_cifar_datasets`, `train_on_mnist`, `train_on_cifar`) where applicable. Can be skipped — examples work with random weights for demonstrating the FHE pipeline (accuracy will be random, but the pipeline is correct).
 
@@ -1380,12 +1386,9 @@ These can stay in `orion_compiler.core.utils` (the compiler package still depend
 #### Phase 5 acceptance checklist
 
 - [x] MNIST models (`mlp.py`, `lenet.py`, `lola.py`) removed from `models/` — remaining models (AlexNet, VGG, ResNet, YOLO) stay until Phase 6
-- [x] `examples/mlp/` — model.py, train.py, run.py, README.md all present and working
-- [x] `examples/lenet/` — same structure, working
-- [x] `examples/lola/` — same structure, working
-- [x] Each MNIST `run.py` produces correct FHE output end-to-end (MAE < 0.1)
-- [x] Each `train.py` trains to reasonable accuracy on MNIST
-- [x] Each `README.md` documents CKKS parameter choices and expected performance
+- [x] `examples/models/mlp.py`, `examples/models/lenet.py`, `examples/models/lola.py` — model + CONFIG, unified `run.py` and `train.py`
+- [x] `python examples/models/run.py mlp` produces correct FHE output end-to-end (MAE < 0.1), same for lenet and lola
+- [x] `python examples/models/train.py <model>` trains to reasonable accuracy on MNIST
 - [x] No imports of `orion_compiler.models.{mlp,lenet,lola}` anywhere in the codebase
 - [x] `examples/wasm-demo/` still works (Phase 4 deliverable, not modified here)
 
@@ -1552,13 +1555,13 @@ For the WASM demo server:
 
 #### 7.2 CIFAR-10 examples
 
-Port models from `models/` to `examples/` using `orion_compiler.nn` imports (the `models/` files use the old `orion.nn` API). Each follows the Phase 5 template: `model.py`, `train.py`, `run.py`, `README.md`.
+Port models from `models/` to `examples/` using `orion_compiler.nn` imports (the `models/` files use the old `orion.nn` API). Each is a flat file (`examples/<model>.py`) with `Model` + `CONFIG`, using the unified `examples/run.py`.
 
-| Example             | Dataset  | Key FHE features                                        | Bootstrap needed                | Reference CKKS params                                                                                |
-| ------------------- | -------- | ------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `examples/alexnet/` | CIFAR-10 | Conv2d E2E validation, SiLU (degree-127 Chebyshev)      | Maybe (depends on param choice) | TBD — start with `logn=15`                                                                           |
-| `examples/vgg/`     | CIFAR-10 | ReLU (minimax sign, 15 levels/activation)               | Yes (heaviest activation)       | TBD — likely `logn=16`                                                                               |
-| `examples/resnet/`  | CIFAR-10 | Residual connections (`Add`), multi-bootstrap placement | Yes                             | `logn=16`, `logq=[55,40×10]`, `logp=[61×3]`, `boot_logp=[61×8]` (from original `configs/resnet.yml`) |
+| Example               | Dataset  | Key FHE features                                        | Bootstrap needed                | Reference CKKS params                                                                                |
+| ---------------------- | -------- | ------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `examples/models/alexnet.py`  | CIFAR-10 | Conv2d E2E validation, SiLU (degree-127 Chebyshev)      | Maybe (depends on param choice) | TBD — start with `logn=15`                                                                           |
+| `examples/models/vgg.py`      | CIFAR-10 | ReLU (minimax sign, 15 levels/activation)               | Yes (heaviest activation)       | TBD — likely `logn=16`                                                                               |
+| `examples/models/resnet.py`   | CIFAR-10 | Residual connections (`Add`), multi-bootstrap placement | Yes                             | `logn=16`, `logq=[55,40×10]`, `logp=[61×3]`, `boot_logp=[61×8]` (from original `configs/resnet.yml`) |
 
 **Model-specific notes:**
 
@@ -1608,11 +1611,9 @@ Note: the earlier claim that YOLO requires "multi-ciphertext packing" is incorre
 
 **CIFAR-10 examples:**
 
-- [x] `examples/alexnet/` — model.py, train.py, run.py, README.md all present and working
-- [x] `examples/vgg/` — same structure, working, includes bootstrap (cleartext verified; FHE compilation OOMs at logn=16 on <64GB — deferred to Post-Completion)
-- [x] `examples/resnet/` — same structure, working, includes bootstrap across residual paths (cleartext verified; FHE compilation OOMs at logn=16 on <64GB — deferred to Post-Completion)
-- [x] AlexNet `run.py` compiles and produces correct compilation graph (3 bootstraps, input level 20). VGG/ResNet FHE E2E deferred to Post-Completion (requires 64+ GB machine)
-- [x] Each `README.md` documents CKKS parameter choices (including `btp_logn`), bootstrap count, bootstrap key size, expected inference time, and FHE precision
+- [x] `examples/models/alexnet.py`, `examples/models/vgg.py`, `examples/models/resnet.py` — model + CONFIG, unified `run.py` and `train.py`
+- [x] `python examples/models/run.py alexnet --cleartext-only` works. VGG/ResNet FHE E2E deferred to Post-Completion (requires 64+ GB machine)
+- [x] AlexNet compiles and produces correct compilation graph (3 bootstraps, input level 20). VGG/ResNet FHE E2E deferred to Post-Completion (requires 64+ GB machine)
 
 **Cleanup:**
 

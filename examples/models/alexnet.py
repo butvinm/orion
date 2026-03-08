@@ -1,30 +1,42 @@
-"""AlexNet model for CIFAR-10 classification using FHE-compatible layers.
+"""AlexNet model for CIFAR-10 classification.
 
 Architecture: 5 Conv2d blocks with SiLU activations, AvgPool2d downsampling,
 AdaptiveAvgPool2d, then 3 FC layers. Input: 3x32x32 (CIFAR-10).
 
-Ported from models/alexnet.py (legacy orion.nn API) to orion_compiler.nn.
+Requires bootstrap (3 operations). Full FHE E2E needs 64+ GB RAM.
 """
 
 import orion_compiler.nn as on
+
+CONFIG = {
+    "input_shape": (1, 3, 32, 32),
+    "dataset": "cifar",
+    "ckks_params": dict(
+        logn=15,
+        logq=[55] + [40] * 20,
+        logp=[61, 61, 61],
+        logscale=40,
+        h=192,
+        ring_type="standard",
+        boot_logp=[61] * 6,
+    ),
+}
 
 
 class AlexNet(on.Module):
     def __init__(self, num_classes=10):
         super().__init__()
-        # Feature extraction: Conv blocks with SiLU degree=127
-        # cfg = [64, 'M', 192, 'M', 384, 256, 256, 'A']
         self.conv1 = on.Conv2d(3, 64, kernel_size=3, stride=1, padding=1)
         self.bn1 = on.BatchNorm2d(64)
         self.act1 = on.SiLU(degree=127)
 
-        self.pool1 = on.AvgPool2d(kernel_size=2, stride=2)  # 32x32 -> 16x16
+        self.pool1 = on.AvgPool2d(kernel_size=2, stride=2)
 
         self.conv2 = on.Conv2d(64, 192, kernel_size=3, stride=1, padding=1)
         self.bn2 = on.BatchNorm2d(192)
         self.act2 = on.SiLU(degree=127)
 
-        self.pool2 = on.AvgPool2d(kernel_size=2, stride=2)  # 16x16 -> 8x8
+        self.pool2 = on.AvgPool2d(kernel_size=2, stride=2)
 
         self.conv3 = on.Conv2d(192, 384, kernel_size=3, stride=1, padding=1)
         self.bn3 = on.BatchNorm2d(384)
@@ -38,10 +50,9 @@ class AlexNet(on.Module):
         self.bn5 = on.BatchNorm2d(256)
         self.act5 = on.SiLU(degree=127)
 
-        self.adapt_pool = on.AdaptiveAvgPool2d((2, 2))  # 8x8 -> 2x2
-        self.flatten = on.Flatten()  # 256 * 2 * 2 = 1024
+        self.adapt_pool = on.AdaptiveAvgPool2d((2, 2))
+        self.flatten = on.Flatten()
 
-        # Classifier
         self.fc1 = on.Linear(1024, 4096)
         self.bn6 = on.BatchNorm1d(4096)
         self.act6 = on.SiLU(degree=127)
@@ -65,3 +76,6 @@ class AlexNet(on.Module):
         x = self.act6(self.bn6(self.fc1(x)))
         x = self.act7(self.bn7(self.fc2(x)))
         return self.fc3(x)
+
+
+Model = AlexNet

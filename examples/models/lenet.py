@@ -1,10 +1,23 @@
-"""LeNet model for MNIST classification using FHE-compatible layers.
+"""LeNet model for MNIST classification.
 
 Architecture: Conv2d(1,32,5,s=2,p=2) → BN2d → Quad → Conv2d(32,64,5,s=2,p=2) → BN2d → Quad
            → Flatten → Linear(3136,512) → BN1d → Quad → Linear(512,10)
 """
 
 import orion_compiler.nn as on
+
+CONFIG = {
+    "input_shape": (1, 1, 28, 28),
+    "dataset": "mnist",
+    "ckks_params": dict(
+        logn=13,
+        logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
+        logp=[29, 29],
+        logscale=26,
+        h=8192,
+        ring_type="conjugate_invariant",
+    ),
+}
 
 
 class LeNet(on.Module):
@@ -31,3 +44,6 @@ class LeNet(on.Module):
         x = self.flatten(x)
         x = self.act3(self.bn3(self.fc1(x)))
         return self.fc2(x)
+
+
+Model = LeNet

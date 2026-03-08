@@ -1,14 +1,28 @@
-"""VGG16 model for CIFAR-10 classification using FHE-compatible layers.
+"""VGG16 model for CIFAR-10 classification.
 
 Architecture: 13 Conv2d blocks with ReLU activations (minimax sign approximation,
 degrees=[15,15,27]), 5 AvgPool2d downsampling layers, then a single FC layer.
 Input: 3x32x32 (CIFAR-10).
 
-Ported from models/vgg.py (legacy orion.nn API) to orion_compiler.nn.
+Requires bootstrap (~13 operations). Full FHE E2E needs 64+ GB RAM.
 """
 
 import torch.nn as nn
 import orion_compiler.nn as on
+
+CONFIG = {
+    "input_shape": (1, 3, 32, 32),
+    "dataset": "cifar",
+    "ckks_params": dict(
+        logn=16,
+        logq=[55] + [40] * 20,
+        logp=[61, 61, 61],
+        logscale=40,
+        h=192,
+        ring_type="standard",
+        boot_logp=[61] * 6,
+    ),
+}
 
 VGG_CONFIGS = {
     "VGG11": [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
@@ -45,3 +59,6 @@ class VGG(on.Module):
         x = self.features(x)
         x = self.flatten(x)
         return self.classifier(x)
+
+
+Model = VGG

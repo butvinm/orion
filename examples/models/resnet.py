@@ -1,14 +1,28 @@
-"""ResNet20 model for CIFAR-10 classification using FHE-compatible layers.
+"""ResNet20 model for CIFAR-10 classification.
 
 Architecture: ResNet20 with BasicBlock, [3,3,3] blocks, [16,32,64] channels.
 Uses ReLU activation approximated via minimax sign polynomials (degrees=[15,15,27]).
 Residual connections via on.Add. Input: 3x32x32 (CIFAR-10).
 
-Ported from models/resnet.py (legacy orion.nn API) to orion_compiler.nn.
+Requires bootstrap (~38 operations). Full FHE E2E needs 64+ GB RAM.
 """
 
 import torch.nn as nn
 import orion_compiler.nn as on
+
+CONFIG = {
+    "input_shape": (1, 3, 32, 32),
+    "dataset": "cifar",
+    "ckks_params": dict(
+        logn=16,
+        logq=[55] + [40] * 10,
+        logp=[61, 61, 61],
+        logscale=40,
+        h=192,
+        ring_type="standard",
+        boot_logp=[61] * 8,
+    ),
+}
 
 
 class BasicBlock(on.Module):
@@ -82,3 +96,6 @@ class ResNet20(on.Module):
         out = self.avgpool(out)
         out = self.flatten(out)
         return self.linear(out)
+
+
+Model = ResNet20

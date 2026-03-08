@@ -12,7 +12,7 @@ See `ARCH.md` for the full target architecture, compiled model format specificat
 
 ## Repository Structure
 
-Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). MNIST examples in `examples/{mlp,lenet,lola}/`, CIFAR-10 examples in `examples/{alexnet,vgg,resnet}/` — each has `model.py`, `train.py`, `run.py`, `README.md`. See `ARCH.md § Repo Structure` for the full directory tree.
+Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). Model examples under `examples/models/` (`{mlp,lenet,lola,alexnet,vgg,resnet}.py`) with unified `run.py` and `train.py`. See `ARCH.md § Repo Structure` for the full directory tree.
 
 **Dependency graph:** `lattigo` ← `orion-compiler` (+ torch, networkx). `orion-evaluator` is independent. `js/lattigo` depends only on Lattigo (no Orion-specific code).
 

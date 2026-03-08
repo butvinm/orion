@@ -1,4 +1,4 @@
-"""LoLA model for MNIST classification using FHE-compatible layers.
+"""LoLA model for MNIST classification.
 
 Architecture: Conv2d(1,5,2,s=2) → BN2d → Quad → Flatten → Linear(980,100) → BN1d → Quad → Linear(100,10)
 
@@ -6,6 +6,19 @@ LoLA ("Low-Latency") — a single-conv architecture from the original orion repo
 """
 
 import orion_compiler.nn as on
+
+CONFIG = {
+    "input_shape": (1, 1, 28, 28),
+    "dataset": "mnist",
+    "ckks_params": dict(
+        logn=13,
+        logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
+        logp=[29, 29],
+        logscale=26,
+        h=8192,
+        ring_type="conjugate_invariant",
+    ),
+}
 
 
 class LoLA(on.Module):
@@ -27,3 +40,6 @@ class LoLA(on.Module):
         x = self.flatten(x)
         x = self.act2(self.bn2(self.fc1(x)))
         return self.fc2(x)
+
+
+Model = LoLA

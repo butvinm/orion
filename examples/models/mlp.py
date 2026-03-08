@@ -1,9 +1,22 @@
-"""MLP model for MNIST classification using FHE-compatible layers.
+"""MLP model for MNIST classification.
 
 Architecture: Flatten → Linear(784,128) → BN → Quad → Linear(128,128) → BN → Quad → Linear(128,10)
 """
 
 import orion_compiler.nn as on
+
+CONFIG = {
+    "input_shape": (1, 1, 28, 28),
+    "dataset": "mnist",
+    "ckks_params": dict(
+        logn=13,
+        logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
+        logp=[29, 29],
+        logscale=26,
+        h=8192,
+        ring_type="conjugate_invariant",
+    ),
+}
 
 
 class MLP(on.Module):
@@ -26,3 +39,6 @@ class MLP(on.Module):
         x = self.act1(self.bn1(self.fc1(x)))
         x = self.act2(self.bn2(self.fc2(x)))
         return self.fc3(x)
+
+
+Model = MLP
