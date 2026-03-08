@@ -208,8 +208,8 @@ Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/
 
 ### Task 12: [Final] Update documentation
 
-- [ ] Update `ARCH.md` to mark Phase 7 as complete (if convention exists)
-- [ ] Update project knowledge docs if new patterns discovered during implementation
+- [x] Update `ARCH.md` to mark Phase 7 as complete (if convention exists)
+- [x] Update project knowledge docs if new patterns discovered during implementation
 
 ## Technical Details
 
