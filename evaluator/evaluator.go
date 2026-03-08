@@ -2,7 +2,7 @@ package evaluator
 
 import (
 	"fmt"
-	"math"
+	"math/bits"
 	"sort"
 
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
@@ -336,7 +336,10 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 // getBootstrapper returns (or lazily creates) a bootstrapping.Evaluator for the
 // given slot count, using the model's manifest parameters.
 func (e *Evaluator) getBootstrapper(model *Model, slots int) (*bootstrapping.Evaluator, error) {
-	logSlots := int(math.Log2(float64(slots)))
+	if slots <= 0 || slots&(slots-1) != 0 {
+		return nil, fmt.Errorf("bootstrap slots must be a power of 2, got %d", slots)
+	}
+	logSlots := bits.Len(uint(slots)) - 1
 	if btp, ok := e.bootstrappers[logSlots]; ok {
 		return btp, nil
 	}
@@ -411,6 +414,8 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 	// Step 3: Prescale — map values to [-1, 1] range for bootstrap.
 	// Encode prescale as a plaintext at ct.Level() with scale = q_L (modulus at that level),
 	// multiply, then rescale. This consumes 1 level.
+	// When prescale==1, values are already in [-1, 1] and the ciphertext is typically
+	// at level 0 with no spare levels for a multiply+rescale. Skip in that case.
 	if cfg.Prescale != 1 {
 		level := work.Level()
 		ql := e.params.Q()[level]
@@ -459,7 +464,11 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 	work.LogDimensions.Cols = e.params.LogMaxSlots()
 
 	// Step 7: Range-mapping postscale — integer multiply (no rescale needed).
+	// Postscale must be a positive integer (Python compiler uses math.ceil(absmax)).
 	rangePostscale := int(cfg.Postscale)
+	if cfg.Postscale != float64(rangePostscale) || rangePostscale < 1 {
+		return nil, fmt.Errorf("bootstrap postscale must be a positive integer, got %f", cfg.Postscale)
+	}
 	if rangePostscale > 1 {
 		work, err = e.eval.MulNew(work, rangePostscale)
 		if err != nil {

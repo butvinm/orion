@@ -6,12 +6,15 @@ that work with raw Lattigo types, not Orion wrapper types.
 
 import ctypes
 
+import threading
+
 from .gohandle import GoHandle, get_lib
 
 _uintptr = ctypes.c_size_t
 _errout = ctypes.POINTER(ctypes.c_char_p)
 
 _prototypes_set = False
+_prototypes_lock = threading.Lock()
 
 
 def _check_err(err_ptr):
@@ -191,9 +194,10 @@ def _setup_prototypes(lib):
 def _ensure_prototypes():
     """Ensure prototypes are set up (call once on first FFI use)."""
     global _prototypes_set
-    if not _prototypes_set:
-        _setup_prototypes(get_lib())
-        _prototypes_set = True
+    with _prototypes_lock:
+        if not _prototypes_set:
+            _setup_prototypes(get_lib())
+            _prototypes_set = True
 
 
 def _lib_call():

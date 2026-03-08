@@ -13,12 +13,13 @@ import (
 
 // paramsJSON mirrors the JSON format used by Python bridge (orion.Params).
 type paramsJSON struct {
-	LogN     int    `json:"LogN"`
-	LogQ     []int  `json:"LogQ"`
-	LogP     []int  `json:"LogP"`
-	LogScale int    `json:"LogDefaultScale"`
-	H        int    `json:"H"`
-	RingType string `json:"RingType"`
+	LogN        int    `json:"LogN"`
+	LogQ        []int  `json:"LogQ"`
+	LogP        []int  `json:"LogP"`
+	LogScale    int    `json:"LogDefaultScale"`
+	H           int    `json:"H"`
+	RingType    string `json:"RingType"`
+	LogNthRoot  int    `json:"LogNthRoot,omitempty"`
 }
 
 // newCKKSParams(paramsJSON: string) → {handle: number} | {error: string}
@@ -52,6 +53,9 @@ func newCKKSParams(_ js.Value, args []js.Value) any {
 	}
 	if p.H > 0 {
 		lit.Xs = ring.Ternary{H: p.H}
+	}
+	if p.LogNthRoot > 0 {
+		lit.LogNthRoot = p.LogNthRoot
 	}
 
 	params, err := ckks.NewParametersFromLiteral(lit)

@@ -165,14 +165,21 @@ async function initializeKeys(): Promise<void> {
   appendLine(`WASM loaded in ${formatDuration(performance.now() - t1)}`);
 
   // 3. Create CKKS params (convert orion format → bridge format)
-  const bridgeParamsJSON = JSON.stringify({
+  // When bootstrap is enabled, set LogNthRoot = btp_logn + 1 so that generated
+  // primes satisfy q = 1 mod 2^(btp_logn+1), required by Lattigo's bootstrap.
+  const bridgeParams: Record<string, unknown> = {
     LogN: ckksData.logn,
     LogQ: ckksData.logq,
     LogP: ckksData.logp,
     LogDefaultScale: ckksData.logscale,
     H: ckksData.h,
     RingType: ckksData.ring_type, // bridge handles "conjugate_invariant" directly
-  });
+  };
+  if (ckksData.boot_logp && ckksData.boot_logp.length > 0) {
+    const btpLogN = ckksData.btp_logn ?? ckksData.logn;
+    bridgeParams.LogNthRoot = btpLogN + 1;
+  }
+  const bridgeParamsJSON = JSON.stringify(bridgeParams);
   params = CKKSParameters.fromJSON(bridgeParamsJSON);
   appendLine(
     `CKKS params: ${params.maxSlots()} slots, max level ${params.maxLevel()}`,
