@@ -32,6 +32,7 @@ type HeaderParams struct {
 	H        int    `json:"h"`
 	RingType string `json:"ring_type"`
 	BootLogP []int  `json:"boot_logp"`
+	BtpLogN  int    `json:"btp_logn,omitempty"`
 }
 
 // HeaderConfig mirrors Python's CompilerConfig.
@@ -46,6 +47,7 @@ type HeaderManifest struct {
 	GaloisElements []int `json:"galois_elements"`
 	BootstrapSlots []int `json:"bootstrap_slots"`
 	BootLogP       []int `json:"boot_logp"`
+	BtpLogN        int   `json:"btp_logn,omitempty"`
 	NeedsRLK       bool  `json:"needs_rlk"`
 }
 

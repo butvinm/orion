@@ -17,6 +17,7 @@ type Params struct {
 	H        int    `json:"h"`
 	RingType string `json:"ring_type"` // "standard" or "conjugate_invariant"
 	BootLogP []int  `json:"boot_logp,omitempty"`
+	BtpLogN  int    `json:"btp_logn,omitempty"`
 }
 
 // NewCKKSParameters constructs Lattigo ckks.Parameters from Params.
@@ -31,14 +32,22 @@ func (p Params) NewCKKSParameters() (ckks.Parameters, error) {
 		return ckks.Parameters{}, fmt.Errorf("unknown ring type: %q", p.RingType)
 	}
 
-	return ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
+	lit := ckks.ParametersLiteral{
 		LogN:            p.LogN,
 		LogQ:            p.LogQ,
 		LogP:            p.LogP,
 		LogDefaultScale: p.LogScale,
 		Xs:              ring.Ternary{H: p.H},
 		RingType:        rt,
-	})
+	}
+
+	// Bootstrap requires all CKKS primes to satisfy q = 1 mod 2^(btp_logn+1).
+	if p.BtpLogN > 0 {
+		logNthRoot := p.BtpLogN + 1
+		lit.LogNthRoot = logNthRoot
+	}
+
+	return ckks.NewParametersFromLiteral(lit)
 }
 
 // MaxSlots returns the maximum number of plaintext slots.

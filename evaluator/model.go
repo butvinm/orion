@@ -210,6 +210,7 @@ func (m *Model) ClientParams() (orion.Params, orion.Manifest, int) {
 		GaloisElements: galoisElements,
 		BootstrapSlots: m.header.Manifest.BootstrapSlots,
 		BootLogP:       m.header.Manifest.BootLogP,
+		BtpLogN:        m.header.Manifest.BtpLogN,
 		NeedsRLK:       m.header.Manifest.NeedsRLK,
 	}
 
@@ -226,5 +227,6 @@ func headerToParams(header *CompiledHeader) orion.Params {
 		H:        header.Params.H,
 		RingType: header.Params.RingType,
 		BootLogP: header.Params.BootLogP,
+		BtpLogN:  header.Params.BtpLogN,
 	}
 }

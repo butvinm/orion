@@ -69,16 +69,16 @@ Key deliverables:
 All 5 runtime callers of `NewCKKSParameters()` go through `orion.Params` (params.go),
 so the `LogNthRoot` fix is centralized there.
 
-- [ ] Add `BtpLogN int` field to `orion.Params` in `params.go` (json tag: `"btp_logn,omitempty"`)
-- [ ] In `Params.NewCKKSParameters()` (params.go:34): set `LogNthRoot: p.BtpLogN + 1` when `p.BtpLogN > 0`. This affects all 5 callers: `python/lattigo/bridge/lattigo.go:33`, `evaluator/model.go:41`, `python/orion-evaluator/bridge/evaluator.go:95`, `examples/wasm-demo/server/main.go:79`, and tests.
-- [ ] Add `BtpLogN int` field to `orion.Manifest` in `keys.go`
-- [ ] Add `BtpLogN int` field to `HeaderParams` in `evaluator/format.go`
-- [ ] Add `BtpLogN int` field to `HeaderManifest` in `evaluator/format.go`
-- [ ] Update `headerToParams()` in `model.go:220` to copy `BtpLogN` from `HeaderParams`
-- [ ] Update `ClientParams()` in `model.go:209` to copy `BtpLogN` from `HeaderManifest`
-- [ ] Write Go test for LoadModel with btp_logn field present in binary
-- [ ] Write Go test verifying `LogNthRoot` is set correctly for bootstrap-enabled params (construct params with `BtpLogN=14`, verify generated primes satisfy constraint)
-- [ ] Run `go test ./evaluator/...` and `go vet ./...` — must pass before next task
+- [x] Add `BtpLogN int` field to `orion.Params` in `params.go` (json tag: `"btp_logn,omitempty"`)
+- [x] In `Params.NewCKKSParameters()` (params.go:34): set `LogNthRoot: p.BtpLogN + 1` when `p.BtpLogN > 0`. This affects all 5 callers: `python/lattigo/bridge/lattigo.go:33`, `evaluator/model.go:41`, `python/orion-evaluator/bridge/evaluator.go:95`, `examples/wasm-demo/server/main.go:79`, and tests.
+- [x] Add `BtpLogN int` field to `orion.Manifest` in `keys.go`
+- [x] Add `BtpLogN int` field to `HeaderParams` in `evaluator/format.go`
+- [x] Add `BtpLogN int` field to `HeaderManifest` in `evaluator/format.go`
+- [x] Update `headerToParams()` in `model.go:220` to copy `BtpLogN` from `HeaderParams`
+- [x] Update `ClientParams()` in `model.go:209` to copy `BtpLogN` from `HeaderManifest`
+- [x] Write Go test for LoadModel with btp_logn field present in binary
+- [x] Write Go test verifying `LogNthRoot` is set correctly for bootstrap-enabled params (construct params with `BtpLogN=14`, verify generated primes satisfy constraint)
+- [x] Run `go test ./evaluator/...` and `go vet ./...` — must pass before next task
 
 ### Task 3: Implement `evalBootstrap` in Go evaluator
 

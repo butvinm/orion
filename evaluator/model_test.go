@@ -1,6 +1,8 @@
 package evaluator
 
 import (
+	"encoding/binary"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -88,6 +90,78 @@ func TestClientParams(t *testing.T) {
 	// Verify input level > 0.
 	assert.Greater(t, inputLevel, 0)
 	assert.Equal(t, 3, inputLevel)
+}
+
+func TestLoadModelWithBtpLogN(t *testing.T) {
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	// Parse the original container to get the header JSON.
+	header, blobs, err := ParseContainer(data)
+	require.NoError(t, err)
+
+	// Set btp_logn in the header params and manifest.
+	header.Params.BtpLogN = 13
+	header.Manifest.BtpLogN = 13
+
+	// Re-serialize into a .orion binary.
+	newData := rebuildContainer(t, header, blobs)
+
+	model, err := LoadModel(newData)
+	require.NoError(t, err)
+
+	params, manifest, _ := model.ClientParams()
+
+	// Verify btp_logn is correctly parsed.
+	assert.Equal(t, 13, params.BtpLogN)
+	assert.Equal(t, 13, manifest.BtpLogN)
+}
+
+func TestLoadModelWithoutBtpLogN(t *testing.T) {
+	// Existing models without btp_logn should still load fine.
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	model, err := LoadModel(data)
+	require.NoError(t, err)
+
+	params, manifest, _ := model.ClientParams()
+
+	// BtpLogN should be zero (not set in the original model).
+	assert.Equal(t, 0, params.BtpLogN)
+	assert.Equal(t, 0, manifest.BtpLogN)
+}
+
+// rebuildContainer serializes a header and blobs back into .orion v2 format.
+func rebuildContainer(t *testing.T, header *CompiledHeader, blobs [][]byte) []byte {
+	t.Helper()
+
+	headerJSON, err := json.Marshal(header)
+	require.NoError(t, err)
+
+	// magic (8) + headerLen (4) + headerJSON + blobCount (4) + blobs
+	size := 8 + 4 + len(headerJSON) + 4
+	for _, b := range blobs {
+		size += 8 + len(b)
+	}
+
+	buf := make([]byte, size)
+	copy(buf[:8], magicV2[:])
+	binary.LittleEndian.PutUint32(buf[8:12], uint32(len(headerJSON)))
+	copy(buf[12:12+len(headerJSON)], headerJSON)
+
+	offset := 12 + len(headerJSON)
+	binary.LittleEndian.PutUint32(buf[offset:offset+4], uint32(len(blobs)))
+	offset += 4
+
+	for _, b := range blobs {
+		binary.LittleEndian.PutUint64(buf[offset:offset+8], uint64(len(b)))
+		offset += 8
+		copy(buf[offset:offset+len(b)], b)
+		offset += len(b)
+	}
+
+	return buf
 }
 
 func TestLoadModelInvalidData(t *testing.T) {
