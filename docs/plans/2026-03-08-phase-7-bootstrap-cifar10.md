@@ -161,8 +161,8 @@ Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/
 - [x] Create `examples/vgg/model.py` — port from `models/vgg.py` using `orion_compiler.nn` (ReLU via minimax sign approximation, ~15 levels/activation)
 - [x] Create `examples/vgg/train.py` — CIFAR-10 training
 - [x] Create `examples/vgg/run.py` — FHE pipeline with bootstrap (cleartext-only path verified, FHE path present but untested)
-- [ ] Create `examples/vgg/README.md` — document expected CKKS params (logn=16), note that compilation/FHE requires 64+ GB RAM
-- [ ] Run cleartext forward pass to verify model correctness (`python run.py --cleartext-only`)
+- [x] Create `examples/vgg/README.md` — document expected CKKS params (logn=16), note that compilation/FHE requires 64+ GB RAM
+- [x] Run cleartext forward pass to verify model correctness (`python run.py --cleartext-only`)
 
 ### Task 9: ResNet CIFAR-10 example
 
