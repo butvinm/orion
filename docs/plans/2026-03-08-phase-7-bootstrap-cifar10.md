@@ -170,11 +170,11 @@ Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/
 > (large diagonal matrices) and bootstrapper generation (38 bootstraps). Do NOT attempt
 > compilation on this machine. Only verify cleartext forward pass.
 
-- [ ] Create `examples/resnet/model.py` — ResNet20 (BasicBlock, [3,3,3], [16,32,64]) using `orion_compiler.nn`, port from `models/resnet.py`
-- [ ] Create `examples/resnet/train.py` — CIFAR-10 training
-- [ ] Create `examples/resnet/run.py` — FHE pipeline with bootstrap across residual (branching) DAG paths (cleartext-only path verified, FHE path present but untested). Use reference CKKS params: `logn=16`, `logq=[55,40x10]`, `logp=[61x3]`, `boot_logp=[61x8]`
-- [ ] Create `examples/resnet/README.md` — document expected CKKS params (logn=16), 38 bootstraps, note that compilation/FHE requires 64+ GB RAM
-- [ ] Run cleartext forward pass to verify model correctness (`python run.py --cleartext-only`)
+- [x] Create `examples/resnet/model.py` — ResNet20 (BasicBlock, [3,3,3], [16,32,64]) using `orion_compiler.nn`, port from `models/resnet.py`
+- [x] Create `examples/resnet/train.py` — CIFAR-10 training
+- [x] Create `examples/resnet/run.py` — FHE pipeline with bootstrap across residual (branching) DAG paths (cleartext-only path verified, FHE path present but untested). Use reference CKKS params: `logn=16`, `logq=[55,40x10]`, `logp=[61x3]`, `boot_logp=[61x8]`
+- [x] Create `examples/resnet/README.md` — document expected CKKS params (logn=16), 38 bootstraps, note that compilation/FHE requires 64+ GB RAM
+- [x] Run cleartext forward pass to verify model correctness (`python run.py --cleartext-only`)
 
 > **Note: CIFAR-10 compilation and FHE E2E are infeasible on <64GB machines.**
 > VGG16 compilation at logn=16 OOMed on 38GB (diagonal packing of conv weight matrices).
