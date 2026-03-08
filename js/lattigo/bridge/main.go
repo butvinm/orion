@@ -80,6 +80,7 @@ func main() {
 	// Bootstrap
 	ns.Set("newBootstrapParametersFromLiteral", js.FuncOf(newBootstrapParametersFromLiteral))
 	ns.Set("btpParamsGenEvaluationKeys", js.FuncOf(btpParamsGenEvaluationKeys))
+	ns.Set("btpEvaluationKeysMarshal", js.FuncOf(btpEvaluationKeysMarshal))
 
 	// Readiness signal — MUST be last registration.
 	ns.Set("__ready", true)

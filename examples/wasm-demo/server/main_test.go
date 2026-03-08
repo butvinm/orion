@@ -80,6 +80,66 @@ func buildMinimalOrion(galoisElements []int) []byte {
 	return buf.Bytes()
 }
 
+// buildBootstrapOrion constructs a minimal .orion v2 binary with bootstrap_slots set.
+// The graph itself doesn't have a bootstrap node — we only need the manifest
+// to trigger finalize validation logic.
+func buildBootstrapOrion() []byte {
+	header := evaluator.CompiledHeader{
+		Version: 2,
+		Params: evaluator.HeaderParams{
+			LogN:     12,
+			LogQ:     []int{40, 30, 30},
+			LogP:     []int{40},
+			LogScale: 30,
+			H:        192,
+			RingType: "conjugate_invariant",
+		},
+		Config: evaluator.HeaderConfig{
+			Margin:          1,
+			EmbeddingMethod: "hybrid",
+			FuseModules:     false,
+		},
+		Manifest: evaluator.HeaderManifest{
+			GaloisElements: []int{},
+			BootstrapSlots: []int{128},
+			BootLogP:       []int{61, 61, 61, 61, 61, 61},
+			NeedsRLK:       true,
+		},
+		InputLevel: 2,
+		Cost: evaluator.HeaderCost{
+			BootstrapCount:    1,
+			GaloisKeyCount:    0,
+			BootstrapKeyCount: 1,
+		},
+		Graph: evaluator.HeaderGraph{
+			Input:  "input",
+			Output: "quad",
+			Nodes: []evaluator.HeaderNode{
+				{Name: "input", Op: "flatten", Level: 2, Depth: 0},
+				{Name: "quad", Op: "quad", Level: 2, Depth: 1},
+			},
+			Edges: []evaluator.HeaderEdge{
+				{Src: "input", Dst: "quad"},
+			},
+		},
+		BlobCount: 0,
+	}
+
+	headerJSON, _ := json.Marshal(header)
+
+	var buf bytes.Buffer
+	buf.Write([]byte("ORION\x00\x02\x00"))
+	headerLen := make([]byte, 4)
+	binary.LittleEndian.PutUint32(headerLen, uint32(len(headerJSON)))
+	buf.Write(headerLen)
+	buf.Write(headerJSON)
+	blobCount := make([]byte, 4)
+	binary.LittleEndian.PutUint32(blobCount, 0)
+	buf.Write(blobCount)
+
+	return buf.Bytes()
+}
+
 // testSetup creates a Server, CKKS params, and keygen context for tests.
 // galoisElements may be nil for a model with no Galois key requirements.
 func testSetup(t *testing.T, galoisElements ...int) (*Server, ckks.Parameters, *rlwe.SecretKey) {
@@ -899,5 +959,107 @@ func TestKeyUploadToNonexistentSession(t *testing.T) {
 
 	if w.Result().StatusCode != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleBootstrapKeyUpload(t *testing.T) {
+	// Test that the bootstrap key endpoint accepts data and stores it.
+	// bootstrapping.EvaluationKeys.UnmarshalBinary is lenient with short data,
+	// so we just verify the handler returns 200 (accepted) for non-empty data.
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	id := createSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/bootstrap",
+		bytes.NewReader([]byte("some key data")))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(w.Result().Body)
+		t.Errorf("expected 200 for bootstrap key upload, got %d: %s", w.Result().StatusCode, body)
+	}
+}
+
+func TestHandleBootstrapKeyEmpty(t *testing.T) {
+	srv, _, _ := testSetup(t)
+	handler := srv.Handler("")
+
+	id := createSession(t, handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/bootstrap",
+		bytes.NewReader(nil))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty body, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleBootstrapKeyRejectReady(t *testing.T) {
+	srv, ckksParams, sk := testSetup(t)
+	handler := srv.Handler("")
+
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
+
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+	finalizeSession(t, handler, id)
+
+	// Upload to ready session should get 409.
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/bootstrap",
+		bytes.NewReader([]byte("data")))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusConflict {
+		t.Errorf("expected 409 for ready session, got %d", w.Result().StatusCode)
+	}
+}
+
+func TestHandleFinalizeMissingBootstrapKeys(t *testing.T) {
+	// Use a model that has bootstrap_slots set — finalize should reject
+	// when bootstrap keys are not uploaded.
+	data := buildBootstrapOrion()
+	model, err := evaluator.LoadModel(data)
+	if err != nil {
+		t.Fatalf("LoadModel: %v", err)
+	}
+
+	srv, err := NewServer(model)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	handler := srv.Handler("")
+
+	ckksParams := srv.CKKSParams()
+	kg := rlwe.NewKeyGenerator(ckksParams)
+	sk := kg.GenSecretKeyNew()
+	rlk := kg.GenRelinearizationKeyNew(sk)
+	rlkBytes, _ := rlk.MarshalBinary()
+
+	id := createSession(t, handler)
+	uploadRLK(t, handler, id, rlkBytes)
+
+	// Finalize without uploading bootstrap keys — should fail.
+	req := httptest.NewRequest(http.MethodPost, "/session/"+id+"/keys/finalize", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Result().StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(w.Result().Body)
+		t.Fatalf("expected 400, got %d: %s", w.Result().StatusCode, body)
+	}
+
+	var errResp finalizeErrorResponse
+	if err := json.NewDecoder(w.Result().Body).Decode(&errResp); err != nil {
+		t.Fatalf("decoding error response: %v", err)
+	}
+	if !errResp.MissingBtpKeys {
+		t.Error("expected missing_btp_keys=true")
 	}
 }

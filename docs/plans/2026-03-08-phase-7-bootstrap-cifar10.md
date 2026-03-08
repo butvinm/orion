@@ -129,17 +129,17 @@ Changes span 3 files: `evaluator.py` (Python API), `ffi.py` (ctypes prototypes),
 
 Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/client.ts`.
 
-- [ ] Add `import "github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"` to server
-- [ ] Add `btpKeys *bootstrapping.EvaluationKeys` field to `session` struct (main.go:50)
-- [ ] Add `maxBootstrapKeyBytes` constant (~6 GB — bootstrap keys are much larger than individual Galois keys)
-- [ ] Add `POST /session/{id}/keys/bootstrap` handler: read body, unmarshal as `bootstrapping.EvaluationKeys`, store in `sess.btpKeys`
-- [ ] Register route in server setup
-- [ ] Update `HandleFinalize` (main.go:280): validate `sess.btpKeys != nil` when `s.manifest.BootstrapSlots` is non-empty; pass `sess.btpKeys` to `evaluator.NewEvaluatorFromKeySet`; nil out `sess.btpKeys` after evaluator creation
-- [ ] Update client (`client.ts`): after Galois key upload and before finalize, if `manifest.bootstrap_slots.length > 0`, generate bootstrap keys via `btpParamsGenEvaluationKeys`, marshal, and POST to `/session/{id}/keys/bootstrap`
-- [ ] Run `cd js/lattigo && npm run build` to rebuild TypeScript
-- [ ] Write test for bootstrap key upload endpoint
-- [ ] Write test for finalize validation rejecting missing bootstrap keys
-- [ ] Run JS/WASM tests (`cd js/lattigo && npm test`) — must pass before next task
+- [x] Add `import "github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"` to server
+- [x] Add `btpKeys *bootstrapping.EvaluationKeys` field to `session` struct (main.go:50)
+- [x] Add `maxBootstrapKeyBytes` constant (~6 GB — bootstrap keys are much larger than individual Galois keys)
+- [x] Add `POST /session/{id}/keys/bootstrap` handler: read body, unmarshal as `bootstrapping.EvaluationKeys`, store in `sess.btpKeys`
+- [x] Register route in server setup
+- [x] Update `HandleFinalize` (main.go:280): validate `sess.btpKeys != nil` when `s.manifest.BootstrapSlots` is non-empty; pass `sess.btpKeys` to `evaluator.NewEvaluatorFromKeySet`; nil out `sess.btpKeys` after evaluator creation
+- [x] Update client (`client.ts`): after Galois key upload and before finalize, if `manifest.bootstrap_slots.length > 0`, generate bootstrap keys via `btpParamsGenEvaluationKeys`, marshal, and POST to `/session/{id}/keys/bootstrap`
+- [x] Run `cd js/lattigo && npm run build` to rebuild TypeScript
+- [x] Write test for bootstrap key upload endpoint
+- [x] Write test for finalize validation rejecting missing bootstrap keys
+- [x] Run JS/WASM tests (`cd js/lattigo && npm test`) — must pass before next task
 
 ### Task 7: AlexNet CIFAR-10 example
 

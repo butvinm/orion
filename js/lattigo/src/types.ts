@@ -188,6 +188,9 @@ export interface WasmBridge {
     btpParamsHID: Handle,
     skHID: Handle,
   ): Promise<{ evkHID: Handle; btpEvkHID: Handle }>;
+
+  /** Marshal bootstrap evaluation keys to binary. */
+  btpEvaluationKeysMarshal(btpEvkHID: Handle): Uint8Array | ErrorResult;
 }
 
 /** Type guard: check if a bridge result is an error. */

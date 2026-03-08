@@ -122,3 +122,21 @@ func btpParamsGenEvaluationKeys(_ js.Value, args []js.Value) any {
 	handler.Release()
 	return promise
 }
+
+// btpEvaluationKeysMarshal(btpEvkHID: number) → Uint8Array | {error: string}
+// Marshals bootstrapping.EvaluationKeys to binary for upload to server.
+func btpEvaluationKeysMarshal(_ js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return errorResult("btpEvaluationKeysMarshal: missing btpEvkHID argument")
+	}
+	obj, ok := Load(uint32(args[0].Int()))
+	if !ok {
+		return errorResult("btpEvaluationKeysMarshal: invalid bootstrap evaluation keys handle")
+	}
+	btpKeys := obj.(*bootstrapping.EvaluationKeys)
+	data, err := btpKeys.MarshalBinary()
+	if err != nil {
+		return errorResult(fmt.Sprintf("btpEvaluationKeysMarshal: %v", err))
+	}
+	return bytesToJS(data)
+}

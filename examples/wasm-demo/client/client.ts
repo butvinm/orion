@@ -47,12 +47,14 @@ interface OrionParams {
   h: number;
   ring_type: string;
   boot_logp?: number[];
+  btp_logn?: number;
 }
 
 interface KeyManifest {
   galois_elements: number[];
   bootstrap_slots: number[];
   boot_logp?: number[];
+  btp_logn?: number;
   needs_rlk: boolean;
 }
 
@@ -283,7 +285,87 @@ async function initializeKeys(): Promise<void> {
     );
   }
 
-  // TODO: Phase 7 — bootstrap key upload (bootstrap_slots is always empty for current models)
+  // 8b. Upload bootstrap keys if model requires bootstrap
+  if (manifest.bootstrap_slots.length > 0 && bridge) {
+    appendLine("Generating bootstrap evaluation keys (this may take a while)...");
+    const t5 = performance.now();
+
+    // Construct bootstrap parameters literal
+    const btpLit: Record<string, unknown> = {
+      LogN: ckksData.btp_logn ?? ckksData.logn,
+    };
+    if (manifest.boot_logp && manifest.boot_logp.length > 0) {
+      btpLit.LogP = manifest.boot_logp;
+    }
+    if (ckksData.h) {
+      btpLit.H = ckksData.h;
+    }
+    // Use the smallest bootstrap_slots for LogSlots
+    const minSlots = Math.min(...manifest.bootstrap_slots);
+    btpLit.LogSlots = Math.round(Math.log2(minSlots));
+
+    const btpParamsResult = bridge.newBootstrapParametersFromLiteral(
+      params!.handle,
+      JSON.stringify(btpLit),
+    );
+    if ("error" in btpParamsResult) {
+      setStatus(`Bootstrap params error: ${btpParamsResult.error}`);
+      btnInit.disabled = false;
+      return;
+    }
+    const btpParamsHID = btpParamsResult.handle;
+
+    // Generate bootstrap evaluation keys (async — heavy operation)
+    const btpResult = await bridge.btpParamsGenEvaluationKeys(
+      btpParamsHID,
+      sk!.handle,
+    );
+    bridge.deleteHandle(btpParamsHID);
+
+    // Marshal bootstrap keys
+    const btpBytes = bridge.btpEvaluationKeysMarshal(btpResult.btpEvkHID);
+    bridge.deleteHandle(btpResult.evkHID);
+    bridge.deleteHandle(btpResult.btpEvkHID);
+
+    if ("error" in btpBytes) {
+      setStatus(`Bootstrap keys marshal error: ${btpBytes.error}`);
+      btnInit.disabled = false;
+      return;
+    }
+
+    appendLine(
+      `Bootstrap keys generated in ${formatDuration(performance.now() - t5)} (${formatBytes(btpBytes.length)})`,
+    );
+
+    // Upload bootstrap keys
+    appendLine("Uploading bootstrap keys...");
+    const t6 = performance.now();
+    try {
+      const resp = await fetch(
+        `/session/${sessionId}/keys/bootstrap`,
+        {
+          method: "POST",
+          body: btpBytes as unknown as ArrayBuffer,
+          headers: { "Content-Type": "application/octet-stream" },
+        },
+      );
+      if (!resp.ok) {
+        const msg = await resp.text();
+        setStatus(`Bootstrap key upload failed: ${msg}`);
+        btnInit.disabled = false;
+        return;
+      }
+    } catch (err) {
+      setStatus(
+        `Bootstrap key upload error: ${(err as Error).message}`,
+      );
+      btnInit.disabled = false;
+      return;
+    }
+    appendLine(
+      `Bootstrap keys uploaded in ${formatDuration(performance.now() - t6)}`,
+    );
+  }
 
   // 9. Finalize session — server validates all keys present and creates evaluator
   appendLine("Finalizing session...");

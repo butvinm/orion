@@ -5,6 +5,7 @@
 //   - POST /session                           — creates pending session, returns session ID
 //   - POST /session/{id}/keys/relin           — uploads relinearization key
 //   - POST /session/{id}/keys/galois/{element} — uploads individual Galois key
+//   - POST /session/{id}/keys/bootstrap       — uploads bootstrap evaluation keys
 //   - POST /session/{id}/keys/finalize        — validates keys, creates evaluator
 //   - POST /session/{id}/infer                — accepts ciphertext bytes, returns result
 //   - GET  /                                  — static files from client directory
@@ -26,6 +27,7 @@ import (
 
 	orion "github.com/baahl-nyu/orion"
 
+	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 
@@ -34,8 +36,9 @@ import (
 
 // Maximum request body sizes.
 const (
-	maxSingleKeyBytes  = 16 * 1024 * 1024 // 16 MB — individual key upload
-	maxCiphertextBytes = 32 * 1024 * 1024 // 32 MB — ciphertexts are much smaller
+	maxSingleKeyBytes      = 16 * 1024 * 1024           // 16 MB — individual key upload
+	maxCiphertextBytes     = 32 * 1024 * 1024            // 32 MB — ciphertexts are much smaller
+	maxBootstrapKeyBytes   = 6 * 1024 * 1024 * 1024      // 6 GB — bootstrap keys are much larger than individual Galois keys
 )
 
 // sessionState represents the state of a session in the key upload state machine.
@@ -55,6 +58,7 @@ type session struct {
 	// Key storage (populated during pending state).
 	rlk        *rlwe.RelinearizationKey
 	galoisKeys map[uint64]*rlwe.GaloisKey
+	btpKeys    *bootstrapping.EvaluationKeys
 
 	// Evaluator (populated after finalize).
 	eval *evaluator.Evaluator
@@ -269,11 +273,54 @@ func (s *Server) HandleGaloisKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// HandleBootstrapKey uploads bootstrap evaluation keys for a pending session.
+func (s *Server) HandleBootstrapKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess, ok := s.getSession(w, r)
+	if !ok {
+		return
+	}
+
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+
+	if sess.state == sessionReady {
+		http.Error(w, "session already finalized", http.StatusConflict)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBootstrapKeyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
+		return
+	}
+	if len(body) == 0 {
+		http.Error(w, "empty body: expected bootstrap EvaluationKeys bytes", http.StatusBadRequest)
+		return
+	}
+
+	btpKeys := &bootstrapping.EvaluationKeys{}
+	if err := btpKeys.UnmarshalBinary(body); err != nil {
+		http.Error(w, fmt.Sprintf("unmarshaling bootstrap keys: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	sess.btpKeys = btpKeys
+	sess.lastActivity = time.Now()
+	w.WriteHeader(http.StatusOK)
+}
+
 // finalizeErrorResponse is the JSON response for finalize validation errors.
 type finalizeErrorResponse struct {
-	Error           string   `json:"error"`
-	MissingRLK      bool     `json:"missing_rlk,omitempty"`
-	MissingElements []uint64 `json:"missing_elements,omitempty"`
+	Error              string   `json:"error"`
+	MissingRLK         bool     `json:"missing_rlk,omitempty"`
+	MissingElements    []uint64 `json:"missing_elements,omitempty"`
+	MissingBtpKeys     bool     `json:"missing_btp_keys,omitempty"`
 }
 
 // HandleFinalize validates all required keys are present and creates the evaluator.
@@ -305,14 +352,16 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	missingRLK := s.manifest.NeedsRLK && sess.rlk == nil
+	missingBtpKeys := len(s.manifest.BootstrapSlots) > 0 && sess.btpKeys == nil
 
-	if missingRLK || len(missingElements) > 0 {
+	if missingRLK || len(missingElements) > 0 || missingBtpKeys {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		if err := json.NewEncoder(w).Encode(finalizeErrorResponse{
 			Error:           "incomplete keys",
 			MissingRLK:      missingRLK,
 			MissingElements: missingElements,
+			MissingBtpKeys:  missingBtpKeys,
 		}); err != nil {
 			log.Printf("HandleFinalize: encode error response: %v", err)
 		}
@@ -326,7 +375,7 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 	}
 	evk := rlwe.NewMemEvaluationKeySet(sess.rlk, galKeys...)
 
-	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk, nil)
+	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk, sess.btpKeys)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("creating evaluator: %v", err), http.StatusInternalServerError)
 		return
@@ -337,6 +386,7 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 	// Free key storage — no longer needed.
 	sess.rlk = nil
 	sess.galoisKeys = nil
+	sess.btpKeys = nil
 	sess.lastActivity = time.Now()
 
 	w.WriteHeader(http.StatusOK)
@@ -443,6 +493,7 @@ func (s *Server) Handler(clientDir string) http.Handler {
 	mux.HandleFunc("POST /session", s.HandleSession)
 	mux.HandleFunc("POST /session/{id}/keys/relin", s.HandleRelinKey)
 	mux.HandleFunc("POST /session/{id}/keys/galois/{element}", s.HandleGaloisKey)
+	mux.HandleFunc("POST /session/{id}/keys/bootstrap", s.HandleBootstrapKey)
 	mux.HandleFunc("POST /session/{id}/keys/finalize", s.HandleFinalize)
 	mux.HandleFunc("POST /session/{id}/infer", s.HandleInfer)
 
