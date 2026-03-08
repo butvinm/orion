@@ -196,15 +196,15 @@ Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] Verify all requirements from ARCH.md Phase 7 acceptance checklist are met
-- [ ] Verify bootstrap parameter plumbing: `btp_logn` flows through CKKSParams → bridge → .orion → Go structs
-- [ ] Verify Go evaluator: `evalBootstrap` handles full sequence, lazy bootstrapper init works
-- [ ] Verify key transport: Python evaluator accepts btp_keys_bytes, WASM demo has bootstrap endpoint
-- [ ] Verify all three CIFAR-10 examples pass cleartext forward (`python run.py --cleartext-only`). AlexNet compilation already verified (Task 7). VGG/ResNet compilation deferred to Post-Completion (OOMs at logn=16 on 38GB)
-- [ ] **Bootstrap E2E acceptance test:** MLP at logn=14 with 1 bootstrap runs through full v2 pipeline (compile → serialize .orion → load in Go evaluator → keygen → encrypt → forward with bootstrap → decrypt → compare). Params: `logn=14, logq=[55,40,40,40], logp=[61,61], logscale=40, boot_logp=[61x6], ring_type=standard, h=192`. Must achieve >=20 bits precision. Peak RSS must stay under 4 GB.
-- [ ] Run full test suite: `pytest python/tests/` + `go test ./evaluator/...` + `cd js/lattigo && npm test`
-- [ ] Run linter: `go vet ./...`
-- [ ] No imports of `orion.nn` or `orion_compiler.models` anywhere
+- [x] Verify all requirements from ARCH.md Phase 7 acceptance checklist are met
+- [x] Verify bootstrap parameter plumbing: `btp_logn` flows through CKKSParams → bridge → .orion → Go structs
+- [x] Verify Go evaluator: `evalBootstrap` handles full sequence, lazy bootstrapper init works
+- [x] Verify key transport: Python evaluator accepts btp_keys_bytes, WASM demo has bootstrap endpoint
+- [x] Verify all three CIFAR-10 examples pass cleartext forward (`python run.py --cleartext-only`). AlexNet compilation already verified (Task 7). VGG/ResNet compilation deferred to Post-Completion (OOMs at logn=16 on 38GB)
+- [x] **Bootstrap E2E acceptance test:** MLP at logn=14 with 1 bootstrap runs through full v2 pipeline (compile → serialize .orion → load in Go evaluator → keygen → encrypt → forward with bootstrap → decrypt → compare). Params: `logn=14, logq=[55,40,40,40], logp=[61,61], logscale=40, boot_logp=[61x6], ring_type=standard, h=192`. Must achieve >=20 bits precision. Peak RSS must stay under 4 GB.
+- [x] Run full test suite: `pytest python/tests/` + `go test ./evaluator/...` + `cd js/lattigo && npm test`
+- [x] Run linter: `go vet ./...`
+- [x] No imports of `orion.nn` or `orion_compiler.models` anywhere
 
 ### Task 12: [Final] Update documentation
 
