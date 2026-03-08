@@ -106,7 +106,7 @@ func EvalNewEvaluator(paramsJSON *C.char, keysData *C.char, keysDataLen C.ulong,
 		return 0
 	}
 
-	eval, err := evaluator.NewEvaluatorFromKeySet(ckksParams, evk)
+	eval, err := evaluator.NewEvaluatorFromKeySet(ckksParams, evk, nil)
 	if err != nil {
 		setErr(errOut, "creating evaluator: "+err.Error())
 		return 0

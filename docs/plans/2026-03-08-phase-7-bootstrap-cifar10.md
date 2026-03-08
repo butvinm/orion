@@ -82,11 +82,11 @@ so the `LogNthRoot` fix is centralized there.
 
 ### Task 3: Implement `evalBootstrap` in Go evaluator
 
-- [ ] Add `bootstrappers map[int]*bootstrapping.Evaluator` field to `Evaluator` struct in `evaluator/evaluator.go`
-- [ ] Change `NewEvaluatorFromKeySet` signature to accept `btpKeys *bootstrapping.EvaluationKeys` (nil when no bootstrap needed)
-- [ ] Store btpKeys in Evaluator for lazy initialization
-- [ ] Implement lazy bootstrapper initialization: on first `Forward()` call, reconstruct `bootstrapping.Parameters` from model manifest (`btp_logn`, `boot_logp`, `bootstrap_slots`) and create `bootstrapping.Evaluator` per unique slot count
-- [ ] Implement `evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
+- [x] Add `bootstrappers map[int]*bootstrapping.Evaluator` field to `Evaluator` struct in `evaluator/evaluator.go`
+- [x] Change `NewEvaluatorFromKeySet` signature to accept `btpKeys *bootstrapping.EvaluationKeys` (nil when no bootstrap needed)
+- [x] Store btpKeys in Evaluator for lazy initialization
+- [x] Implement lazy bootstrapper initialization: on first `Forward()` call, reconstruct `bootstrapping.Parameters` from model manifest (`btp_logn`, `boot_logp`, `bootstrap_slots`) and create `bootstrapping.Evaluator` per unique slot count
+- [x] Implement `evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error)`:
   - Step 1: Parse `BootstrapConfig` from node
   - Step 2: If `constant != 0`, `AddNew(ct, constant)` (shift into symmetric range)
   - Step 3: Prescale — encode prescale plaintext at ct.Level() with scale = modulus at that level, `MulNew` + `Rescale`
@@ -95,10 +95,10 @@ so the `LogNthRoot` fix is centralized there.
   - Step 6: Sparse-slot postscale — `1 << (params.LogMaxSlots() - bootstrapper.LogMaxSlots())`, integer multiply, restore `LogDimensions.Cols`
   - Step 7: If `postscale != 1`, integer multiply for range-mapping postscale (no rescale)
   - Step 8: If `constant != 0`, `AddNew(ct, -constant)` (un-shift)
-- [ ] Wire `evalBootstrap` into the op dispatch in `Forward()` (replace the "not yet implemented" error)
-- [ ] Update `Close()` to nil out `bootstrappers` map
-- [ ] Update all existing callers of `NewEvaluatorFromKeySet` to pass nil for btpKeys: `evaluator_test.go:62`, `max_error_stats_test.go:74` (the bridge callers in `python/orion-evaluator/bridge/evaluator.go:109` and `wasm-demo/server/main.go:329` are handled in Tasks 5 and 6)
-- [ ] Run `go test ./evaluator/...` — must pass before next task (existing tests still green)
+- [x] Wire `evalBootstrap` into the op dispatch in `Forward()` (replace the "not yet implemented" error)
+- [x] Update `Close()` to nil out `bootstrappers` map
+- [x] Update all existing callers of `NewEvaluatorFromKeySet` to pass nil for btpKeys: `evaluator_test.go:62`, `max_error_stats_test.go:74` (the bridge callers in `python/orion-evaluator/bridge/evaluator.go:109` and `wasm-demo/server/main.go:329` are handled in Tasks 5 and 6)
+- [x] Run `go test ./evaluator/...` — must pass before next task (existing tests still green)
 
 ### Task 4: Go evaluator bootstrap unit tests
 

@@ -2,12 +2,15 @@ package evaluator
 
 import (
 	"fmt"
+	"math"
 	"sort"
 
+	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/polynomial"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
+	"github.com/baahl-nyu/lattigo/v6/utils"
 )
 
 // Evaluator runs FHE inference on a compiled Model by walking the computation graph.
@@ -18,21 +21,28 @@ type Evaluator struct {
 	eval     *ckks.Evaluator
 	linEval  *lintrans.Evaluator
 	polyEval *polynomial.Evaluator
+
+	// Bootstrap support: keys stored for lazy bootstrapper initialization.
+	btpKeys       *bootstrapping.EvaluationKeys
+	bootstrappers map[int]*bootstrapping.Evaluator // logSlots -> bootstrapper
 }
 
 // NewEvaluatorFromKeySet creates an Evaluator from Lattigo types directly.
-func NewEvaluatorFromKeySet(ckksParams ckks.Parameters, keys *rlwe.MemEvaluationKeySet) (*Evaluator, error) {
+// btpKeys may be nil when the model does not use bootstrap.
+func NewEvaluatorFromKeySet(ckksParams ckks.Parameters, keys *rlwe.MemEvaluationKeySet, btpKeys *bootstrapping.EvaluationKeys) (*Evaluator, error) {
 	eval := ckks.NewEvaluator(ckksParams, keys)
 	enc := ckks.NewEncoder(ckksParams)
 	polyEval := polynomial.NewEvaluator(ckksParams, eval)
 	linEval := lintrans.NewEvaluator(eval)
 
 	return &Evaluator{
-		params:   ckksParams,
-		encoder:  enc,
-		eval:     eval,
-		linEval:  linEval,
-		polyEval: polyEval,
+		params:        ckksParams,
+		encoder:       enc,
+		eval:          eval,
+		linEval:       linEval,
+		polyEval:      polyEval,
+		btpKeys:       btpKeys,
+		bootstrappers: make(map[int]*bootstrapping.Evaluator),
 	}, nil
 }
 
@@ -42,6 +52,8 @@ func (e *Evaluator) Close() {
 	e.encoder = nil
 	e.linEval = nil
 	e.polyEval = nil
+	e.btpKeys = nil
+	e.bootstrappers = nil
 }
 
 // Forward runs FHE inference on the model's computation graph.
@@ -116,7 +128,10 @@ func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphert
 			result, err = e.evalPolynomial(model, node, results[inputs[0]])
 
 		case "bootstrap":
-			return nil, fmt.Errorf("op %q not yet implemented for node %q", node.Op, name)
+			if len(inputs) != 1 {
+				return nil, fmt.Errorf("bootstrap %q: expected 1 input, got %d", name, len(inputs))
+			}
+			result, err = e.evalBootstrap(model, node, results[inputs[0]])
 
 		default:
 			return nil, fmt.Errorf("unknown op %q for node %q", node.Op, name)
@@ -316,4 +331,146 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 	}
 
 	return result, nil
+}
+
+// getBootstrapper returns (or lazily creates) a bootstrapping.Evaluator for the
+// given slot count, using the model's manifest parameters.
+func (e *Evaluator) getBootstrapper(model *Model, slots int) (*bootstrapping.Evaluator, error) {
+	logSlots := int(math.Log2(float64(slots)))
+	if btp, ok := e.bootstrappers[logSlots]; ok {
+		return btp, nil
+	}
+
+	if e.btpKeys == nil {
+		return nil, fmt.Errorf("bootstrap keys not provided but bootstrap op requires them")
+	}
+
+	manifest := model.header.Manifest
+	btpLit := bootstrapping.ParametersLiteral{
+		LogN:     utils.Pointy(manifest.BtpLogN),
+		LogP:     copyIntSlice(manifest.BootLogP),
+		Xs:       e.params.Xs(),
+		LogSlots: utils.Pointy(logSlots),
+	}
+
+	btpParams, err := bootstrapping.NewParametersFromLiteral(e.params, btpLit)
+	if err != nil {
+		return nil, fmt.Errorf("creating bootstrap parameters (slots=%d): %w", slots, err)
+	}
+
+	btp, err := bootstrapping.NewEvaluator(btpParams, e.btpKeys)
+	if err != nil {
+		return nil, fmt.Errorf("creating bootstrapper (slots=%d): %w", slots, err)
+	}
+
+	e.bootstrappers[logSlots] = btp
+	return btp, nil
+}
+
+// copyIntSlice returns a copy of the input slice.
+func copyIntSlice(s []int) []int {
+	if s == nil {
+		return nil
+	}
+	out := make([]int, len(s))
+	copy(out, s)
+	return out
+}
+
+// evalBootstrap implements the bootstrap operation:
+//  1. Parse BootstrapConfig
+//  2. Constant shift (center values around 0)
+//  3. Prescale (map to [-1, 1]) via plaintext multiply + rescale
+//  4. Set sparse LogDimensions.Cols
+//  5. Bootstrap (refresh modulus chain)
+//  6. Sparse-slot postscale (integer multiply, restore dims)
+//  7. Range-mapping postscale (integer multiply, no rescale)
+//  8. Un-shift constant
+func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
+	cfg, err := parseBootstrapConfig(node.ConfigRaw)
+	if err != nil {
+		return nil, fmt.Errorf("parsing bootstrap config: %w", err)
+	}
+
+	bootstrapper, err := e.getBootstrapper(model, cfg.Slots)
+	if err != nil {
+		return nil, err
+	}
+
+	// Work on a copy to avoid aliasing.
+	work := ct.CopyNew()
+
+	// Step 2: Constant shift — center values around 0.
+	if cfg.Constant != 0 {
+		work, err = e.eval.AddNew(work, cfg.Constant)
+		if err != nil {
+			return nil, fmt.Errorf("bootstrap constant shift: %w", err)
+		}
+	}
+
+	// Step 3: Prescale — map values to [-1, 1] range for bootstrap.
+	// Encode prescale as a plaintext at ct.Level() with scale = q_L (modulus at that level),
+	// multiply, then rescale. This consumes 1 level.
+	if cfg.Prescale != 1 {
+		level := work.Level()
+		ql := e.params.Q()[level]
+		prescalePt := ckks.NewPlaintext(e.params, level)
+		prescalePt.Scale = rlwe.NewScale(ql)
+
+		prescaleVec := make([]float64, e.params.MaxSlots())
+		for i := range prescaleVec {
+			prescaleVec[i] = cfg.Prescale
+		}
+		if err := e.encoder.Encode(prescaleVec, prescalePt); err != nil {
+			return nil, fmt.Errorf("encoding prescale: %w", err)
+		}
+
+		work, err = e.eval.MulNew(work, prescalePt)
+		if err != nil {
+			return nil, fmt.Errorf("prescale mul: %w", err)
+		}
+		if err = e.eval.Rescale(work, work); err != nil {
+			return nil, fmt.Errorf("prescale rescale: %w", err)
+		}
+	}
+
+	// Step 4: Set sparse LogDimensions for bootstrap.
+	work.LogDimensions.Cols = bootstrapper.LogMaxSlots()
+
+	// Step 5: Bootstrap — refresh modulus chain.
+	work, err = bootstrapper.Bootstrap(work)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: %w", err)
+	}
+
+	// Step 6: Sparse-slot postscale — compensate for sparse slot packing.
+	sparsePostscale := 1 << (e.params.LogMaxSlots() - bootstrapper.LogMaxSlots())
+	if sparsePostscale > 1 {
+		work, err = e.eval.MulNew(work, sparsePostscale)
+		if err != nil {
+			return nil, fmt.Errorf("sparse postscale mul: %w", err)
+		}
+	}
+
+	// Restore full LogDimensions.
+	work.LogDimensions.Cols = e.params.LogMaxSlots()
+
+	// Step 7: Range-mapping postscale — integer multiply (no rescale needed).
+	rangePostscale := int(cfg.Postscale)
+	if rangePostscale > 1 {
+		work, err = e.eval.MulNew(work, rangePostscale)
+		if err != nil {
+			return nil, fmt.Errorf("range postscale mul: %w", err)
+		}
+	}
+
+	// Step 8: Un-shift constant.
+	if cfg.Constant != 0 {
+		work, err = e.eval.AddNew(work, -cfg.Constant)
+		if err != nil {
+			return nil, fmt.Errorf("bootstrap constant un-shift: %w", err)
+		}
+	}
+
+	return work, nil
 }

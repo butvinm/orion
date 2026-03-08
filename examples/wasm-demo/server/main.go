@@ -326,7 +326,7 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 	}
 	evk := rlwe.NewMemEvaluationKeySet(sess.rlk, galKeys...)
 
-	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk)
+	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk, nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("creating evaluator: %v", err), http.StatusInternalServerError)
 		return

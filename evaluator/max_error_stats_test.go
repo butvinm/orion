@@ -71,7 +71,7 @@ func TestMaxErrorDistribution(t *testing.T) {
 				}
 
 				evk := rlwe.NewMemEvaluationKeySet(rlk, galoisKeys...)
-				eval, err := NewEvaluatorFromKeySet(ckksParams, evk)
+				eval, err := NewEvaluatorFromKeySet(ckksParams, evk, nil)
 				require.NoError(t, err)
 
 				enc := ckks.NewEncoder(ckksParams)

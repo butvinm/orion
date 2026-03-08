@@ -59,7 +59,7 @@ func setupEvaluator(t *testing.T, ckksParams ckks.Parameters, galoisElements []u
 	}
 
 	evk := rlwe.NewMemEvaluationKeySet(rlk, galoisKeys...)
-	eval, err := NewEvaluatorFromKeySet(ckksParams, evk)
+	eval, err := NewEvaluatorFromKeySet(ckksParams, evk, nil)
 	require.NoError(t, err)
 
 	ctx := &testContext{
@@ -130,14 +130,16 @@ func TestForwardNilInput(t *testing.T) {
 	assert.Contains(t, err.Error(), "input ciphertext is nil")
 }
 
-func TestForwardBootstrapStubReturnsError(t *testing.T) {
+func TestForwardBootstrapWithoutKeysReturnsError(t *testing.T) {
 	model, eval, ctx := newTestEvaluator(t)
 	defer eval.Close()
 
-	// Inject a bootstrap node into the graph to test the error path.
+	// Inject a bootstrap node into the graph to test error when no btpKeys provided.
+	btpConfig := `{"input_level":3,"input_min":-1,"input_max":1,"prescale":1,"postscale":1,"constant":0,"slots":128}`
 	model.graph.Nodes["bootstrap_node"] = &Node{
-		Name: "bootstrap_node",
-		Op:   "bootstrap",
+		Name:      "bootstrap_node",
+		Op:        "bootstrap",
+		ConfigRaw: json.RawMessage(btpConfig),
 	}
 	model.graph.Order = []string{"flatten", "bootstrap_node"}
 	model.graph.Input = "flatten"
@@ -152,7 +154,7 @@ func TestForwardBootstrapStubReturnsError(t *testing.T) {
 
 	_, err := eval.Forward(model, ct)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not yet implemented")
+	assert.Contains(t, err.Error(), "bootstrap keys not provided")
 }
 
 func TestForwardUnknownOpReturnsError(t *testing.T) {
