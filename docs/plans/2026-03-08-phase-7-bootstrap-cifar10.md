@@ -143,13 +143,13 @@ Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/
 
 ### Task 7: AlexNet CIFAR-10 example
 
-- [ ] Create `examples/alexnet/model.py` — port from `models/alexnet.py` using `orion_compiler.nn` imports (Conv2d, SiLU via Chebyshev degree-127, AvgPool2d, AdaptiveAvgPool2d, Linear)
-- [ ] Create `examples/alexnet/train.py` — CIFAR-10 training script with torchvision data loading
-- [ ] Create `examples/alexnet/run.py` — FHE compile → keygen → encrypt → evaluate → decrypt pipeline, starting with `logn=15`
-- [ ] Determine CKKS parameters empirically (adjust logq chain, check if bootstrap is triggered)
-- [ ] Verify `run.py` compiles and produces correct compilation graph (bootstrap placement, level assignment)
-- [ ] Create `examples/alexnet/README.md` — document CKKS params, bootstrap count (if any), key size, expected precision
-- [ ] Run cleartext forward pass to verify model correctness (no FHE — see Note below)
+- [x] Create `examples/alexnet/model.py` — port from `models/alexnet.py` using `orion_compiler.nn` imports (Conv2d, SiLU via Chebyshev degree-127, AvgPool2d, AdaptiveAvgPool2d, Linear)
+- [x] Create `examples/alexnet/train.py` — CIFAR-10 training script with torchvision data loading
+- [x] Create `examples/alexnet/run.py` — FHE compile → keygen → encrypt → evaluate → decrypt pipeline, starting with `logn=15`
+- [x] Determine CKKS parameters empirically (adjust logq chain, check if bootstrap is triggered)
+- [x] Verify `run.py` compiles and produces correct compilation graph (bootstrap placement, level assignment)
+- [x] Create `examples/alexnet/README.md` — document CKKS params, bootstrap count (if any), key size, expected precision
+- [x] Run cleartext forward pass to verify model correctness (no FHE — see Note below)
 
 ### Task 8: VGG CIFAR-10 example
 
