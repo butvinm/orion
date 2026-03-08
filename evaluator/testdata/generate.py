@@ -41,6 +41,29 @@ class SimpleMLP(on.Module):
         return self.fc2(x)
 
 
+class DeepMLP(on.Module):
+    """Flatten -> Linear(784,32) -> Quad -> Linear(32,32) -> Quad -> Linear(32,10)
+
+    Two hidden layers force 1 bootstrap when compiled with a short logq chain
+    (e.g. logq=[55,40,40,40] — only 3 levels, but 5 are needed).
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.flatten = on.Flatten()
+        self.fc1 = on.Linear(784, 32)
+        self.act1 = on.Quad()
+        self.fc2 = on.Linear(32, 32)
+        self.act2 = on.Quad()
+        self.fc3 = on.Linear(32, 10)
+
+    def forward(self, x):
+        x = self.flatten(x)
+        x = self.act1(self.fc1(x))
+        x = self.act2(self.fc2(x))
+        return self.fc3(x)
+
+
 class SigmoidMLP(on.Module):
     """Flatten -> Linear(784,32) -> Sigmoid(degree=7) -> Linear(32,10)"""
 
@@ -204,6 +227,21 @@ def main():
 
     print("Generating SigmoidMLP unfused fixture...")
     generate_fixture("sigmoid_unfused", SigmoidMLP, sigmoid_unfused_params, config=unfused_config)
+
+    # DeepMLP with bootstrap: logn=14, short logq chain forces 1 bootstrap.
+    # Uses standard ring (required for bootstrap) and h=192.
+    bootstrap_params = orion.CKKSParams(
+        logn=14,
+        logq=[55, 40, 40, 40],
+        logp=[61, 61],
+        logscale=40,
+        h=192,
+        ring_type="standard",
+        boot_logp=[61, 61, 61, 61, 61, 61],
+    )
+
+    print("Generating DeepMLP with bootstrap fixture...")
+    generate_fixture("bootstrap_mlp", DeepMLP, bootstrap_params)
 
     print("Done!")
 

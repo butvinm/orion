@@ -417,8 +417,11 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 		prescalePt := ckks.NewPlaintext(e.params, level)
 		prescalePt.Scale = rlwe.NewScale(ql)
 
+		// Only apply prescale to the active slots, zero out the rest.
+		// This matches the Python Bootstrap.compile() which zeros unused slots
+		// to enable clean sparse bootstrapping.
 		prescaleVec := make([]float64, e.params.MaxSlots())
-		for i := range prescaleVec {
+		for i := 0; i < cfg.Slots; i++ {
 			prescaleVec[i] = cfg.Prescale
 		}
 		if err := e.encoder.Encode(prescaleVec, prescalePt); err != nil {

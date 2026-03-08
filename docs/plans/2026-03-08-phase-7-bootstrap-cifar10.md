@@ -106,10 +106,10 @@ Validated with original Orion: MLP at logn=14, `LogQ=[55,40,40,40]`, `LogP=[61,6
 `boot_logp=[61x6]`, `RingType=Standard`, `H=192` triggers exactly 1 bootstrap
 (logslots=7). Peak RSS: 3 GB. Bootstrap time: 1.3s. Precision: 22.9 bits.
 
-- [ ] Write `TestEvalBootstrap` — synthetic model with one bootstrap node at logn=14, verify ciphertext level is refreshed and values preserved within tolerance (~22 bits precision expected)
-- [ ] Write `TestForwardWithBootstrap` — compile MLP with short `logq=[55,40,40,40]` chain forcing 1 bootstrap, run E2E: keygen → encrypt → evaluate → decrypt → compare. Use params: `logn=14, logq=[55,40,40,40], logp=[61,61], logscale=40, boot_logp=[61x6], ring_type=standard, h=192`
-- [ ] Calibrate bootstrap tolerance using `max_error_stats_test.go` pattern (N=30 runs, tolerance = max_observed x 1.5)
-- [ ] Run `go test ./evaluator/...` — must pass before next task
+- [x] Write `TestEvalBootstrap` — synthetic model with one bootstrap node at logn=14, verify ciphertext level is refreshed and values preserved within tolerance (~22 bits precision expected)
+- [x] Write `TestForwardWithBootstrap` — compile MLP with short `logq=[55,40,40,40]` chain forcing 1 bootstrap, run E2E: keygen → encrypt → evaluate → decrypt → compare. Use params: `logn=14, logq=[55,40,40,40], logp=[61,61], logscale=40, boot_logp=[61x6], ring_type=standard, h=192`
+- [x] Calibrate bootstrap tolerance using `max_error_stats_test.go` pattern (N=30 runs, tolerance = max_observed x 1.5)
+- [x] Run `go test ./evaluator/...` — must pass before next task
 
 ### Task 5: Python `orion_evaluator` bootstrap key support
 
