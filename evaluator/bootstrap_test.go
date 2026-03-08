@@ -147,17 +147,91 @@ func buildSyntheticBootstrapModel(t *testing.T, ckksParams ckks.Parameters, p or
 	}
 }
 
-// TestEvalBootstrap tests the bootstrap operation on a synthetic model.
-// Encrypts at level 0 (simulating exhausted modulus chain), verifies bootstrap
-// refreshes the level and preserves values within tolerance.
+// TestEvalBootstrap tests the bootstrap operation at multiple input levels.
+// The compiler guarantees input_level >= 1 (level_dag.py:238-240). The prescale
+// multiply always runs (even when prescale==1) to zero inactive slots, consuming
+// 1 level. We test at levels 1, 2, and 3 to cover minimum, middle, and high.
 func TestEvalBootstrap(t *testing.T) {
 	logSlots := 7 // 128 slots
 	slots := 1 << logSlots
 
 	btpCtx := newBootstrapTestContext(t, logSlots)
 	p := bootstrapTestParams()
+	// logq=[55,40,40,40] → max level 3
 
-	// Create evaluator with bootstrap keys.
+	kg := rlwe.NewKeyGenerator(btpCtx.ckksParams)
+	rlk := kg.GenRelinearizationKeyNew(btpCtx.sk)
+	evk := rlwe.NewMemEvaluationKeySet(rlk)
+
+	for _, inputLevel := range []int{1, 2} {
+		t.Run(fmt.Sprintf("level_%d", inputLevel), func(t *testing.T) {
+			eval, err := NewEvaluatorFromKeySet(btpCtx.ckksParams, evk, btpCtx.btpKeys)
+			require.NoError(t, err)
+			defer eval.Close()
+
+			cfg := BootstrapConfig{
+				InputLevel: inputLevel,
+				InputMin:   -1.0,
+				InputMax:   1.0,
+				Prescale:   1.0,
+				Postscale:  1.0,
+				Constant:   0.0,
+				Slots:      slots,
+			}
+			model := buildSyntheticBootstrapModel(t, btpCtx.ckksParams, p, cfg, inputLevel)
+
+			maxSlots := btpCtx.ckksParams.MaxSlots()
+			input := make([]float64, maxSlots)
+			for i := 0; i < slots; i++ {
+				input[i] = 2.0*float64(i)/float64(slots) - 1.0
+			}
+
+			ctx := &testContext{
+				ckksParams: btpCtx.ckksParams,
+				encoder:    btpCtx.encoder,
+				encryptor:  btpCtx.encryptor,
+				decryptor:  btpCtx.decryptor,
+			}
+			ct := encryptVector(t, ctx, input, inputLevel)
+			require.Equal(t, inputLevel, ct.Level())
+
+			result, err := eval.Forward(model, ct)
+			require.NoError(t, err)
+
+			assert.Greater(t, result.Level(), inputLevel,
+				"bootstrap should refresh level: got %d, want > %d", result.Level(), inputLevel)
+
+			decoded := decryptVector(t, ctx, result)
+
+			tolerance := 0.01
+			var maxErr float64
+			for i := 0; i < slots; i++ {
+				diff := math.Abs(input[i] - decoded[i])
+				if diff > maxErr {
+					maxErr = diff
+				}
+			}
+			t.Logf("Bootstrap (logSlots=%d, level %d->%d): max_error=%.6f tolerance=%.6f",
+				logSlots, inputLevel, result.Level(), maxErr, tolerance)
+
+			for i := 0; i < slots; i++ {
+				assert.InDelta(t, input[i], decoded[i], tolerance,
+					"slot %d: expected %.6f, got %.6f", i, input[i], decoded[i])
+			}
+		})
+	}
+}
+
+// TestEvalBootstrapRejectsLevel0 verifies that bootstrap at level 0 returns a
+// clear error. The compiler never produces level 0 bootstrap nodes, but the
+// evaluator should fail explicitly rather than with an opaque Lattigo error.
+func TestEvalBootstrapRejectsLevel0(t *testing.T) {
+	logSlots := 7
+	slots := 1 << logSlots
+
+	btpCtx := newBootstrapTestContext(t, logSlots)
+	p := bootstrapTestParams()
+
 	kg := rlwe.NewKeyGenerator(btpCtx.ckksParams)
 	rlk := kg.GenRelinearizationKeyNew(btpCtx.sk)
 	evk := rlwe.NewMemEvaluationKeySet(rlk)
@@ -165,8 +239,6 @@ func TestEvalBootstrap(t *testing.T) {
 	require.NoError(t, err)
 	defer eval.Close()
 
-	// Encrypt at level 0 to simulate a ciphertext that has exhausted its levels.
-	// In real usage, bootstrap is applied after operations consume all levels.
 	inputLevel := 0
 	cfg := BootstrapConfig{
 		InputLevel: inputLevel,
@@ -179,7 +251,6 @@ func TestEvalBootstrap(t *testing.T) {
 	}
 	model := buildSyntheticBootstrapModel(t, btpCtx.ckksParams, p, cfg, inputLevel)
 
-	// Input values in [-1, 1] (bootstrap domain).
 	maxSlots := btpCtx.ckksParams.MaxSlots()
 	input := make([]float64, maxSlots)
 	for i := 0; i < slots; i++ {
@@ -193,36 +264,10 @@ func TestEvalBootstrap(t *testing.T) {
 		decryptor:  btpCtx.decryptor,
 	}
 	ct := encryptVector(t, ctx, input, inputLevel)
-	require.Equal(t, inputLevel, ct.Level())
 
-	result, err := eval.Forward(model, ct)
-	require.NoError(t, err)
-
-	// Bootstrap should refresh ciphertext to a level above the input level.
-	assert.Greater(t, result.Level(), inputLevel,
-		"bootstrap should refresh level: got %d, want > %d", result.Level(), inputLevel)
-
-	decoded := decryptVector(t, ctx, result)
-
-	// The sparse postscale (2^(LogMaxSlots-logSlots)) compensates for bootstrap's
-	// internal sparse-slot division, so the net effect is approximately identity.
-	// Bootstrap adds noise — ~22 bits precision expected.
-	tolerance := 0.01
-
-	var maxErr float64
-	for i := 0; i < slots; i++ {
-		diff := math.Abs(input[i] - decoded[i])
-		if diff > maxErr {
-			maxErr = diff
-		}
-	}
-	t.Logf("Bootstrap (logSlots=%d, level %d->%d): max_error=%.6f tolerance=%.6f",
-		logSlots, inputLevel, result.Level(), maxErr, tolerance)
-
-	for i := 0; i < slots; i++ {
-		assert.InDelta(t, input[i], decoded[i], tolerance,
-			"slot %d: expected %.6f, got %.6f", i, input[i], decoded[i])
-	}
+	_, err = eval.Forward(model, ct)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "input level >= 1")
 }
 
 // TestForwardWithBootstrap runs a full E2E test with a compiled model that includes
@@ -334,7 +379,7 @@ func TestBootstrapMaxErrorDistribution(t *testing.T) {
 	ckksParams, err := p.NewCKKSParameters()
 	require.NoError(t, err)
 
-	inputLevel := 0 // bootstrap from level 0
+	inputLevel := 1 // compiler guarantees bootstrap input_level >= 1
 
 	maxSlots := ckksParams.MaxSlots()
 	input := make([]float64, maxSlots)

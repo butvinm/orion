@@ -411,20 +411,22 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 		}
 	}
 
-	// Step 3: Prescale — map values to [-1, 1] range for bootstrap.
-	// Encode prescale as a plaintext at ct.Level() with scale = q_L (modulus at that level),
-	// multiply, then rescale. This consumes 1 level.
-	// When prescale==1, values are already in [-1, 1] and the ciphertext is typically
-	// at level 0 with no spare levels for a multiply+rescale. Skip in that case.
-	if cfg.Prescale != 1 {
+	// Step 3: Prescale — map values to [-1, 1] and zero inactive slots.
+	// The prescale plaintext has cfg.Prescale in active slots and 0.0 in inactive
+	// slots. Even when prescale==1, the multiply is necessary to zero inactive
+	// slots for clean sparse bootstrapping (matching the reference implementation
+	// which unconditionally multiplies by prescale_ptxt).
+	// This consumes 1 level. The compiler guarantees input_level >= 1
+	// (level_dag.py:238-240 rejects bootstrap placement at level 0).
+	if work.Level() < 1 {
+		return nil, fmt.Errorf("bootstrap requires input level >= 1 for prescale, got level %d", work.Level())
+	}
+	{
 		level := work.Level()
 		ql := e.params.Q()[level]
 		prescalePt := ckks.NewPlaintext(e.params, level)
 		prescalePt.Scale = rlwe.NewScale(ql)
 
-		// Only apply prescale to the active slots, zero out the rest.
-		// This matches the Python Bootstrap.compile() which zeros unused slots
-		// to enable clean sparse bootstrapping.
 		prescaleVec := make([]float64, e.params.MaxSlots())
 		for i := 0; i < cfg.Slots; i++ {
 			prescaleVec[i] = cfg.Prescale
