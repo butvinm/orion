@@ -12,12 +12,9 @@ import json
 import sys
 import os
 
-# Add project root to path so we can import orion
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
 import torch
-import orion
-import orion.nn as on
+import orion_compiler
+import orion_compiler.nn as on
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +144,7 @@ def generate_fixture(name, net_cls, params, config=None):
     net.eval()
 
     # Compile
-    compiler = orion.Compiler(net, params, config=config)
+    compiler = orion_compiler.Compiler(net, params, config=config)
     compiler.fit(torch.randn(1, 1, 28, 28))
     compiled = compiler.compile()
     fused = config.fuse_modules if config else True
@@ -188,7 +185,7 @@ def generate_fixture(name, net_cls, params, config=None):
 
 def main():
     # SimpleMLP: logn=13, logq=[29,26,26,26,26,26], h=8192, conjugate_invariant
-    mlp_params = orion.CKKSParams(
+    mlp_params = orion_compiler.CKKSParams(
         logn=13,
         logq=[29, 26, 26, 26, 26, 26],
         logp=[29, 29],
@@ -198,7 +195,7 @@ def main():
     )
 
     # SigmoidMLP: needs more levels for degree-7 polynomial
-    sigmoid_params = orion.CKKSParams(
+    sigmoid_params = orion_compiler.CKKSParams(
         logn=13,
         logq=[29, 26, 26, 26, 26, 26, 26, 26],
         logp=[29, 29],
@@ -215,7 +212,7 @@ def main():
 
     # SigmoidMLP unfused: same params but fuse_modules=False
     # Needs extra level because prescale adds 1 to depth
-    sigmoid_unfused_params = orion.CKKSParams(
+    sigmoid_unfused_params = orion_compiler.CKKSParams(
         logn=13,
         logq=[29, 26, 26, 26, 26, 26, 26, 26, 26],
         logp=[29, 29],
@@ -223,14 +220,14 @@ def main():
         h=8192,
         ring_type="conjugate_invariant",
     )
-    unfused_config = orion.CompilerConfig(fuse_modules=False)
+    unfused_config = orion_compiler.CompilerConfig(fuse_modules=False)
 
     print("Generating SigmoidMLP unfused fixture...")
     generate_fixture("sigmoid_unfused", SigmoidMLP, sigmoid_unfused_params, config=unfused_config)
 
     # DeepMLP with bootstrap: logn=14, short logq chain forces 1 bootstrap.
     # Uses standard ring (required for bootstrap) and h=192.
-    bootstrap_params = orion.CKKSParams(
+    bootstrap_params = orion_compiler.CKKSParams(
         logn=14,
         logq=[55, 40, 40, 40],
         logp=[61, 61],

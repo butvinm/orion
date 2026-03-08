@@ -189,10 +189,10 @@ Server: `examples/wasm-demo/server/main.go`. Client: `examples/wasm-demo/client/
 
 ### Task 10: Cleanup legacy models
 
-- [ ] Delete `models/` directory entirely (alexnet.py, vgg.py, resnet.py, yolo.py)
-- [ ] Grep codebase for any remaining imports of `orion.nn` or `orion_compiler.models` — remove them
-- [ ] Run `pytest python/tests/` — must pass
-- [ ] Run `go test ./evaluator/...` — must pass
+- [x] Delete `models/` directory entirely (alexnet.py, vgg.py, resnet.py, yolo.py)
+- [x] Grep codebase for any remaining imports of `orion.nn` or `orion_compiler.models` — remove them
+- [x] Run `pytest python/tests/` — must pass
+- [x] Run `go test ./evaluator/...` — must pass
 
 ### Task 11: Verify acceptance criteria
 
