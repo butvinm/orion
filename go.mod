@@ -1,4 +1,4 @@
-module github.com/baahl-nyu/orion
+module github.com/butvinm/orion
 
 go 1.23.0
 

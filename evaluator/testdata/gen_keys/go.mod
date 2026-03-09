@@ -1,12 +1,12 @@
-module github.com/baahl-nyu/orion/evaluator/testdata/gen_keys
+module github.com/butvinm/orion/evaluator/testdata/gen_keys
 
 go 1.23.0
 
-replace github.com/baahl-nyu/orion => ../../../
+replace github.com/butvinm/orion => ../../../
 
 require (
 	github.com/baahl-nyu/lattigo/v6 v6.2.0
-	github.com/baahl-nyu/orion v0.0.0-00010101000000-000000000000
+	github.com/butvinm/orion v0.0.0-00010101000000-000000000000
 )
 
 require (

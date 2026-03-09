@@ -179,7 +179,7 @@ import (
     "github.com/baahl-nyu/lattigo/v6/core/rlwe"
     "github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 
-    "github.com/baahl-nyu/orion/evaluator"
+    "github.com/butvinm/orion/evaluator"
 )
 
 func main() {
@@ -488,11 +488,11 @@ default:
 
 ## Repo Structure
 
-Monorepo. Go module at root (`github.com/baahl-nyu/orion`). One Go package — `evaluator`, plus shared types at root. Three Python packages — `lattigo` (Go bridge `.so` + Python FFI), `orion-compiler` (torch + compilation), and `orion-evaluator` (Go evaluator bridge `.so`). No `orion-client` — users use Lattigo directly. The evaluator, Python bridge, and JS bridge each import Lattigo directly — no shared Go wrapper package.
+Monorepo. Go module at root (`github.com/butvinm/orion`). One Go package — `evaluator`, plus shared types at root. Three Python packages — `lattigo` (Go bridge `.so` + Python FFI), `orion-compiler` (torch + compilation), and `orion-evaluator` (Go evaluator bridge `.so`). No `orion-client` — users use Lattigo directly. The evaluator, Python bridge, and JS bridge each import Lattigo directly — no shared Go wrapper package.
 
 ```
 orion/
-├── go.mod                          # module github.com/baahl-nyu/orion
+├── go.mod                          # module github.com/butvinm/orion
 ├── params.go, keys.go, ...         # Shared types: Params, Manifest, Polynomial (used by evaluator + bridges)
 │
 ├── evaluator/                      # Go pkg: Orion FHE inference engine
@@ -531,7 +531,7 @@ orion/
 └── docs/
 ```
 
-**`evaluator/`** (`github.com/baahl-nyu/orion/evaluator`) — the only Orion-specific Go package. Reads `.orion` files, CKKS-encodes diagonals at load time, walks the computation graph. Imports Lattigo directly.
+**`evaluator/`** (`github.com/butvinm/orion/evaluator`) — the only Orion-specific Go package. Reads `.orion` files, CKKS-encodes diagonals at load time, walks the computation graph. Imports Lattigo directly.
 
 **`lattigo`** (`pip install lattigo`) — Python package shipping the Go bridge `.so`. Contains all ctypes bindings (`ffi.py`, `GoHandle`). Not Orion-specific — exposes Lattigo's keygen, encrypt, decrypt, encode, decode, marshal/unmarshal, polynomial generation, parameter construction. The only Python package requiring Go/CGO to build from source (pre-built wheels eliminate this).
 
@@ -545,7 +545,7 @@ orion/
 
 | Component         | Go import                              | `pip install`     | Depends on                 | Does NOT depend on        |
 | ----------------- | -------------------------------------- | ----------------- | -------------------------- | ------------------------- |
-| `evaluator/`      | `github.com/baahl-nyu/orion/evaluator` | —                 | Lattigo                    | Python, compiler, bridges |
+| `evaluator/`      | `github.com/butvinm/orion/evaluator` | —                 | Lattigo                    | Python, compiler, bridges |
 | `lattigo`         | (CGO, builds .so)                      | `lattigo`         | Lattigo (Go)               | Anything Orion            |
 | `orion-compiler`  | —                                      | `orion-compiler`  | `lattigo`, torch, networkx | `evaluator/`              |
 | `orion-evaluator` | (CGO, builds .so)                      | `orion-evaluator` | `evaluator/`, Lattigo      | torch, compiler           |
@@ -567,7 +567,7 @@ Source-only builds for now. Pre-built wheels with bundled Go shared library are 
 
 **Orion evaluator (Python bindings):** `cd python/orion-evaluator && pip install -e .` — triggers Go compilation of `bridge/` into a shared library wrapping the `evaluator/` package. Requires the `evaluator/` Go package (repo root).
 
-**Go Evaluator:** Standard `go build`. Users import `"github.com/baahl-nyu/orion/evaluator"` in their server code.
+**Go Evaluator:** Standard `go build`. Users import `"github.com/butvinm/orion/evaluator"` in their server code.
 
 ## Testing
 
@@ -1095,7 +1095,7 @@ With the Python evaluator gone (Phase 1), `Client` class deleted, and packages s
 
 After Phase 2 delivers the `evaluator/` package:
 
-- Root `go.mod`: `module github.com/baahl-nyu/orion` (single module for evaluator + shared types)
+- Root `go.mod`: `module github.com/butvinm/orion` (single module for evaluator + shared types)
 - `evaluator/` becomes a package under the root module
 - `python/lattigo/bridge/` retains its own `go.mod` (CGO shared library, separate build)
 - Move shared types (`Params`, `Manifest`, etc.) from `orionclient/` to root-level package
@@ -1124,7 +1124,7 @@ The evaluator bridge accepts raw Lattigo `MarshalBinary` bytes for both keys and
 
 All handles are `cgo.Handle` values, same pattern as `python/lattigo/bridge/`. Error propagation via `errOut` parameter.
 
-The bridge has its own `go.mod` that imports both `github.com/baahl-nyu/orion/evaluator` and Lattigo. It builds a platform-specific `.so`/`.dylib`/`.dll`.
+The bridge has its own `go.mod` that imports both `github.com/butvinm/orion/evaluator` and Lattigo. It builds a platform-specific `.so`/`.dylib`/`.dll`.
 
 **Python package (`python/orion-evaluator/orion_evaluator/`):**
 

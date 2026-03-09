@@ -15,8 +15,8 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 
-	orion "github.com/baahl-nyu/orion"
-	"github.com/baahl-nyu/orion/evaluator"
+	orion "github.com/butvinm/orion"
+	"github.com/butvinm/orion/evaluator"
 )
 
 // =====================================================================

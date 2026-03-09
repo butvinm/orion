@@ -1,10 +1,10 @@
-module github.com/baahl-nyu/orion/examples/wasm-demo/server
+module github.com/butvinm/orion/examples/wasm-demo/server
 
 go 1.23.0
 
-require github.com/baahl-nyu/orion v0.0.0
+require github.com/butvinm/orion v0.0.0
 
-replace github.com/baahl-nyu/orion => ../../../
+replace github.com/butvinm/orion => ../../../
 
 require github.com/baahl-nyu/lattigo/v6 v6.2.0
 

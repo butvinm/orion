@@ -15,7 +15,7 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 
-	"github.com/baahl-nyu/orion/evaluator"
+	"github.com/butvinm/orion/evaluator"
 )
 
 // buildMinimalOrion constructs a minimal .orion v2 binary with a single quad node.

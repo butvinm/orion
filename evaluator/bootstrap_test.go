@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	orion "github.com/baahl-nyu/orion"
+	orion "github.com/butvinm/orion"
 )
 
 // bootstrapTestParams returns CKKS params suitable for bootstrap testing at logn=14.

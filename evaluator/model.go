@@ -10,7 +10,7 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
 
-	orion "github.com/baahl-nyu/orion"
+	orion "github.com/butvinm/orion"
 )
 
 // Model holds a parsed and CKKS-encoded compiled model.

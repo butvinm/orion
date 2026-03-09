@@ -25,7 +25,7 @@ go version # go version go1.22.3 linux/amd64
 ### Install Orion
 
 ```bash
-git clone https://github.com/baahl-nyu/orion.git
+git clone https://github.com/butvinm/orion.git
 cd orion/
 
 # Build the Go shared library

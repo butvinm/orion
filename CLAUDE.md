@@ -156,5 +156,5 @@ output = encoder.decode(result_pt, params.max_slots())
 
 - Three separate packages: `lattigo`, `orion-compiler`, `orion-evaluator`
 - No `Client` class — users use Lattigo primitives directly
-- Go evaluator is a subpackage of the root module (`github.com/baahl-nyu/orion/evaluator`)
+- Go evaluator is a subpackage of the root module (`github.com/butvinm/orion/evaluator`)
 - Tests in `python/tests/`, run with `pytest python/tests/`

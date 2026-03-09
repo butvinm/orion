@@ -1,4 +1,4 @@
-module github.com/baahl-nyu/orion/python/lattigo/bridge
+module github.com/butvinm/orion/python/lattigo/bridge
 
 go 1.23.0
 
