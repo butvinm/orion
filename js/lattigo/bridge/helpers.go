@@ -37,3 +37,22 @@ func jsToBytes(v js.Value) []byte {
 	js.CopyBytesToGo(b, v)
 	return b
 }
+
+// jsToIntSlice converts a JS Array to a Go int slice.
+func jsToIntSlice(v js.Value) []int {
+	length := v.Length()
+	result := make([]int, length)
+	for i := 0; i < length; i++ {
+		result[i] = v.Index(i).Int()
+	}
+	return result
+}
+
+// intSliceToJS converts a Go int slice to a JS Array.
+func intSliceToJS(s []int) js.Value {
+	arr := js.Global().Get("Array").New(len(s))
+	for i, v := range s {
+		arr.SetIndex(i, v)
+	}
+	return arr
+}

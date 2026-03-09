@@ -78,9 +78,14 @@ func main() {
 	ns.Set("memEvalKeySetUnmarshal", js.FuncOf(memEvalKeySetUnmarshal))
 
 	// Bootstrap
-	ns.Set("newBootstrapParametersFromLiteral", js.FuncOf(newBootstrapParametersFromLiteral))
-	ns.Set("btpParamsGenEvaluationKeys", js.FuncOf(btpParamsGenEvaluationKeys))
-	ns.Set("btpEvaluationKeysMarshal", js.FuncOf(btpEvaluationKeysMarshal))
+	ns.Set("newBootstrapParams", js.FuncOf(newBootstrapParams))
+	ns.Set("bootstrapParamsGenEvalKeys", js.FuncOf(bootstrapParamsGenEvalKeys))
+	ns.Set("bootstrapEvalKeysMarshal", js.FuncOf(bootstrapEvalKeysMarshal))
+
+	// Polynomial
+	ns.Set("newPolynomialMonomial", js.FuncOf(newPolynomialMonomial))
+	ns.Set("newPolynomialChebyshev", js.FuncOf(newPolynomialChebyshev))
+	ns.Set("genMinimaxCompositePolynomial", js.FuncOf(genMinimaxCompositePolynomial))
 
 	// Readiness signal — MUST be last registration.
 	ns.Set("__ready", true)

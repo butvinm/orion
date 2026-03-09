@@ -3,7 +3,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"syscall/js"
 
@@ -11,51 +10,50 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 )
 
-// paramsJSON mirrors the JSON format used by Python bridge (orion.Params).
-type paramsJSON struct {
-	LogN        int    `json:"LogN"`
-	LogQ        []int  `json:"LogQ"`
-	LogP        []int  `json:"LogP"`
-	LogScale    int    `json:"LogDefaultScale"`
-	H           int    `json:"H"`
-	RingType    string `json:"RingType"`
-	LogNthRoot  int    `json:"LogNthRoot,omitempty"`
-}
-
-// newCKKSParams(paramsJSON: string) → {handle: number} | {error: string}
+// newCKKSParams(logN, logQ, logP, logDefaultScale, ringType, h?, logNthRoot?)
+// → {handle: number} | {error: string}
 func newCKKSParams(_ js.Value, args []js.Value) any {
-	if len(args) < 1 {
-		return errorResult("newCKKSParams: missing paramsJSON argument")
+	if len(args) < 5 {
+		return errorResult("newCKKSParams: need logN, logQ, logP, logDefaultScale, ringType")
 	}
-	jsonStr := args[0].String()
 
-	var p paramsJSON
-	if err := json.Unmarshal([]byte(jsonStr), &p); err != nil {
-		return errorResult(fmt.Sprintf("newCKKSParams: parsing JSON: %v", err))
+	logN := args[0].Int()
+	logQ := jsToIntSlice(args[1])
+	logP := jsToIntSlice(args[2])
+	logDefaultScale := args[3].Int()
+	ringTypeStr := args[4].String()
+
+	h := 0
+	if len(args) > 5 && !args[5].IsUndefined() && !args[5].IsNull() {
+		h = args[5].Int()
+	}
+	logNthRoot := 0
+	if len(args) > 6 && !args[6].IsUndefined() && !args[6].IsNull() {
+		logNthRoot = args[6].Int()
 	}
 
 	rt := ring.ConjugateInvariant
-	switch p.RingType {
+	switch ringTypeStr {
 	case "Standard", "standard":
 		rt = ring.Standard
 	case "ConjugateInvariant", "conjugate_invariant", "conjugateinvariant", "":
 		rt = ring.ConjugateInvariant
 	default:
-		return errorResult(fmt.Sprintf("newCKKSParams: unknown ring type: %q", p.RingType))
+		return errorResult(fmt.Sprintf("newCKKSParams: unknown ring type: %q", ringTypeStr))
 	}
 
 	lit := ckks.ParametersLiteral{
-		LogN:            p.LogN,
-		LogQ:            p.LogQ,
-		LogP:            p.LogP,
-		LogDefaultScale: p.LogScale,
+		LogN:            logN,
+		LogQ:            logQ,
+		LogP:            logP,
+		LogDefaultScale: logDefaultScale,
 		RingType:        rt,
 	}
-	if p.H > 0 {
-		lit.Xs = ring.Ternary{H: p.H}
+	if h > 0 {
+		lit.Xs = ring.Ternary{H: h}
 	}
-	if p.LogNthRoot > 0 {
-		lit.LogNthRoot = p.LogNthRoot
+	if logNthRoot > 0 {
+		lit.LogNthRoot = logNthRoot
 	}
 
 	params, err := ckks.NewParametersFromLiteral(lit)
@@ -115,8 +113,6 @@ func ckksGaloisElement(_ js.Value, args []js.Value) any {
 		return nil
 	}
 	rotation := args[1].Int()
-	// Return float64 for consistency with ckksModuliChain/ckksAuxModuliChain.
-	// Galois elements fit safely in float64 for any practical CKKS ring dimension.
 	return float64(p.(*ckks.Parameters).GaloisElement(rotation))
 }
 
@@ -132,7 +128,6 @@ func ckksModuliChain(_ js.Value, args []js.Value) any {
 	qi := p.(*ckks.Parameters).Q()
 	arr := js.Global().Get("Array").New(len(qi))
 	for i, v := range qi {
-		// JS numbers are float64 — safe for primes up to 2^53
 		arr.SetIndex(i, float64(v))
 	}
 	return arr

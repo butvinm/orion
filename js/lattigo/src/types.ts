@@ -11,6 +11,9 @@ export interface ErrorResult {
   error: string;
 }
 
+/** Ring type for CKKS parameters. */
+export type RingType = "standard" | "conjugate_invariant";
+
 /**
  * Typed interface for all functions registered on `globalThis.lattigo`
  * by the Go WASM bridge (js/lattigo/bridge/main.go).
@@ -20,7 +23,7 @@ export interface ErrorResult {
  * - Accessor functions return primitives directly (or null on bad handle)
  * - Marshal functions return Uint8Array | ErrorResult
  * - encoderDecode returns Float64Array | ErrorResult
- * - btpParamsGenEvaluationKeys returns Promise
+ * - bootstrapParamsGenEvalKeys returns Promise
  */
 export interface WasmBridge {
   /** Readiness signal — true once all functions are registered. */
@@ -33,8 +36,16 @@ export interface WasmBridge {
 
   // --- CKKS Parameters ---
 
-  /** Create CKKS parameters from JSON. */
-  newCKKSParams(paramsJSON: string): HandleResult | ErrorResult;
+  /** Create CKKS parameters from flat arguments. */
+  newCKKSParams(
+    logN: number,
+    logQ: number[],
+    logP: number[],
+    logDefaultScale: number,
+    ringType: string,
+    h?: number,
+    logNthRoot?: number,
+  ): HandleResult | ErrorResult;
 
   /** Max number of plaintext slots for these parameters. */
   ckksMaxSlots(paramsHID: Handle): number | null;
@@ -171,26 +182,52 @@ export interface WasmBridge {
 
   // --- Bootstrap ---
 
-  /**
-   * Construct bootstrap parameters from a CKKS params handle and a JSON literal.
-   * JSON fields: LogN?, LogP?, H?, LogSlots?
-   */
-  newBootstrapParametersFromLiteral(
+  /** Construct bootstrap parameters from flat arguments. */
+  newBootstrapParams(
     paramsHID: Handle,
-    btpLitJSON: string,
+    logN?: number | null,
+    logP?: number[] | null,
+    h?: number | null,
+    logSlots?: number | null,
   ): HandleResult | ErrorResult;
 
   /**
    * Generate bootstrap evaluation keys. Async (5-30s).
    * Returns both the MemEvaluationKeySet handle and the full bootstrap EvaluationKeys handle.
    */
-  btpParamsGenEvaluationKeys(
+  bootstrapParamsGenEvalKeys(
     btpParamsHID: Handle,
     skHID: Handle,
   ): Promise<{ evkHID: Handle; btpEvkHID: Handle }>;
 
   /** Marshal bootstrap evaluation keys to binary. */
-  btpEvaluationKeysMarshal(btpEvkHID: Handle): Uint8Array | ErrorResult;
+  bootstrapEvalKeysMarshal(btpEvkHID: Handle): Uint8Array | ErrorResult;
+
+  // --- Polynomial ---
+
+  /** Create a monomial-basis polynomial from coefficients. */
+  newPolynomialMonomial(
+    coeffs: Float64Array | number[],
+  ): HandleResult | ErrorResult;
+
+  /** Create a Chebyshev-basis polynomial from coefficients with explicit interval. */
+  newPolynomialChebyshev(
+    coeffs: Float64Array | number[],
+    intervalA: number,
+    intervalB: number,
+  ): HandleResult | ErrorResult;
+
+  /**
+   * Generate minimax composite polynomial coefficients for sign approximation.
+   * Returns raw coefficients (no caching, no sign→[0,1] rescaling).
+   */
+  genMinimaxCompositePolynomial(
+    prec: number,
+    logAlpha: number,
+    logErr: number,
+    degrees: number[],
+    debug: number,
+  ): { coeffs: Float64Array; seps: number[] } | ErrorResult;
 }
 
 /** Type guard: check if a bridge result is an error. */

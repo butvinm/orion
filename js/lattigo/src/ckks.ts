@@ -1,4 +1,4 @@
-import type { Handle } from "./types.js";
+import type { Handle, RingType } from "./types.js";
 import { isError } from "./types.js";
 import { getBridge, registry } from "./bridge.js";
 
@@ -6,43 +6,42 @@ import { getBridge, registry } from "./bridge.js";
 export class CKKSParameters {
   private _handle: Handle;
 
-  constructor(handle: Handle) {
-    this._handle = handle;
-    registry.register(this, handle, this);
+  constructor(opts: {
+    logN: number;
+    logQ: number[];
+    logP: number[];
+    logDefaultScale: number;
+    ringType: RingType;
+    h?: number;
+    logNthRoot?: number;
+  }) {
+    const result = getBridge().newCKKSParams(
+      opts.logN,
+      opts.logQ,
+      opts.logP,
+      opts.logDefaultScale,
+      opts.ringType,
+      opts.h,
+      opts.logNthRoot,
+    );
+    if (isError(result)) {
+      throw new Error(`Failed to create CKKS params: ${result.error}`);
+    }
+    this._handle = result.handle;
+    registry.register(this, this._handle, this);
+  }
+
+  /** @internal Wrap an existing handle (for deserialization etc). */
+  static _fromHandle(handle: Handle): CKKSParameters {
+    const obj = Object.create(CKKSParameters.prototype) as CKKSParameters;
+    obj._handle = handle;
+    registry.register(obj, handle, obj);
+    return obj;
   }
 
   /** @internal Access the raw handle ID. */
   get handle(): Handle {
     return this._handle;
-  }
-
-  /** Create CKKS parameters from log-scale specifications. */
-  static fromLogn(opts: {
-    logN: number;
-    logQ: number[];
-    logP: number[];
-    logDefaultScale: number;
-    h?: number;
-    ringType?: string;
-  }): CKKSParameters {
-    const json = JSON.stringify({
-      LogN: opts.logN,
-      LogQ: opts.logQ,
-      LogP: opts.logP,
-      LogDefaultScale: opts.logDefaultScale,
-      H: opts.h ?? 192,
-      RingType: opts.ringType ?? "ConjugateInvariant",
-    });
-    return CKKSParameters.fromJSON(json);
-  }
-
-  /** Create from a JSON string (Lattigo parameter format). */
-  static fromJSON(paramsJson: string): CKKSParameters {
-    const result = getBridge().newCKKSParams(paramsJson);
-    if (isError(result)) {
-      throw new Error(`Failed to create CKKS params: ${result.error}`);
-    }
-    return new CKKSParameters(result.handle);
   }
 
   /** Maximum number of plaintext slots. */

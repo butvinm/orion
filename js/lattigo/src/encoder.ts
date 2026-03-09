@@ -8,21 +8,24 @@ import type { Handle } from "./types.js";
 export class Encoder {
   private _handle: Handle;
 
-  constructor(handle: Handle) {
-    this._handle = handle;
-    registry.register(this, handle, this);
+  constructor(params: CKKSParameters) {
+    const result = getBridge().newEncoder(params.handle);
+    if (isError(result))
+      throw new Error(`Encoder create: ${result.error}`);
+    this._handle = result.handle;
+    registry.register(this, this._handle, this);
+  }
+
+  /** @internal Wrap an existing handle. */
+  static _fromHandle(handle: Handle): Encoder {
+    const obj = Object.create(Encoder.prototype) as Encoder;
+    obj._handle = handle;
+    registry.register(obj, handle, obj);
+    return obj;
   }
 
   get handle(): Handle {
     return this._handle;
-  }
-
-  /** Create a new CKKS encoder for the given parameters. */
-  static new(params: CKKSParameters): Encoder {
-    const result = getBridge().newEncoder(params.handle);
-    if (isError(result))
-      throw new Error(`Encoder create: ${result.error}`);
-    return new Encoder(result.handle);
   }
 
   /** Encode float64 values into a Plaintext at given level and scale. */

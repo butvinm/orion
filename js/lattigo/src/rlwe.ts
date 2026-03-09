@@ -246,20 +246,24 @@ export class Plaintext {
 export class KeyGenerator {
   private _handle: Handle;
 
-  constructor(handle: Handle) {
-    this._handle = handle;
-    registry.register(this, handle, this);
+  constructor(params: CKKSParameters) {
+    const result = getBridge().newKeyGenerator(params.handle);
+    if (isError(result))
+      throw new Error(`KeyGenerator create: ${result.error}`);
+    this._handle = result.handle;
+    registry.register(this, this._handle, this);
+  }
+
+  /** @internal Wrap an existing handle. */
+  static _fromHandle(handle: Handle): KeyGenerator {
+    const obj = Object.create(KeyGenerator.prototype) as KeyGenerator;
+    obj._handle = handle;
+    registry.register(obj, handle, obj);
+    return obj;
   }
 
   get handle(): Handle {
     return this._handle;
-  }
-
-  static new(params: CKKSParameters): KeyGenerator {
-    const result = getBridge().newKeyGenerator(params.handle);
-    if (isError(result))
-      throw new Error(`KeyGenerator create: ${result.error}`);
-    return new KeyGenerator(result.handle);
   }
 
   genSecretKey(): SecretKey {
@@ -311,20 +315,24 @@ export class KeyGenerator {
 export class Encryptor {
   private _handle: Handle;
 
-  constructor(handle: Handle) {
-    this._handle = handle;
-    registry.register(this, handle, this);
+  constructor(params: CKKSParameters, pk: PublicKey) {
+    const result = getBridge().newEncryptor(params.handle, pk.handle);
+    if (isError(result))
+      throw new Error(`Encryptor create: ${result.error}`);
+    this._handle = result.handle;
+    registry.register(this, this._handle, this);
+  }
+
+  /** @internal Wrap an existing handle. */
+  static _fromHandle(handle: Handle): Encryptor {
+    const obj = Object.create(Encryptor.prototype) as Encryptor;
+    obj._handle = handle;
+    registry.register(obj, handle, obj);
+    return obj;
   }
 
   get handle(): Handle {
     return this._handle;
-  }
-
-  static new(params: CKKSParameters, pk: PublicKey): Encryptor {
-    const result = getBridge().newEncryptor(params.handle, pk.handle);
-    if (isError(result))
-      throw new Error(`Encryptor create: ${result.error}`);
-    return new Encryptor(result.handle);
   }
 
   encryptNew(pt: Plaintext): Ciphertext {
@@ -347,20 +355,24 @@ export class Encryptor {
 export class Decryptor {
   private _handle: Handle;
 
-  constructor(handle: Handle) {
-    this._handle = handle;
-    registry.register(this, handle, this);
+  constructor(params: CKKSParameters, sk: SecretKey) {
+    const result = getBridge().newDecryptor(params.handle, sk.handle);
+    if (isError(result))
+      throw new Error(`Decryptor create: ${result.error}`);
+    this._handle = result.handle;
+    registry.register(this, this._handle, this);
+  }
+
+  /** @internal Wrap an existing handle. */
+  static _fromHandle(handle: Handle): Decryptor {
+    const obj = Object.create(Decryptor.prototype) as Decryptor;
+    obj._handle = handle;
+    registry.register(obj, handle, obj);
+    return obj;
   }
 
   get handle(): Handle {
     return this._handle;
-  }
-
-  static new(params: CKKSParameters, sk: SecretKey): Decryptor {
-    const result = getBridge().newDecryptor(params.handle, sk.handle);
-    if (isError(result))
-      throw new Error(`Decryptor create: ${result.error}`);
-    return new Decryptor(result.handle);
   }
 
   decryptNew(ct: Ciphertext): Plaintext {
@@ -387,30 +399,30 @@ export class Decryptor {
 export class MemEvaluationKeySet {
   private _handle: Handle;
 
-  constructor(handle: Handle) {
-    this._handle = handle;
-    registry.register(this, handle, this);
-  }
-
-  get handle(): Handle {
-    return this._handle;
-  }
-
-  /**
-   * Create a MemEvaluationKeySet from optional RLK + Galois keys.
-   * Pass null for rlk if no relinearization key is needed.
-   */
-  static new(
+  constructor(
     rlk: RelinearizationKey | null,
     galoisKeys: GaloisKey[] = [],
-  ): MemEvaluationKeySet {
+  ) {
     const result = getBridge().newMemEvalKeySet(
       rlk?.handle ?? null,
       galoisKeys.map((gk) => gk.handle),
     );
     if (isError(result))
       throw new Error(`MemEvaluationKeySet create: ${result.error}`);
-    return new MemEvaluationKeySet(result.handle);
+    this._handle = result.handle;
+    registry.register(this, this._handle, this);
+  }
+
+  /** @internal Wrap an existing handle. */
+  static _fromHandle(handle: Handle): MemEvaluationKeySet {
+    const obj = Object.create(MemEvaluationKeySet.prototype) as MemEvaluationKeySet;
+    obj._handle = handle;
+    registry.register(obj, handle, obj);
+    return obj;
+  }
+
+  get handle(): Handle {
+    return this._handle;
   }
 
   marshalBinary(): Uint8Array {
@@ -424,7 +436,7 @@ export class MemEvaluationKeySet {
     const result = getBridge().memEvalKeySetUnmarshal(bytes);
     if (isError(result))
       throw new Error(`MemEvaluationKeySet unmarshal: ${result.error}`);
-    return new MemEvaluationKeySet(result.handle);
+    return MemEvaluationKeySet._fromHandle(result.handle);
   }
 
   free(): void {

@@ -3,7 +3,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"syscall/js"
 
@@ -14,64 +13,48 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/utils"
 )
 
-// btpLitJSON is the JSON schema for bootstrapping.ParametersLiteral.
-// All fields are optional — omitted fields use Lattigo's defaults.
-type btpLitJSON struct {
-	LogN     *int  `json:"LogN"`
-	LogP     []int `json:"LogP"`
-	H        *int  `json:"H"`        // Maps to Xs: ring.Ternary{H: value}
-	LogSlots *int  `json:"LogSlots"`
-}
-
-// newBootstrapParametersFromLiteral(paramsHID: number, btpLitJSON: string) → {handle: number} | {error: string}
-// Constructs bootstrapping.Parameters from the residual CKKS params and a JSON literal.
-// Sync — just parameter construction and validation.
-func newBootstrapParametersFromLiteral(_ js.Value, args []js.Value) any {
-	if len(args) < 2 {
-		return errorResult("newBootstrapParametersFromLiteral: need paramsHID and btpLitJSON arguments")
+// newBootstrapParams(paramsHID, logN?, logP?, h?, logSlots?)
+// → {handle: number} | {error: string}
+// All args after paramsHID are optional (pass null/undefined to use defaults).
+func newBootstrapParams(_ js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return errorResult("newBootstrapParams: need paramsHID argument")
 	}
 
 	obj, ok := Load(uint32(args[0].Int()))
 	if !ok {
-		return errorResult("newBootstrapParametersFromLiteral: invalid params handle")
+		return errorResult("newBootstrapParams: invalid params handle")
 	}
 	params := obj.(*ckks.Parameters)
 
-	jsonStr := args[1].String()
-	var lit btpLitJSON
-	if err := json.Unmarshal([]byte(jsonStr), &lit); err != nil {
-		return errorResult(fmt.Sprintf("newBootstrapParametersFromLiteral: parsing JSON: %v", err))
-	}
-
 	btpLit := bootstrapping.ParametersLiteral{}
-	if lit.LogN != nil {
-		btpLit.LogN = utils.Pointy(*lit.LogN)
+
+	if len(args) > 1 && !args[1].IsUndefined() && !args[1].IsNull() && args[1].Int() > 0 {
+		btpLit.LogN = utils.Pointy(args[1].Int())
 	}
-	if lit.LogP != nil {
-		btpLit.LogP = lit.LogP
+	if len(args) > 2 && !args[2].IsUndefined() && !args[2].IsNull() {
+		btpLit.LogP = jsToIntSlice(args[2])
 	}
-	if lit.H != nil {
-		btpLit.Xs = ring.Ternary{H: *lit.H}
+	if len(args) > 3 && !args[3].IsUndefined() && !args[3].IsNull() && args[3].Int() > 0 {
+		btpLit.Xs = ring.Ternary{H: args[3].Int()}
 	}
-	if lit.LogSlots != nil {
-		btpLit.LogSlots = utils.Pointy(*lit.LogSlots)
+	if len(args) > 4 && !args[4].IsUndefined() && !args[4].IsNull() && args[4].Int() > 0 {
+		btpLit.LogSlots = utils.Pointy(args[4].Int())
 	}
 
 	btpParams, err := bootstrapping.NewParametersFromLiteral(*params, btpLit)
 	if err != nil {
-		return errorResult(fmt.Sprintf("newBootstrapParametersFromLiteral: %v", err))
+		return errorResult(fmt.Sprintf("newBootstrapParams: %v", err))
 	}
 
 	return handleResult(Store(&btpParams))
 }
 
-// btpParamsGenEvaluationKeys(btpParamsHID: number, skHID: number) → Promise<{evkHID: number, btpEvkHID: number}>
+// bootstrapParamsGenEvalKeys(btpParamsHID, skHID) → Promise<{evkHID, btpEvkHID}>
 // Async — key generation is heavy (5–30s). Returns a Promise.
-// evkHID: the *rlwe.MemEvaluationKeySet embedded in the bootstrap EvaluationKeys.
-// btpEvkHID: the full *bootstrapping.EvaluationKeys (includes ring switching keys).
-func btpParamsGenEvaluationKeys(_ js.Value, args []js.Value) any {
+func bootstrapParamsGenEvalKeys(_ js.Value, args []js.Value) any {
 	if len(args) < 2 {
-		return errorResult("btpParamsGenEvaluationKeys: need btpParamsHID and skHID arguments")
+		return errorResult("bootstrapParamsGenEvalKeys: need btpParamsHID and skHID arguments")
 	}
 
 	btpParamsHID := uint32(args[0].Int())
@@ -82,27 +65,27 @@ func btpParamsGenEvaluationKeys(_ js.Value, args []js.Value) any {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					reject.Invoke(fmt.Sprintf("btpParamsGenEvaluationKeys panic: %v", r))
+					reject.Invoke(fmt.Sprintf("bootstrapParamsGenEvalKeys panic: %v", r))
 				}
 			}()
 
 			obj, ok := Load(btpParamsHID)
 			if !ok {
-				reject.Invoke("btpParamsGenEvaluationKeys: invalid btp params handle")
+				reject.Invoke("bootstrapParamsGenEvalKeys: invalid btp params handle")
 				return
 			}
 			btpParams := obj.(*bootstrapping.Parameters)
 
 			skObj, ok := Load(skHID)
 			if !ok {
-				reject.Invoke("btpParamsGenEvaluationKeys: invalid secret key handle")
+				reject.Invoke("bootstrapParamsGenEvalKeys: invalid secret key handle")
 				return
 			}
 			sk := skObj.(*rlwe.SecretKey)
 
 			btpKeys, _, err := btpParams.GenEvaluationKeys(sk)
 			if err != nil {
-				reject.Invoke(fmt.Sprintf("btpParamsGenEvaluationKeys: %v", err))
+				reject.Invoke(fmt.Sprintf("bootstrapParamsGenEvalKeys: %v", err))
 				return
 			}
 
@@ -116,27 +99,24 @@ func btpParamsGenEvaluationKeys(_ js.Value, args []js.Value) any {
 		}()
 		return nil
 	})
-	// Promise constructor is synchronous — it captures handler immediately.
-	// Release the js.Func after construction to avoid leaking the Go function table slot.
 	promise := js.Global().Get("Promise").New(handler)
 	handler.Release()
 	return promise
 }
 
-// btpEvaluationKeysMarshal(btpEvkHID: number) → Uint8Array | {error: string}
-// Marshals bootstrapping.EvaluationKeys to binary for upload to server.
-func btpEvaluationKeysMarshal(_ js.Value, args []js.Value) any {
+// bootstrapEvalKeysMarshal(btpEvkHID) → Uint8Array | {error: string}
+func bootstrapEvalKeysMarshal(_ js.Value, args []js.Value) any {
 	if len(args) < 1 {
-		return errorResult("btpEvaluationKeysMarshal: missing btpEvkHID argument")
+		return errorResult("bootstrapEvalKeysMarshal: missing btpEvkHID argument")
 	}
 	obj, ok := Load(uint32(args[0].Int()))
 	if !ok {
-		return errorResult("btpEvaluationKeysMarshal: invalid bootstrap evaluation keys handle")
+		return errorResult("bootstrapEvalKeysMarshal: invalid bootstrap evaluation keys handle")
 	}
 	btpKeys := obj.(*bootstrapping.EvaluationKeys)
 	data, err := btpKeys.MarshalBinary()
 	if err != nil {
-		return errorResult(fmt.Sprintf("btpEvaluationKeysMarshal: %v", err))
+		return errorResult(fmt.Sprintf("bootstrapEvalKeysMarshal: %v", err))
 	}
 	return bytesToJS(data)
 }
