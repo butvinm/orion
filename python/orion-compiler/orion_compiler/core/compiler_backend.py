@@ -7,7 +7,8 @@ lattigo bridge shared library.
 
 from __future__ import annotations
 
-import json
+import math
+import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Literal
 
@@ -197,20 +198,20 @@ class CompilerBackend:
         ring_map = {"standard": "standard", "conjugateinvariant": "conjugate_invariant"}
         ring_type = ring_map.get(p.ringtype.lower(), "conjugate_invariant")
 
-        params_dict = {
-            "logn": p.logn,
-            "logq": list(p.logq),
-            "logp": list(p.logp),
-            "logscale": p.logscale,
-            "h": p.h,
-            "ring_type": ring_type,
-        }
-        if p.boot_logp:
-            params_dict["boot_logp"] = list(p.boot_logp)
+        log_nth_root = 0
+        if hasattr(p, 'btp_logn') and p.btp_logn and p.btp_logn > 0:
+            log_nth_root = p.btp_logn + 1
 
-        params_json = json.dumps(params_dict)
-        self._params_h = lattigo_ffi.new_ckks_params(params_json)
-        self._encoder_h = lattigo_ffi.new_ckks_encoder(self._params_h)
+        self._params_h = lattigo_ffi.new_ckks_params(
+            logn=p.logn,
+            logq=list(p.logq),
+            logp=list(p.logp),
+            log_default_scale=p.logscale,
+            h=p.h,
+            ring_type=ring_type,
+            log_nth_root=log_nth_root,
+        )
+        self._encoder_h = lattigo_ffi.new_encoder(self._params_h)
         self._max_slots = lattigo_ffi.ckks_params_max_slots(self._params_h)
 
     # -- Encoder operations --
@@ -223,13 +224,13 @@ class CompilerBackend:
         """Encode values into a plaintext. Returns a GoHandle."""
         if not isinstance(values, list):
             values = list(values)
-        return lattigo_ffi.ckks_encoder_encode(
-            self._encoder_h, self._params_h, values, level, scale,
+        return lattigo_ffi.encoder_encode(
+            self._encoder_h, values, level, scale,
         )
 
     def Decode(self, pt_h):
         """Decode a plaintext handle to float values."""
-        return lattigo_ffi.ckks_encoder_decode(
+        return lattigo_ffi.encoder_decode(
             self._encoder_h, pt_h, self._max_slots,
         )
 
@@ -257,19 +258,21 @@ class CompilerBackend:
         """Generate a monomial polynomial. Returns a GoHandle."""
         if not isinstance(coeffs, list):
             coeffs = list(coeffs)
-        return lattigo_ffi.generate_polynomial_monomial(coeffs)
+        return lattigo_ffi.new_polynomial_monomial(coeffs)
 
     def GenerateChebyshev(self, coeffs):
         """Generate a Chebyshev polynomial. Returns a GoHandle."""
         if not isinstance(coeffs, list):
             coeffs = list(coeffs)
-        return lattigo_ffi.generate_polynomial_chebyshev(coeffs)
+        return lattigo_ffi.new_polynomial_chebyshev(coeffs)
 
     def GenerateMinimaxSignCoeffs(self, degrees, prec, logalpha, logerr, debug):
-        """Generate minimax sign polynomial coefficients."""
-        return lattigo_ffi.generate_minimax_sign_coeffs(
-            degrees, prec, logalpha, logerr, debug,
-        )
+        """Generate minimax sign polynomial coefficients.
+
+        Calls raw Lattigo minimax, applies sign→[0,1] rescaling
+        (divide last poly by 2, add 0.5 to constant), and caches results.
+        """
+        return _minimax_sign_cached(degrees, prec, logalpha, logerr, debug)
 
     # -- Lifecycle --
 
@@ -291,6 +294,62 @@ class CompilerBackend:
             self.close()
         except Exception:
             pass
+
+
+# =========================================================================
+# Minimax sign coefficients — caching + sign→[0,1] rescaling
+# (Moved from Go orion.GenerateMinimaxSignCoeffs)
+# =========================================================================
+
+_minimax_cache: dict[str, list[float]] = {}
+_minimax_cache_lock = threading.Lock()
+
+
+def _minimax_cache_key(degrees: list[int], prec: int, logalpha: int, logerr: int) -> str:
+    return f"{','.join(str(d) for d in degrees)}|{prec}|{logalpha}|{logerr}"
+
+
+def _minimax_sign_cached(
+    degrees: list[int], prec: int, logalpha: int, logerr: int, debug: int,
+) -> list[float]:
+    """Generate minimax sign coefficients with caching and sign→[0,1] rescaling."""
+    cleaned = [d for d in degrees if d != 0]
+    if not cleaned:
+        raise ValueError("At least one non-zero degree must be provided")
+
+    key = _minimax_cache_key(cleaned, prec, logalpha, logerr)
+    with _minimax_cache_lock:
+        if key in _minimax_cache:
+            return list(_minimax_cache[key])
+
+    # Call raw Lattigo bridge (no rescaling)
+    flat_coeffs, seps = lattigo_ffi.gen_minimax_composite_polynomial(
+        cleaned, prec, logalpha, logerr, debug,
+    )
+
+    # Split into per-polynomial lists using separator indices
+    polys = []
+    for i, start in enumerate(seps):
+        end = seps[i + 1] if i + 1 < len(seps) else len(flat_coeffs)
+        polys.append(list(flat_coeffs[start:end]))
+
+    # Scale last polynomial from sign [-1,1] → sigmoid [0,1]:
+    # divide by 2, add 0.5 to constant term
+    if polys:
+        last = polys[-1]
+        for j in range(len(last)):
+            last[j] /= 2.0
+        last[0] += 0.5
+
+    # Flatten back and cache
+    result = []
+    for poly in polys:
+        result.extend(poly)
+
+    with _minimax_cache_lock:
+        _minimax_cache[key] = list(result)
+
+    return result
 
 
 # =========================================================================
@@ -428,5 +487,3 @@ class PolynomialGenerator:
         coeffs_flat = torch.tensor(coeffs_flat)
         splits = [degree + 1 for degree in degrees]
         return torch.split(coeffs_flat, splits)
-
-
