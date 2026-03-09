@@ -31,6 +31,19 @@ def _cleanup():
     gc.collect()
 
 
+def _params_from_dict(params_dict: dict) -> Parameters:
+    """Convert a client_params() dict to a Parameters object.
+
+    client_params() returns 'logscale' but the new Parameters constructor
+    expects 'log_default_scale'. Also ensures ring_type has a default.
+    """
+    d = dict(params_dict)
+    if "logscale" in d:
+        d["log_default_scale"] = d.pop("logscale")
+    d.setdefault("ring_type", "conjugate_invariant")
+    return Parameters(**d)
+
+
 # -----------------------------------------------------------------------
 # Model lifecycle tests
 # -----------------------------------------------------------------------
@@ -100,15 +113,15 @@ class TestModelLifecycle:
 def _make_evaluator_from_model(model):
     """Helper: create an Evaluator from a loaded Model using lattigo keygen."""
     params_dict, manifest, input_level = model.client_params()
-    params = Parameters.from_logn(**params_dict)
+    params = _params_from_dict(params_dict)
 
-    kg = KeyGenerator.new(params)
+    kg = KeyGenerator(params)
     sk = kg.gen_secret_key()
 
-    rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+    rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
     gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
 
-    evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+    evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
     keys_bytes = evk.marshal_binary()
 
     evaluator = Evaluator(params_dict, keys_bytes)
@@ -183,13 +196,13 @@ class TestBootstrapKeyParameter:
         data = open(MLP_ORION, "rb").read()
         model = Model.load(data)
         params_dict, manifest, input_level = model.client_params()
-        params = Parameters.from_logn(**params_dict)
+        params = _params_from_dict(params_dict)
 
-        kg = KeyGenerator.new(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
-        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
         gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
         keys_bytes = evk.marshal_binary()
 
         # Explicitly pass btp_keys_bytes=None
@@ -213,13 +226,13 @@ class TestBootstrapKeyParameter:
         data = open(MLP_ORION, "rb").read()
         model = Model.load(data)
         params_dict, manifest, input_level = model.client_params()
-        params = Parameters.from_logn(**params_dict)
+        params = _params_from_dict(params_dict)
 
-        kg = KeyGenerator.new(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
-        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
         gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
         keys_bytes = evk.marshal_binary()
 
         # Pass None positionally (not keyword)
@@ -244,17 +257,17 @@ class TestBootstrapKeyParameter:
         model = Model.load(model_data)
         params_dict, manifest, input_level = model.client_params()
 
-        params = Parameters.from_logn(**params_dict)
-        kg = KeyGenerator.new(params)
+        params = _params_from_dict(params_dict)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encoder = Encoder.new(params)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encoder = Encoder(params)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
-        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
         gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
         keys_bytes = evk.marshal_binary()
 
         evaluator = Evaluator(params_dict, keys_bytes, btp_keys_bytes=None)
@@ -323,18 +336,18 @@ class TestE2EForward:
         params_dict, manifest, input_level = model.client_params()
 
         # Create lattigo objects for keygen + encryption
-        params = Parameters.from_logn(**params_dict)
-        kg = KeyGenerator.new(params)
+        params = _params_from_dict(params_dict)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encoder = Encoder.new(params)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encoder = Encoder(params)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
         # Generate evaluation keys
-        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
         gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
         keys_bytes = evk.marshal_binary()
 
         # Create evaluator
@@ -437,17 +450,17 @@ class TestE2EForward:
         params_dict, manifest, input_level = model.client_params()
 
         # Create lattigo objects
-        params = Parameters.from_logn(**params_dict)
-        kg = KeyGenerator.new(params)
+        params = _params_from_dict(params_dict)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encoder = Encoder.new(params)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encoder = Encoder(params)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
-        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
         gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
         keys_bytes = evk.marshal_binary()
 
         evaluator = Evaluator(params_dict, keys_bytes)
@@ -548,17 +561,17 @@ class TestE2EForward:
         params_dict, manifest, input_level = model.client_params()
 
         # Create lattigo objects
-        params = Parameters.from_logn(**params_dict)
-        kg = KeyGenerator.new(params)
+        params = _params_from_dict(params_dict)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encoder = Encoder.new(params)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encoder = Encoder(params)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
-        rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+        rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
         gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
         keys_bytes = evk.marshal_binary()
 
         evaluator = Evaluator(params_dict, keys_bytes)

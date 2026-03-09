@@ -58,13 +58,13 @@ def _cleanup():
 
 def _make_params():
     """Create lattigo Parameters matching MLP_PARAMS."""
-    return Parameters.from_logn(
+    return Parameters(
         logn=13,
         logq=[29, 26, 26, 26, 26, 26],
         logp=[29, 29],
-        logscale=26,
-        h=8192,
+        log_default_scale=26,
         ring_type="conjugate_invariant",
+        h=8192,
     )
 
 
@@ -162,7 +162,7 @@ class TestPrimitiveLifecycle:
     def test_encoder_context_manager_pattern(self):
         """Lattigo objects support manual lifecycle management."""
         params = _make_params()
-        encoder = Encoder.new(params)
+        encoder = Encoder(params)
         values = [1.0, 2.0, 3.0]
         pt = encoder.encode(values, params.max_level(), params.default_scale())
         assert isinstance(pt, Plaintext)
@@ -178,35 +178,35 @@ class TestPrimitiveLifecycle:
 class TestMultiInstance:
     def test_multi_instance_independence(self):
         """Two parameter sets coexist, operate independently."""
-        params1 = Parameters.from_logn(
+        params1 = Parameters(
             logn=13,
             logq=[29, 26, 26, 26, 26, 26],
             logp=[29, 29],
-            logscale=26,
-            h=8192,
+            log_default_scale=26,
             ring_type="conjugate_invariant",
+            h=8192,
         )
-        params2 = Parameters.from_logn(
+        params2 = Parameters(
             logn=13,
             logq=[29, 26, 26, 26],
             logp=[29, 29],
-            logscale=26,
-            h=8192,
+            log_default_scale=26,
             ring_type="conjugate_invariant",
+            h=8192,
         )
 
-        encoder1 = Encoder.new(params1)
-        encoder2 = Encoder.new(params2)
-        kg1 = KeyGenerator.new(params1)
-        kg2 = KeyGenerator.new(params2)
+        encoder1 = Encoder(params1)
+        encoder2 = Encoder(params2)
+        kg1 = KeyGenerator(params1)
+        kg2 = KeyGenerator(params2)
         sk1 = kg1.gen_secret_key()
         sk2 = kg2.gen_secret_key()
         pk1 = kg1.gen_public_key(sk1)
         pk2 = kg2.gen_public_key(sk2)
-        enc1 = Encryptor.new(params1, pk1)
-        enc2 = Encryptor.new(params2, pk2)
-        dec1 = Decryptor.new(params1, sk1)
-        dec2 = Decryptor.new(params2, sk2)
+        enc1 = Encryptor(params1, pk1)
+        enc2 = Encryptor(params2, pk2)
+        dec1 = Decryptor(params1, sk1)
+        dec2 = Decryptor(params2, sk2)
 
         inp1 = torch.randn(784).double().tolist()
         inp2 = torch.randn(784).double().tolist()
@@ -272,12 +272,12 @@ class TestWireFormat:
     def test_ciphertext_wire_format_roundtrip(self):
         """Ciphertext.unmarshal_binary(ct.marshal_binary()) decrypts to same values."""
         params = _make_params()
-        encoder = Encoder.new(params)
-        kg = KeyGenerator.new(params)
+        encoder = Encoder(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
         inp = torch.randn(784).double().tolist()
         slots = params.max_slots()
@@ -322,11 +322,11 @@ class TestCiphertextClose:
     def test_ciphertext_close_releases_handle(self):
         """ct.close() releases the Go handle."""
         params = _make_params()
-        encoder = Encoder.new(params)
-        kg = KeyGenerator.new(params)
+        encoder = Encoder(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encryptor = Encryptor.new(params, pk)
+        encryptor = Encryptor(params, pk)
 
         pt = encoder.encode([1.0, 2.0], params.max_level(), params.default_scale())
         ct = encryptor.encrypt_new(pt)
@@ -346,11 +346,11 @@ class TestCiphertextClose:
     def test_ciphertext_double_close(self):
         """ct.close(); ct.close() -- no error on second call."""
         params = _make_params()
-        encoder = Encoder.new(params)
-        kg = KeyGenerator.new(params)
+        encoder = Encoder(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encryptor = Encryptor.new(params, pk)
+        encryptor = Encryptor(params, pk)
 
         pt = encoder.encode([1.0, 2.0], params.max_level(), params.default_scale())
         ct = encryptor.encrypt_new(pt)
@@ -369,7 +369,7 @@ class TestCiphertextClose:
     def test_plaintext_close_releases_handle(self):
         """pt.close() releases the Go handle."""
         params = _make_params()
-        encoder = Encoder.new(params)
+        encoder = Encoder(params)
 
         pt = encoder.encode([1.0, 2.0], params.max_level(), params.default_scale())
         assert pt._handle._raw != 0
@@ -383,7 +383,7 @@ class TestCiphertextClose:
     def test_plaintext_double_close(self):
         """pt.close(); pt.close() -- no error on second call."""
         params = _make_params()
-        encoder = Encoder.new(params)
+        encoder = Encoder(params)
 
         pt = encoder.encode([1.0, 2.0], params.max_level(), params.default_scale())
         pt.close()
@@ -396,11 +396,11 @@ class TestCiphertextClose:
     def test_ciphertext_del_via_gc(self):
         """Ciphertext.__del__ triggers close() via garbage collection."""
         params = _make_params()
-        encoder = Encoder.new(params)
-        kg = KeyGenerator.new(params)
+        encoder = Encoder(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encryptor = Encryptor.new(params, pk)
+        encryptor = Encryptor(params, pk)
 
         pt = encoder.encode([1.0, 2.0], params.max_level(), params.default_scale())
         ct = encryptor.encrypt_new(pt)
@@ -422,7 +422,7 @@ class TestCiphertextClose:
     def test_plaintext_del_via_gc(self):
         """Plaintext.__del__ triggers close() via garbage collection."""
         params = _make_params()
-        encoder = Encoder.new(params)
+        encoder = Encoder(params)
 
         pt = encoder.encode([1.0, 2.0], params.max_level(), params.default_scale())
         h = pt._handle
@@ -471,13 +471,13 @@ class TestModuliChain:
 
     def test_moduli_chain_different_params(self):
         """Moduli chain length matches logq for different parameter sets."""
-        params = Parameters.from_logn(
+        params = Parameters(
             logn=13,
             logq=[29, 26, 26, 26],
             logp=[29, 29],
-            logscale=26,
-            h=8192,
+            log_default_scale=26,
             ring_type="conjugate_invariant",
+            h=8192,
         )
         chain = params.moduli_chain()
         assert len(chain) == 4
@@ -488,15 +488,14 @@ class TestModuliChain:
 class TestGoErrorPropagation:
     def test_error_propagation(self):
         """Trigger a Go error, verify Python gets RuntimeError, not process crash."""
-        bad_json = '{"logn": 3, "logq": [10], "logp": [10], "logscale": 5, "h": 64, "ring_type": "standard"}'
         with pytest.raises(RuntimeError) as exc_info:
-            Parameters.from_json(bad_json)
+            Parameters(logn=3, logq=[10], logp=[10], log_default_scale=5, ring_type="standard", h=64)
 
         assert len(str(exc_info.value)) > 0
 
         # Process should still be alive and functional after the error
         params = _make_params()
-        encoder = Encoder.new(params)
+        encoder = Encoder(params)
         pt = encoder.encode([1.0, 2.0], params.max_level(), params.default_scale())
         assert isinstance(pt, Plaintext)
         pt.close()

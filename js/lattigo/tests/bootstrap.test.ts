@@ -8,8 +8,8 @@ beforeAll(async () => {
 });
 
 describe("Bootstrap parameters", () => {
-  it("newBootstrapParametersFromLiteral constructs valid params handle", () => {
-    const params = CKKSParameters.fromLogn(TEST_PARAMS);
+  it("newBootstrapParams constructs valid params handle", () => {
+    const params = new CKKSParameters(TEST_PARAMS);
     const bridge = getBridge();
 
     // For ConjugateInvariant ring, bootstrap operates at LogN+1
@@ -17,16 +17,12 @@ describe("Bootstrap parameters", () => {
     const numSlots = 256;
     const logSlots = Math.round(Math.log2(numSlots));
 
-    const btpLitJSON = JSON.stringify({
-      LogN: btpLogN,
-      LogP: TEST_PARAMS.logP,
-      H: 192,
-      LogSlots: logSlots,
-    });
-
-    const result = bridge.newBootstrapParametersFromLiteral(
+    const result = bridge.newBootstrapParams(
       params.handle,
-      btpLitJSON,
+      btpLogN,
+      TEST_PARAMS.logP,
+      192,
+      logSlots,
     );
     expect(isError(result)).toBe(false);
     if (!isError(result)) {
@@ -37,14 +33,14 @@ describe("Bootstrap parameters", () => {
     params.free();
   });
 
-  it("newBootstrapParametersFromLiteral accepts empty literal (all defaults)", () => {
-    const params = CKKSParameters.fromLogn(TEST_PARAMS);
+  it("newBootstrapParams accepts minimal args (defaults for optional)", () => {
+    const params = new CKKSParameters(TEST_PARAMS);
     const bridge = getBridge();
 
     const btpLogN = TEST_PARAMS.logN + 1;
-    const result = bridge.newBootstrapParametersFromLiteral(
+    const result = bridge.newBootstrapParams(
       params.handle,
-      JSON.stringify({ LogN: btpLogN }),
+      btpLogN,
     );
     // May succeed or fail depending on Lattigo defaults — just verify no panic
     if (!isError(result)) {
@@ -54,23 +50,10 @@ describe("Bootstrap parameters", () => {
     params.free();
   });
 
-  it("newBootstrapParametersFromLiteral returns error for invalid params handle", () => {
+  it("newBootstrapParams returns error for invalid params handle", () => {
     const bridge = getBridge();
-    const result = bridge.newBootstrapParametersFromLiteral(99999, "{}");
+    const result = bridge.newBootstrapParams(99999);
     expect(isError(result)).toBe(true);
-  });
-
-  it("newBootstrapParametersFromLiteral returns error for invalid JSON", () => {
-    const params = CKKSParameters.fromLogn(TEST_PARAMS);
-    const bridge = getBridge();
-
-    const result = bridge.newBootstrapParametersFromLiteral(
-      params.handle,
-      "not valid json",
-    );
-    expect(isError(result)).toBe(true);
-
-    params.free();
   });
 });
 
@@ -79,30 +62,27 @@ describe("Bootstrap parameters", () => {
 // memory limits — LogSlots=8 (256 slots) produces ~1.7 GB and OOMs.
 describe("Bootstrap key generation (slow)", () => {
   it(
-    "btpParamsGenEvaluationKeys generates keys and marshals EVK roundtrip",
+    "bootstrapParamsGenEvalKeys generates keys and marshals EVK roundtrip",
     async () => {
       const bridge = getBridge();
-      const params = CKKSParameters.fromLogn(TEST_PARAMS);
-      const kg = KeyGenerator.new(params);
+      const params = new CKKSParameters(TEST_PARAMS);
+      const kg = new KeyGenerator(params);
       const sk = kg.genSecretKey();
 
       // For ConjugateInvariant ring, bootstrap operates at LogN+1.
       const btpLogN = TEST_PARAMS.logN + 1;
-      const btpLitJSON = JSON.stringify({
-        LogN: btpLogN,
-        LogP: TEST_PARAMS.logP,
-        H: 192,
-        LogSlots: 1,
-      });
 
-      const btpParamsResult = bridge.newBootstrapParametersFromLiteral(
+      const btpParamsResult = bridge.newBootstrapParams(
         params.handle,
-        btpLitJSON,
+        btpLogN,
+        TEST_PARAMS.logP,
+        192,
+        1,
       );
       expect(isError(btpParamsResult)).toBe(false);
       if (isError(btpParamsResult)) return;
 
-      const result = await bridge.btpParamsGenEvaluationKeys(
+      const result = await bridge.bootstrapParamsGenEvalKeys(
         btpParamsResult.handle,
         sk.handle,
       );
@@ -139,10 +119,10 @@ describe("Bootstrap key generation (slow)", () => {
     120_000,
   );
 
-  it("btpParamsGenEvaluationKeys rejects invalid btpParams handle", async () => {
+  it("bootstrapParamsGenEvalKeys rejects invalid btpParams handle", async () => {
     const bridge = getBridge();
     await expect(
-      bridge.btpParamsGenEvaluationKeys(99999, 99999),
+      bridge.bootstrapParamsGenEvalKeys(99999, 99999),
     ).rejects.toMatch(/invalid/);
   });
 });

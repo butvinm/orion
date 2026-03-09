@@ -28,12 +28,12 @@ let encryptor: Encryptor;
 
 beforeAll(async () => {
   await ensureWasmLoaded();
-  params = CKKSParameters.fromLogn(TEST_PARAMS);
-  kg = KeyGenerator.new(params);
+  params = new CKKSParameters(TEST_PARAMS);
+  kg = new KeyGenerator(params);
   sk = kg.genSecretKey();
   pk = kg.genPublicKey(sk);
-  encoder = Encoder.new(params);
-  encryptor = Encryptor.new(params, pk);
+  encoder = new Encoder(params);
+  encryptor = new Encryptor(params, pk);
 });
 
 afterAll(() => {

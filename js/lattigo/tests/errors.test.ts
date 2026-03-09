@@ -17,23 +17,17 @@ beforeAll(async () => {
 
 describe("Error handling", () => {
   describe("CKKSParameters", () => {
-    it("fromJSON throws on invalid JSON string", () => {
-      expect(() => CKKSParameters.fromJSON("not json")).toThrow();
-    });
-
-    it("fromJSON throws on empty JSON object", () => {
-      expect(() => CKKSParameters.fromJSON("{}")).toThrow();
-    });
-
-    it("fromJSON throws on invalid ring type", () => {
-      const json = JSON.stringify({
-        LogN: 13,
-        LogQ: [29, 26],
-        LogP: [29],
-        LogDefaultScale: 26,
-        RingType: "InvalidRingType",
-      });
-      expect(() => CKKSParameters.fromJSON(json)).toThrow(/ring type/i);
+    it("constructor throws on invalid ring type", () => {
+      expect(
+        () =>
+          new CKKSParameters({
+            logN: 13,
+            logQ: [29, 26],
+            logP: [29],
+            logDefaultScale: 26,
+            ringType: "InvalidRingType" as any,
+          }),
+      ).toThrow();
     });
   });
 

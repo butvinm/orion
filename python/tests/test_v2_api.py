@@ -277,11 +277,11 @@ class TestCompiler:
 
 def _make_params():
     """Create lattigo Parameters matching MLP_PARAMS."""
-    return Parameters.from_logn(
+    return Parameters(
         logn=13,
         logq=[29, 26, 26, 26, 26, 26],
         logp=[29, 29],
-        logscale=26,
+        log_default_scale=26,
         h=8192,
         ring_type="conjugate_invariant",
     )
@@ -312,7 +312,7 @@ class TestLattigoPrimitives:
     def test_encode_decode(self):
         """Lattigo encode/decode roundtrip with torch tensor."""
         params = _make_params()
-        encoder = Encoder.new(params)
+        encoder = Encoder(params)
         inp = torch.randn(1, 784)
         pt = _encode_tensor(encoder, params, inp, level=5)
         assert isinstance(pt, Plaintext)
@@ -329,12 +329,12 @@ class TestLattigoPrimitives:
     def test_encrypt_decrypt(self):
         """Lattigo encrypt/decrypt roundtrip."""
         params = _make_params()
-        encoder = Encoder.new(params)
-        kg = KeyGenerator.new(params)
+        encoder = Encoder(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
         inp = torch.randn(1, 784)
         pt = _encode_tensor(encoder, params, inp, level=5)
@@ -361,12 +361,12 @@ class TestLattigoPrimitives:
     def test_ciphertext_serialization(self):
         """Ciphertext marshal/unmarshal roundtrip."""
         params = _make_params()
-        encoder = Encoder.new(params)
-        kg = KeyGenerator.new(params)
+        encoder = Encoder(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
         inp = torch.randn(1, 784)
         pt = _encode_tensor(encoder, params, inp, level=5)
@@ -398,11 +398,11 @@ class TestLattigoPrimitives:
     def test_key_generation(self):
         """Generate individual keys via Lattigo KeyGenerator."""
         params = _make_params()
-        kg = KeyGenerator.new(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
 
         # Relinearization key
-        rlk = kg.gen_relinearization_key(sk)
+        rlk = kg.gen_relin_key(sk)
         assert rlk._handle
 
         # Galois keys
@@ -414,7 +414,7 @@ class TestLattigoPrimitives:
             gks.append(gk)
 
         # Build MemEvaluationKeySet
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
         assert evk._handle
 
         evk.close()
@@ -429,14 +429,14 @@ class TestLattigoPrimitives:
     def test_eval_key_set_serialization(self):
         """MemEvaluationKeySet marshal/unmarshal roundtrip."""
         params = _make_params()
-        kg = KeyGenerator.new(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
 
-        rlk = kg.gen_relinearization_key(sk)
+        rlk = kg.gen_relin_key(sk)
         gk1 = kg.gen_galois_key(sk, 5)
         gk2 = kg.gen_galois_key(sk, 25)
 
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=[gk1, gk2])
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=[gk1, gk2])
         keys_bytes = evk.marshal_binary()
         assert isinstance(keys_bytes, bytes)
         assert len(keys_bytes) > 0
@@ -462,11 +462,11 @@ class TestSecretKeyRoundtrip:
     def test_secret_key_roundtrip(self):
         """Secret key can be serialized and used to decrypt with a new Decryptor."""
         params = _make_params()
-        encoder = Encoder.new(params)
-        kg = KeyGenerator.new(params)
+        encoder = Encoder(params)
+        kg = KeyGenerator(params)
         sk = kg.gen_secret_key()
         pk = kg.gen_public_key(sk)
-        encryptor = Encryptor.new(params, pk)
+        encryptor = Encryptor(params, pk)
 
         inp = torch.randn(1, 784)
         pt = _encode_tensor(encoder, params, inp, level=5)
@@ -489,7 +489,7 @@ class TestSecretKeyRoundtrip:
 
         # Restore secret key and decrypt
         sk2 = SecretKey.unmarshal_binary(sk_bytes)
-        decryptor = Decryptor.new(params, sk2)
+        decryptor = Decryptor(params, sk2)
         ct2 = Ciphertext.unmarshal_binary(ct_bytes)
         pt2 = decryptor.decrypt_new(ct2)
         decoded = _decode_tensor(encoder, params, pt2, inp.shape)

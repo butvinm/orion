@@ -20,8 +20,8 @@ let kg: KeyGenerator;
 
 beforeAll(async () => {
   await ensureWasmLoaded();
-  params = CKKSParameters.fromLogn(TEST_PARAMS);
-  kg = KeyGenerator.new(params);
+  params = new CKKSParameters(TEST_PARAMS);
+  kg = new KeyGenerator(params);
 });
 
 afterAll(() => {
@@ -88,9 +88,9 @@ describe("Serialization roundtrip", () => {
   it("Ciphertext: marshal -> unmarshal -> decrypt produces same values", () => {
     const sk = kg.genSecretKey();
     const pk = kg.genPublicKey(sk);
-    const encoder = Encoder.new(params);
-    const encryptor = Encryptor.new(params, pk);
-    const decryptor = Decryptor.new(params, sk);
+    const encoder = new Encoder(params);
+    const encryptor = new Encryptor(params, pk);
+    const decryptor = new Decryptor(params, sk);
 
     const input = [1.0, 2.0, 3.0];
     const pt = encoder.encode(input, params.maxLevel(), params.defaultScale());
@@ -119,7 +119,7 @@ describe("Serialization roundtrip", () => {
   });
 
   it("Plaintext: marshal -> unmarshal -> decode produces same values", () => {
-    const encoder = Encoder.new(params);
+    const encoder = new Encoder(params);
     const input = [4.0, 5.0, 6.0];
     const pt = encoder.encode(input, params.maxLevel(), params.defaultScale());
 
@@ -145,7 +145,7 @@ describe("Serialization roundtrip", () => {
     const gk1 = kg.genGaloisKey(sk, ge1);
     const gk2 = kg.genGaloisKey(sk, ge2);
 
-    const evk = MemEvaluationKeySet.new(rlk, [gk1, gk2]);
+    const evk = new MemEvaluationKeySet(rlk, [gk1, gk2]);
     expect(evk.handle).toBeGreaterThan(0);
 
     const evkBytes = evk.marshalBinary();
@@ -171,7 +171,7 @@ describe("Serialization roundtrip", () => {
     const ge = params.galoisElement(1);
     const gk = kg.genGaloisKey(sk, ge);
 
-    const evk = MemEvaluationKeySet.new(null, [gk]);
+    const evk = new MemEvaluationKeySet(null, [gk]);
     expect(evk.handle).toBeGreaterThan(0);
 
     const evkBytes = evk.marshalBinary();

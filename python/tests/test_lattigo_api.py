@@ -29,11 +29,12 @@ TEST_NUM_SLOTS = 1 << TEST_LOGN  # conjugate_invariant → 2^logn slots
 
 @pytest.fixture
 def params():
-    p = Parameters.from_logn(
+    p = Parameters(
         logn=TEST_LOGN,
         logq=TEST_LOGQ,
         logp=TEST_LOGP,
-        logscale=TEST_LOGSCALE,
+        log_default_scale=TEST_LOGSCALE,
+        ring_type="conjugate_invariant",
     )
     yield p
     p.close()
@@ -41,7 +42,7 @@ def params():
 
 @pytest.fixture
 def keygen(params):
-    kg = KeyGenerator.new(params)
+    kg = KeyGenerator(params)
     yield kg
     kg.close()
 
@@ -87,8 +88,8 @@ class TestKeyGeneration:
         assert pk._handle
         pk.close()
 
-    def test_gen_relinearization_key(self, keygen, sk):
-        rlk = keygen.gen_relinearization_key(sk)
+    def test_gen_relin_key(self, keygen, sk):
+        rlk = keygen.gen_relin_key(sk)
         assert rlk._handle
         rlk.close()
 
@@ -123,7 +124,7 @@ class TestPublicKeySerialization:
 
 class TestRelinearizationKeySerialization:
     def test_marshal_unmarshal_roundtrip(self, keygen, sk):
-        rlk = keygen.gen_relinearization_key(sk)
+        rlk = keygen.gen_relin_key(sk)
         data = rlk.marshal_binary()
         assert len(data) > 0
 
@@ -150,7 +151,7 @@ class TestGaloisKeySerialization:
 
 class TestEncodeDecode:
     def test_encode_decode_roundtrip(self, params, sk):
-        encoder = Encoder.new(params)
+        encoder = Encoder(params)
         level = params.max_level()
         scale = params.default_scale()
 
@@ -172,9 +173,9 @@ class TestEncodeDecode:
 
 class TestEncryptDecrypt:
     def test_encrypt_decrypt_roundtrip(self, params, keygen, sk, pk):
-        encoder = Encoder.new(params)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encoder = Encoder(params)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
         level = params.max_level()
         scale = params.default_scale()
@@ -204,9 +205,9 @@ class TestEncryptDecrypt:
 
 class TestCiphertextSerialization:
     def test_marshal_unmarshal_roundtrip(self, params, pk, sk):
-        encoder = Encoder.new(params)
-        encryptor = Encryptor.new(params, pk)
-        decryptor = Decryptor.new(params, sk)
+        encoder = Encoder(params)
+        encryptor = Encryptor(params, pk)
+        decryptor = Decryptor(params, sk)
 
         level = params.max_level()
         scale = params.default_scale()
@@ -242,7 +243,7 @@ class TestCiphertextSerialization:
 
 class TestPlaintextSerialization:
     def test_marshal_unmarshal_roundtrip(self, params):
-        encoder = Encoder.new(params)
+        encoder = Encoder(params)
         level = params.max_level()
         scale = params.default_scale()
 
@@ -266,31 +267,31 @@ class TestPlaintextSerialization:
 
 class TestMemEvaluationKeySet:
     def test_create_with_rlk_and_galois_keys(self, params, keygen, sk):
-        rlk = keygen.gen_relinearization_key(sk)
+        rlk = keygen.gen_relin_key(sk)
         gel = params.galois_element(1)
         gk = keygen.gen_galois_key(sk, gel)
 
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=[gk])
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=[gk])
         assert evk._handle
         evk.close()
         rlk.close()
         gk.close()
 
     def test_create_with_rlk_only(self, keygen, sk):
-        rlk = keygen.gen_relinearization_key(sk)
-        evk = MemEvaluationKeySet.new(rlk=rlk)
+        rlk = keygen.gen_relin_key(sk)
+        evk = MemEvaluationKeySet(rlk=rlk)
         assert evk._handle
         evk.close()
         rlk.close()
 
     def test_marshal_unmarshal_roundtrip(self, params, keygen, sk):
-        rlk = keygen.gen_relinearization_key(sk)
+        rlk = keygen.gen_relin_key(sk)
         gel1 = params.galois_element(1)
         gel2 = params.galois_element(-1)
         gk1 = keygen.gen_galois_key(sk, gel1)
         gk2 = keygen.gen_galois_key(sk, gel2)
 
-        evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=[gk1, gk2])
+        evk = MemEvaluationKeySet(rlk=rlk, galois_keys=[gk1, gk2])
 
         # Marshal
         data = evk.marshal_binary()
