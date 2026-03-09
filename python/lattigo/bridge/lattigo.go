@@ -1,41 +1,95 @@
 package main
 
 // Bridge exports for Lattigo primitive types.
-// These work with raw Lattigo types (*rlwe.SecretKey, *rlwe.Ciphertext, etc.),
-// NOT the Orion wrapper types (*orion.Ciphertext, *orion.Plaintext).
+// Pure Lattigo bindings — no Orion imports.
 
 //#include <stdlib.h>
 //#include <stdint.h>
 import "C"
 
 import (
-	"encoding/json"
+	"fmt"
 	"runtime/cgo"
 	"unsafe"
 
-	orion "github.com/baahl-nyu/orion"
+	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
+	"github.com/baahl-nyu/lattigo/v6/ring"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 )
+
+// Wrapper structs store params alongside the object so callers
+// don't need to pass params redundantly on every operation.
+
+type encoderHandle struct {
+	enc    *ckks.Encoder
+	params *ckks.Parameters
+}
+
+type encryptorHandle struct {
+	enc    *rlwe.Encryptor
+	params *ckks.Parameters
+}
+
+type decryptorHandle struct {
+	dec    *rlwe.Decryptor
+	params *ckks.Parameters
+}
 
 // =====================================================================
 // CKKS Parameters
 // =====================================================================
 
 //export NewCKKSParams
-func NewCKKSParams(paramsJSON *C.char, errOut **C.char) C.uintptr_t {
+func NewCKKSParams(
+	logn C.int,
+	logqPtr *C.int, logqLen C.int,
+	logpPtr *C.int, logpLen C.int,
+	logDefaultScale C.int,
+	h C.int,
+	ringType *C.char,
+	logNthRoot C.int,
+	errOut **C.char,
+) C.uintptr_t {
 	defer catchPanic(errOut)
-	var p orion.Params
-	if err := json.Unmarshal([]byte(C.GoString(paramsJSON)), &p); err != nil {
-		setErr(errOut, "parsing params: "+err.Error())
+
+	logq := cIntsToGoInts(logqPtr, logqLen)
+	logp := cIntsToGoInts(logpPtr, logpLen)
+
+	rt := ring.ConjugateInvariant
+	rtStr := C.GoString(ringType)
+	switch rtStr {
+	case "standard":
+		rt = ring.Standard
+	case "conjugate_invariant", "":
+		rt = ring.ConjugateInvariant
+	default:
+		setErr(errOut, fmt.Sprintf("unknown ring type: %q", rtStr))
 		return 0
 	}
-	ckksParams, err := p.NewCKKSParameters()
+
+	lit := ckks.ParametersLiteral{
+		LogN:            int(logn),
+		LogQ:            logq,
+		LogP:            logp,
+		LogDefaultScale: int(logDefaultScale),
+		RingType:        rt,
+	}
+
+	if int(h) > 0 {
+		lit.Xs = ring.Ternary{H: int(h)}
+	}
+
+	if int(logNthRoot) > 0 {
+		lit.LogNthRoot = int(logNthRoot)
+	}
+
+	params, err := ckks.NewParametersFromLiteral(lit)
 	if err != nil {
 		setErr(errOut, err.Error())
 		return 0
 	}
-	return C.uintptr_t(cgo.NewHandle(&ckksParams))
+	return C.uintptr_t(cgo.NewHandle(&params))
 }
 
 //export CKKSParamsMaxSlots
@@ -137,8 +191,8 @@ func KeyGenGenPublicKey(kgH C.uintptr_t, skH C.uintptr_t, errOut **C.char) C.uin
 	return C.uintptr_t(cgo.NewHandle(pk))
 }
 
-//export KeyGenGenRelinearizationKey
-func KeyGenGenRelinearizationKey(kgH C.uintptr_t, skH C.uintptr_t, errOut **C.char) C.uintptr_t {
+//export KeyGenGenRelinKey
+func KeyGenGenRelinKey(kgH C.uintptr_t, skH C.uintptr_t, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 	kg := cgo.Handle(kgH).Value().(*rlwe.KeyGenerator)
 	sk := cgo.Handle(skH).Value().(*rlwe.SecretKey)
@@ -156,42 +210,42 @@ func KeyGenGenGaloisKey(kgH C.uintptr_t, skH C.uintptr_t, galEl C.ulonglong, err
 }
 
 // =====================================================================
-// CKKS Encoder
+// Encoder
 // =====================================================================
 
-//export NewCKKSEncoder
-func NewCKKSEncoder(paramsH C.uintptr_t, errOut **C.char) C.uintptr_t {
+//export NewEncoder
+func NewEncoder(paramsH C.uintptr_t, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
 	enc := ckks.NewEncoder(*p)
-	return C.uintptr_t(cgo.NewHandle(enc))
+	h := &encoderHandle{enc: enc, params: p}
+	return C.uintptr_t(cgo.NewHandle(h))
 }
 
-//export CKKSEncoderEncode
-func CKKSEncoderEncode(encH C.uintptr_t, paramsH C.uintptr_t, values *C.double, numValues C.int, level C.int, scale C.ulonglong, errOut **C.char) C.uintptr_t {
+//export EncoderEncode
+func EncoderEncode(encH C.uintptr_t, values *C.double, numValues C.int, level C.int, scale C.ulonglong, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
-	enc := cgo.Handle(encH).Value().(*ckks.Encoder)
-	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
+	h := cgo.Handle(encH).Value().(*encoderHandle)
 
 	goValues := cDoublesToGoFloat64s(values, numValues)
-	pt := ckks.NewPlaintext(*p, int(level))
+	pt := ckks.NewPlaintext(*h.params, int(level))
 	pt.Scale = rlwe.NewScale(uint64(scale))
 
-	if err := enc.Encode(goValues, pt); err != nil {
+	if err := h.enc.Encode(goValues, pt); err != nil {
 		setErr(errOut, err.Error())
 		return 0
 	}
 	return C.uintptr_t(cgo.NewHandle(pt))
 }
 
-//export CKKSEncoderDecode
-func CKKSEncoderDecode(encH C.uintptr_t, ptH C.uintptr_t, numSlots C.int, outLen *C.int, errOut **C.char) *C.double {
+//export EncoderDecode
+func EncoderDecode(encH C.uintptr_t, ptH C.uintptr_t, numSlots C.int, outLen *C.int, errOut **C.char) *C.double {
 	defer catchPanic(errOut)
-	enc := cgo.Handle(encH).Value().(*ckks.Encoder)
+	h := cgo.Handle(encH).Value().(*encoderHandle)
 	pt := cgo.Handle(ptH).Value().(*rlwe.Plaintext)
 
 	result := make([]float64, int(numSlots))
-	if err := enc.Decode(pt, result); err != nil {
+	if err := h.enc.Decode(pt, result); err != nil {
 		setErr(errOut, err.Error())
 		return nil
 	}
@@ -204,24 +258,24 @@ func CKKSEncoderDecode(encH C.uintptr_t, ptH C.uintptr_t, numSlots C.int, outLen
 // Encryptor
 // =====================================================================
 
-//export NewCKKSEncryptor
-func NewCKKSEncryptor(paramsH C.uintptr_t, pkH C.uintptr_t, errOut **C.char) C.uintptr_t {
+//export NewEncryptor
+func NewEncryptor(paramsH C.uintptr_t, pkH C.uintptr_t, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
 	pk := cgo.Handle(pkH).Value().(*rlwe.PublicKey)
-	encryptor := ckks.NewEncryptor(*p, pk)
-	return C.uintptr_t(cgo.NewHandle(encryptor))
+	enc := ckks.NewEncryptor(*p, pk)
+	h := &encryptorHandle{enc: enc, params: p}
+	return C.uintptr_t(cgo.NewHandle(h))
 }
 
 //export EncryptorEncryptNew
-func EncryptorEncryptNew(encryptorH C.uintptr_t, ptH C.uintptr_t, paramsH C.uintptr_t, errOut **C.char) C.uintptr_t {
+func EncryptorEncryptNew(encryptorH C.uintptr_t, ptH C.uintptr_t, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
-	encryptor := cgo.Handle(encryptorH).Value().(*rlwe.Encryptor)
+	h := cgo.Handle(encryptorH).Value().(*encryptorHandle)
 	pt := cgo.Handle(ptH).Value().(*rlwe.Plaintext)
-	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
 
-	ct := ckks.NewCiphertext(*p, 1, pt.Level())
-	if err := encryptor.Encrypt(pt, ct); err != nil {
+	ct := ckks.NewCiphertext(*h.params, 1, pt.Level())
+	if err := h.enc.Encrypt(pt, ct); err != nil {
 		setErr(errOut, err.Error())
 		return 0
 	}
@@ -232,24 +286,24 @@ func EncryptorEncryptNew(encryptorH C.uintptr_t, ptH C.uintptr_t, paramsH C.uint
 // Decryptor
 // =====================================================================
 
-//export NewCKKSDecryptor
-func NewCKKSDecryptor(paramsH C.uintptr_t, skH C.uintptr_t, errOut **C.char) C.uintptr_t {
+//export NewDecryptor
+func NewDecryptor(paramsH C.uintptr_t, skH C.uintptr_t, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
 	sk := cgo.Handle(skH).Value().(*rlwe.SecretKey)
-	decryptor := ckks.NewDecryptor(*p, sk)
-	return C.uintptr_t(cgo.NewHandle(decryptor))
+	dec := ckks.NewDecryptor(*p, sk)
+	h := &decryptorHandle{dec: dec, params: p}
+	return C.uintptr_t(cgo.NewHandle(h))
 }
 
 //export DecryptorDecryptNew
-func DecryptorDecryptNew(decryptorH C.uintptr_t, ctH C.uintptr_t, paramsH C.uintptr_t, errOut **C.char) C.uintptr_t {
+func DecryptorDecryptNew(decryptorH C.uintptr_t, ctH C.uintptr_t, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
-	decryptor := cgo.Handle(decryptorH).Value().(*rlwe.Decryptor)
+	h := cgo.Handle(decryptorH).Value().(*decryptorHandle)
 	ct := cgo.Handle(ctH).Value().(*rlwe.Ciphertext)
-	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
 
-	pt := ckks.NewPlaintext(*p, ct.Level())
-	decryptor.Decrypt(ct, pt)
+	pt := ckks.NewPlaintext(*h.params, ct.Level())
+	h.dec.Decrypt(ct, pt)
 	return C.uintptr_t(cgo.NewHandle(pt))
 }
 
@@ -314,11 +368,11 @@ func PublicKeyUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintpt
 }
 
 // =====================================================================
-// Serialization — RelinearizationKey
+// Serialization — RelinKey
 // =====================================================================
 
-//export RelinearizationKeyMarshal
-func RelinearizationKeyMarshal(rlkH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.char {
+//export RelinKeyMarshal
+func RelinKeyMarshal(rlkH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.char {
 	defer catchPanic(errOut)
 	rlk := cgo.Handle(rlkH).Value().(*rlwe.RelinearizationKey)
 	data, err := rlk.MarshalBinary()
@@ -331,8 +385,8 @@ func RelinearizationKeyMarshal(rlkH C.uintptr_t, outLen *C.ulong, errOut **C.cha
 	return ptr
 }
 
-//export RelinearizationKeyUnmarshal
-func RelinearizationKeyUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintptr_t {
+//export RelinKeyUnmarshal
+func RelinKeyUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.uintptr_t {
 	defer catchPanic(errOut)
 	goData := cBytesToGoSlice(data, dataLen)
 	rlk := new(rlwe.RelinearizationKey)
@@ -497,4 +551,81 @@ func MemEvalKeySetUnmarshal(data *C.char, dataLen C.ulong, errOut **C.char) C.ui
 		return 0
 	}
 	return C.uintptr_t(cgo.NewHandle(evk))
+}
+
+// =====================================================================
+// Bootstrap
+// =====================================================================
+
+//export NewBootstrapParams
+func NewBootstrapParams(
+	paramsH C.uintptr_t,
+	logn C.int,
+	logpPtr *C.int, logpLen C.int,
+	h C.int,
+	logSlots C.int,
+	errOut **C.char,
+) C.uintptr_t {
+	defer catchPanic(errOut)
+	p := cgo.Handle(paramsH).Value().(*ckks.Parameters)
+
+	btpLit := bootstrapping.ParametersLiteral{}
+	if int(logn) > 0 {
+		v := int(logn)
+		btpLit.LogN = &v
+	}
+	if int(logpLen) > 0 {
+		btpLit.LogP = cIntsToGoInts(logpPtr, logpLen)
+	}
+	if int(h) > 0 {
+		btpLit.Xs = ring.Ternary{H: int(h)}
+	}
+	if int(logSlots) > 0 {
+		v := int(logSlots)
+		btpLit.LogSlots = &v
+	}
+
+	btpParams, err := bootstrapping.NewParametersFromLiteral(*p, btpLit)
+	if err != nil {
+		setErr(errOut, err.Error())
+		return 0
+	}
+	return C.uintptr_t(cgo.NewHandle(&btpParams))
+}
+
+//export BootstrapParamsGenEvalKeys
+func BootstrapParamsGenEvalKeys(
+	btpParamsH C.uintptr_t,
+	skH C.uintptr_t,
+	outEvkH *C.uintptr_t,
+	errOut **C.char,
+) C.uintptr_t {
+	defer catchPanic(errOut)
+	btpParams := cgo.Handle(btpParamsH).Value().(*bootstrapping.Parameters)
+	sk := cgo.Handle(skH).Value().(*rlwe.SecretKey)
+
+	btpKeys, _, err := btpParams.GenEvaluationKeys(sk)
+	if err != nil {
+		setErr(errOut, err.Error())
+		return 0
+	}
+
+	evkHandle := C.uintptr_t(cgo.NewHandle(btpKeys.MemEvaluationKeySet))
+	*outEvkH = evkHandle
+
+	return C.uintptr_t(cgo.NewHandle(btpKeys))
+}
+
+//export BootstrapEvalKeysMarshal
+func BootstrapEvalKeysMarshal(btpEvkH C.uintptr_t, outLen *C.ulong, errOut **C.char) *C.char {
+	defer catchPanic(errOut)
+	btpKeys := cgo.Handle(btpEvkH).Value().(*bootstrapping.EvaluationKeys)
+	data, err := btpKeys.MarshalBinary()
+	if err != nil {
+		setErr(errOut, err.Error())
+		return nil
+	}
+	ptr, length := goSliceToCBytes(data)
+	*outLen = length
+	return ptr
 }

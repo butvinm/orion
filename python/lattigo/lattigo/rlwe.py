@@ -68,11 +68,11 @@ class RelinearizationKey:
         self._handle = handle
 
     def marshal_binary(self) -> bytes:
-        return ffi.relinearization_key_marshal(self._handle)
+        return ffi.relin_key_marshal(self._handle)
 
     @classmethod
     def unmarshal_binary(cls, data: bytes) -> RelinearizationKey:
-        return cls(ffi.relinearization_key_unmarshal(data))
+        return cls(ffi.relin_key_unmarshal(data))
 
     def close(self):
         self._handle.close()
@@ -172,13 +172,15 @@ class Plaintext:
 class KeyGenerator:
     """Wraps Lattigo's rlwe.KeyGenerator."""
 
-    def __init__(self, handle: GoHandle):
-        self._handle = handle
+    def __init__(self, params: Parameters):
+        self._handle = ffi.new_key_generator(params._h)
 
     @classmethod
-    def new(cls, params: Parameters) -> KeyGenerator:
-        handle = ffi.new_key_generator(params._h)
-        return cls(handle)
+    def _from_handle(cls, handle: GoHandle) -> KeyGenerator:
+        """Wrap an existing Go handle (internal use)."""
+        obj = object.__new__(cls)
+        obj._handle = handle
+        return obj
 
     def gen_secret_key(self) -> SecretKey:
         return SecretKey(ffi.keygen_gen_secret_key(self._handle))
@@ -186,9 +188,9 @@ class KeyGenerator:
     def gen_public_key(self, sk: SecretKey) -> PublicKey:
         return PublicKey(ffi.keygen_gen_public_key(self._handle, sk._handle))
 
-    def gen_relinearization_key(self, sk: SecretKey) -> RelinearizationKey:
+    def gen_relin_key(self, sk: SecretKey) -> RelinearizationKey:
         return RelinearizationKey(
-            ffi.keygen_gen_relinearization_key(self._handle, sk._handle)
+            ffi.keygen_gen_relin_key(self._handle, sk._handle)
         )
 
     def gen_galois_key(self, sk: SecretKey, galois_element: int) -> GaloisKey:
@@ -214,19 +216,18 @@ class KeyGenerator:
 class Encryptor:
     """Wraps Lattigo's rlwe.Encryptor (public-key encryption)."""
 
-    def __init__(self, handle: GoHandle, params: Parameters):
-        self._handle = handle
-        self._params = params
+    def __init__(self, params: Parameters, pk: PublicKey):
+        self._handle = ffi.new_encryptor(params._h, pk._handle)
 
     @classmethod
-    def new(cls, params: Parameters, pk: PublicKey) -> Encryptor:
-        handle = ffi.new_ckks_encryptor(params._h, pk._handle)
-        return cls(handle, params)
+    def _from_handle(cls, handle: GoHandle) -> Encryptor:
+        """Wrap an existing Go handle (internal use)."""
+        obj = object.__new__(cls)
+        obj._handle = handle
+        return obj
 
     def encrypt_new(self, pt: Plaintext) -> Ciphertext:
-        ct_h = ffi.encryptor_encrypt_new(
-            self._handle, pt._handle, self._params._h,
-        )
+        ct_h = ffi.encryptor_encrypt_new(self._handle, pt._handle)
         return Ciphertext(ct_h)
 
     def close(self):
@@ -242,19 +243,18 @@ class Encryptor:
 class Decryptor:
     """Wraps Lattigo's rlwe.Decryptor."""
 
-    def __init__(self, handle: GoHandle, params: Parameters):
-        self._handle = handle
-        self._params = params
+    def __init__(self, params: Parameters, sk: SecretKey):
+        self._handle = ffi.new_decryptor(params._h, sk._handle)
 
     @classmethod
-    def new(cls, params: Parameters, sk: SecretKey) -> Decryptor:
-        handle = ffi.new_ckks_decryptor(params._h, sk._handle)
-        return cls(handle, params)
+    def _from_handle(cls, handle: GoHandle) -> Decryptor:
+        """Wrap an existing Go handle (internal use)."""
+        obj = object.__new__(cls)
+        obj._handle = handle
+        return obj
 
     def decrypt_new(self, ct: Ciphertext) -> Plaintext:
-        pt_h = ffi.decryptor_decrypt_new(
-            self._handle, ct._handle, self._params._h,
-        )
+        pt_h = ffi.decryptor_decrypt_new(self._handle, ct._handle)
         return Plaintext(pt_h)
 
     def close(self):
@@ -275,27 +275,29 @@ class Decryptor:
 class MemEvaluationKeySet:
     """Wraps Lattigo's rlwe.MemEvaluationKeySet."""
 
-    def __init__(self, handle: GoHandle):
-        self._handle = handle
-
-    @classmethod
-    def new(
-        cls,
+    def __init__(
+        self,
         rlk: RelinearizationKey | None = None,
         galois_keys: list[GaloisKey] | None = None,
-    ) -> MemEvaluationKeySet:
-        handle = ffi.new_mem_eval_key_set(
+    ):
+        self._handle = ffi.new_mem_eval_key_set(
             rlk._handle if rlk else None,
             [gk._handle for gk in (galois_keys or [])],
         )
-        return cls(handle)
+
+    @classmethod
+    def _from_handle(cls, handle: GoHandle) -> MemEvaluationKeySet:
+        """Wrap an existing Go handle (internal use)."""
+        obj = object.__new__(cls)
+        obj._handle = handle
+        return obj
 
     def marshal_binary(self) -> bytes:
         return ffi.mem_eval_key_set_marshal(self._handle)
 
     @classmethod
     def unmarshal_binary(cls, data: bytes) -> MemEvaluationKeySet:
-        return cls(ffi.mem_eval_key_set_unmarshal(data))
+        return cls._from_handle(ffi.mem_eval_key_set_unmarshal(data))
 
     def close(self):
         self._handle.close()

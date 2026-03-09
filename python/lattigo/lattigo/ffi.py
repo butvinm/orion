@@ -1,7 +1,7 @@
 """Low-level ctypes FFI bindings for Lattigo primitive bridge exports.
 
-Wraps the new bridge functions (NewCKKSParams, NewKeyGenerator, etc.)
-that work with raw Lattigo types, not Orion wrapper types.
+Wraps the bridge functions (NewCKKSParams, NewKeyGenerator, etc.)
+that work with raw Lattigo types. No Orion imports.
 """
 
 import ctypes
@@ -35,6 +35,12 @@ def _doubles_ptr(values):
     return arr, ctypes.c_int(n)
 
 
+def _ints_ptr(values):
+    n = len(values)
+    arr = (ctypes.c_int * n)(*values)
+    return arr, ctypes.c_int(n)
+
+
 def _bytes_ptr(data):
     buf = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
     return ctypes.cast(buf, ctypes.c_void_p), ctypes.c_ulong(len(data))
@@ -43,7 +49,16 @@ def _bytes_ptr(data):
 def _setup_prototypes(lib):
     """Declare C function prototypes for Lattigo primitive exports."""
     # --- CKKS Parameters ---
-    lib.NewCKKSParams.argtypes = [ctypes.c_char_p, _errout]
+    lib.NewCKKSParams.argtypes = [
+        ctypes.c_int,                        # logn
+        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # logqPtr, logqLen
+        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # logpPtr, logpLen
+        ctypes.c_int,                        # logDefaultScale
+        ctypes.c_int,                        # h
+        ctypes.c_char_p,                     # ringType
+        ctypes.c_int,                        # logNthRoot
+        _errout,
+    ]
     lib.NewCKKSParams.restype = _uintptr
 
     lib.CKKSParamsMaxSlots.argtypes = [_uintptr]
@@ -74,41 +89,41 @@ def _setup_prototypes(lib):
     lib.KeyGenGenPublicKey.argtypes = [_uintptr, _uintptr, _errout]
     lib.KeyGenGenPublicKey.restype = _uintptr
 
-    lib.KeyGenGenRelinearizationKey.argtypes = [_uintptr, _uintptr, _errout]
-    lib.KeyGenGenRelinearizationKey.restype = _uintptr
+    lib.KeyGenGenRelinKey.argtypes = [_uintptr, _uintptr, _errout]
+    lib.KeyGenGenRelinKey.restype = _uintptr
 
     lib.KeyGenGenGaloisKey.argtypes = [_uintptr, _uintptr, ctypes.c_ulonglong, _errout]
     lib.KeyGenGenGaloisKey.restype = _uintptr
 
-    # --- CKKS Encoder ---
-    lib.NewCKKSEncoder.argtypes = [_uintptr, _errout]
-    lib.NewCKKSEncoder.restype = _uintptr
+    # --- Encoder ---
+    lib.NewEncoder.argtypes = [_uintptr, _errout]
+    lib.NewEncoder.restype = _uintptr
 
-    lib.CKKSEncoderEncode.argtypes = [
-        _uintptr, _uintptr,
+    lib.EncoderEncode.argtypes = [
+        _uintptr,
         ctypes.POINTER(ctypes.c_double), ctypes.c_int,
         ctypes.c_int, ctypes.c_ulonglong, _errout,
     ]
-    lib.CKKSEncoderEncode.restype = _uintptr
+    lib.EncoderEncode.restype = _uintptr
 
-    lib.CKKSEncoderDecode.argtypes = [
+    lib.EncoderDecode.argtypes = [
         _uintptr, _uintptr, ctypes.c_int,
         ctypes.POINTER(ctypes.c_int), _errout,
     ]
-    lib.CKKSEncoderDecode.restype = ctypes.POINTER(ctypes.c_double)
+    lib.EncoderDecode.restype = ctypes.POINTER(ctypes.c_double)
 
     # --- Encryptor ---
-    lib.NewCKKSEncryptor.argtypes = [_uintptr, _uintptr, _errout]
-    lib.NewCKKSEncryptor.restype = _uintptr
+    lib.NewEncryptor.argtypes = [_uintptr, _uintptr, _errout]
+    lib.NewEncryptor.restype = _uintptr
 
-    lib.EncryptorEncryptNew.argtypes = [_uintptr, _uintptr, _uintptr, _errout]
+    lib.EncryptorEncryptNew.argtypes = [_uintptr, _uintptr, _errout]
     lib.EncryptorEncryptNew.restype = _uintptr
 
     # --- Decryptor ---
-    lib.NewCKKSDecryptor.argtypes = [_uintptr, _uintptr, _errout]
-    lib.NewCKKSDecryptor.restype = _uintptr
+    lib.NewDecryptor.argtypes = [_uintptr, _uintptr, _errout]
+    lib.NewDecryptor.restype = _uintptr
 
-    lib.DecryptorDecryptNew.argtypes = [_uintptr, _uintptr, _uintptr, _errout]
+    lib.DecryptorDecryptNew.argtypes = [_uintptr, _uintptr, _errout]
     lib.DecryptorDecryptNew.restype = _uintptr
 
     # --- SecretKey serialization ---
@@ -125,12 +140,12 @@ def _setup_prototypes(lib):
     lib.PublicKeyUnmarshal.argtypes = [ctypes.c_void_p, ctypes.c_ulong, _errout]
     lib.PublicKeyUnmarshal.restype = _uintptr
 
-    # --- RelinearizationKey serialization ---
-    lib.RelinearizationKeyMarshal.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_ulong), _errout]
-    lib.RelinearizationKeyMarshal.restype = ctypes.c_void_p
+    # --- RelinKey serialization ---
+    lib.RelinKeyMarshal.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_ulong), _errout]
+    lib.RelinKeyMarshal.restype = ctypes.c_void_p
 
-    lib.RelinearizationKeyUnmarshal.argtypes = [ctypes.c_void_p, ctypes.c_ulong, _errout]
-    lib.RelinearizationKeyUnmarshal.restype = _uintptr
+    lib.RelinKeyUnmarshal.argtypes = [ctypes.c_void_p, ctypes.c_ulong, _errout]
+    lib.RelinKeyUnmarshal.restype = _uintptr
 
     # --- GaloisKey serialization ---
     lib.GaloisKeyMarshal.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_ulong), _errout]
@@ -172,23 +187,50 @@ def _setup_prototypes(lib):
     lib.MemEvalKeySetUnmarshal.restype = _uintptr
 
     # --- Polynomial generation ---
-    lib.GeneratePolynomialMonomial.argtypes = [
+    lib.NewPolynomialMonomial.argtypes = [
         ctypes.POINTER(ctypes.c_double), ctypes.c_int, _errout,
     ]
-    lib.GeneratePolynomialMonomial.restype = _uintptr
+    lib.NewPolynomialMonomial.restype = _uintptr
 
-    lib.GeneratePolynomialChebyshev.argtypes = [
-        ctypes.POINTER(ctypes.c_double), ctypes.c_int, _errout,
+    lib.NewPolynomialChebyshev.argtypes = [
+        ctypes.POINTER(ctypes.c_double), ctypes.c_int,
+        ctypes.c_double, ctypes.c_double,
+        _errout,
     ]
-    lib.GeneratePolynomialChebyshev.restype = _uintptr
+    lib.NewPolynomialChebyshev.restype = _uintptr
 
-    # --- Minimax sign coefficients ---
-    lib.GenerateMinimaxSignCoeffs.argtypes = [
-        ctypes.POINTER(ctypes.c_int), ctypes.c_int,
-        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
-        ctypes.POINTER(ctypes.c_int), _errout,
+    # --- Minimax composite polynomial ---
+    lib.GenMinimaxCompositePolynomial.argtypes = [
+        ctypes.c_uint,                       # prec
+        ctypes.c_int, ctypes.c_int,          # logAlpha, logErr
+        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # degreesPtr, numDegrees
+        ctypes.c_int,                        # debug
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.c_int),  # outCoeffs, outLen
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)), ctypes.POINTER(ctypes.c_int),     # outSeps, outNumPolys
+        _errout,
     ]
-    lib.GenerateMinimaxSignCoeffs.restype = ctypes.POINTER(ctypes.c_double)
+    lib.GenMinimaxCompositePolynomial.restype = None
+
+    # --- Bootstrap ---
+    lib.NewBootstrapParams.argtypes = [
+        _uintptr,                            # paramsH
+        ctypes.c_int,                        # logn
+        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # logpPtr, logpLen
+        ctypes.c_int,                        # h
+        ctypes.c_int,                        # logSlots
+        _errout,
+    ]
+    lib.NewBootstrapParams.restype = _uintptr
+
+    lib.BootstrapParamsGenEvalKeys.argtypes = [
+        _uintptr, _uintptr,                 # btpParamsH, skH
+        ctypes.POINTER(_uintptr),            # outEvkH
+        _errout,
+    ]
+    lib.BootstrapParamsGenEvalKeys.restype = _uintptr
+
+    lib.BootstrapEvalKeysMarshal.argtypes = [_uintptr, ctypes.POINTER(ctypes.c_ulong), _errout]
+    lib.BootstrapEvalKeysMarshal.restype = ctypes.c_void_p
 
 
 def _ensure_prototypes():
@@ -211,12 +253,31 @@ def _lib_call():
 # =========================================================================
 
 
-def new_ckks_params(params_json: str) -> GoHandle:
+def new_ckks_params(
+    logn: int,
+    logq: list[int],
+    logp: list[int],
+    log_default_scale: int,
+    h: int,
+    ring_type: str,
+    log_nth_root: int = 0,
+) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
-    h = lib.NewCKKSParams(params_json.encode("utf-8"), ctypes.byref(err))
+    logq_arr, logq_len = _ints_ptr(logq)
+    logp_arr, logp_len = _ints_ptr(logp)
+    handle = lib.NewCKKSParams(
+        ctypes.c_int(logn),
+        logq_arr, logq_len,
+        logp_arr, logp_len,
+        ctypes.c_int(log_default_scale),
+        ctypes.c_int(h),
+        ring_type.encode("utf-8"),
+        ctypes.c_int(log_nth_root),
+        ctypes.byref(err),
+    )
     _check_err(err)
-    return GoHandle(h, tag="CKKSParams")
+    return GoHandle(handle, tag="CKKSParams")
 
 
 def ckks_params_max_slots(h: GoHandle) -> int:
@@ -296,14 +357,14 @@ def keygen_gen_public_key(kg_h: GoHandle, sk_h: GoHandle) -> GoHandle:
     return GoHandle(h, tag="PublicKey")
 
 
-def keygen_gen_relinearization_key(kg_h: GoHandle, sk_h: GoHandle) -> GoHandle:
+def keygen_gen_relin_key(kg_h: GoHandle, sk_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
-    h = lib.KeyGenGenRelinearizationKey(
+    h = lib.KeyGenGenRelinKey(
         _uintptr(kg_h.raw), _uintptr(sk_h.raw), ctypes.byref(err),
     )
     _check_err(err)
-    return GoHandle(h, tag="RelinearizationKey")
+    return GoHandle(h, tag="RelinKey")
 
 
 def keygen_gen_galois_key(kg_h: GoHandle, sk_h: GoHandle, galois_element: int) -> GoHandle:
@@ -318,27 +379,27 @@ def keygen_gen_galois_key(kg_h: GoHandle, sk_h: GoHandle, galois_element: int) -
 
 
 # =========================================================================
-# CKKS Encoder
+# Encoder
 # =========================================================================
 
 
-def new_ckks_encoder(params_h: GoHandle) -> GoHandle:
+def new_encoder(params_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
-    h = lib.NewCKKSEncoder(_uintptr(params_h.raw), ctypes.byref(err))
+    h = lib.NewEncoder(_uintptr(params_h.raw), ctypes.byref(err))
     _check_err(err)
-    return GoHandle(h, tag="CKKSEncoder")
+    return GoHandle(h, tag="Encoder")
 
 
-def ckks_encoder_encode(
-    enc_h: GoHandle, params_h: GoHandle,
+def encoder_encode(
+    enc_h: GoHandle,
     values: list[float], level: int, scale: int,
 ) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     arr, n = _doubles_ptr(values)
-    h = lib.CKKSEncoderEncode(
-        _uintptr(enc_h.raw), _uintptr(params_h.raw),
+    h = lib.EncoderEncode(
+        _uintptr(enc_h.raw),
         arr, n, ctypes.c_int(level), ctypes.c_ulonglong(scale),
         ctypes.byref(err),
     )
@@ -346,11 +407,11 @@ def ckks_encoder_encode(
     return GoHandle(h, tag="RLWEPlaintext")
 
 
-def ckks_encoder_decode(enc_h: GoHandle, pt_h: GoHandle, num_slots: int) -> list[float]:
+def encoder_decode(enc_h: GoHandle, pt_h: GoHandle, num_slots: int) -> list[float]:
     lib = _lib_call()
     err = _make_errout()
     out_len = ctypes.c_int(0)
-    ptr = lib.CKKSEncoderDecode(
+    ptr = lib.EncoderDecode(
         _uintptr(enc_h.raw), _uintptr(pt_h.raw),
         ctypes.c_int(num_slots), ctypes.byref(out_len), ctypes.byref(err),
     )
@@ -366,24 +427,22 @@ def ckks_encoder_decode(enc_h: GoHandle, pt_h: GoHandle, num_slots: int) -> list
 # =========================================================================
 
 
-def new_ckks_encryptor(params_h: GoHandle, pk_h: GoHandle) -> GoHandle:
+def new_encryptor(params_h: GoHandle, pk_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
-    h = lib.NewCKKSEncryptor(
+    h = lib.NewEncryptor(
         _uintptr(params_h.raw), _uintptr(pk_h.raw), ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="Encryptor")
 
 
-def encryptor_encrypt_new(
-    enc_h: GoHandle, pt_h: GoHandle, params_h: GoHandle,
-) -> GoHandle:
+def encryptor_encrypt_new(enc_h: GoHandle, pt_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     h = lib.EncryptorEncryptNew(
         _uintptr(enc_h.raw), _uintptr(pt_h.raw),
-        _uintptr(params_h.raw), ctypes.byref(err),
+        ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="RLWECiphertext")
@@ -394,24 +453,22 @@ def encryptor_encrypt_new(
 # =========================================================================
 
 
-def new_ckks_decryptor(params_h: GoHandle, sk_h: GoHandle) -> GoHandle:
+def new_decryptor(params_h: GoHandle, sk_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
-    h = lib.NewCKKSDecryptor(
+    h = lib.NewDecryptor(
         _uintptr(params_h.raw), _uintptr(sk_h.raw), ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="Decryptor")
 
 
-def decryptor_decrypt_new(
-    dec_h: GoHandle, ct_h: GoHandle, params_h: GoHandle,
-) -> GoHandle:
+def decryptor_decrypt_new(dec_h: GoHandle, ct_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     h = lib.DecryptorDecryptNew(
         _uintptr(dec_h.raw), _uintptr(ct_h.raw),
-        _uintptr(params_h.raw), ctypes.byref(err),
+        ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="RLWEPlaintext")
@@ -460,12 +517,12 @@ def public_key_unmarshal(data: bytes) -> GoHandle:
     return _unmarshal("PublicKeyUnmarshal", data, "PublicKey")
 
 
-def relinearization_key_marshal(h: GoHandle) -> bytes:
-    return _marshal("RelinearizationKeyMarshal", h)
+def relin_key_marshal(h: GoHandle) -> bytes:
+    return _marshal("RelinKeyMarshal", h)
 
 
-def relinearization_key_unmarshal(data: bytes) -> GoHandle:
-    return _unmarshal("RelinearizationKeyUnmarshal", data, "RelinearizationKey")
+def relin_key_unmarshal(data: bytes) -> GoHandle:
+    return _unmarshal("RelinKeyUnmarshal", data, "RelinKey")
 
 
 def galois_key_marshal(h: GoHandle) -> bytes:
@@ -539,46 +596,139 @@ def mem_eval_key_set_unmarshal(data: bytes) -> GoHandle:
 # =========================================================================
 
 
-def generate_polynomial_monomial(coeffs: list[float]) -> GoHandle:
+def new_polynomial_monomial(coeffs: list[float]) -> GoHandle:
     arr, n = _doubles_ptr(coeffs)
     err = _make_errout()
-    r = _lib_call().GeneratePolynomialMonomial(arr, n, ctypes.byref(err))
+    r = _lib_call().NewPolynomialMonomial(arr, n, ctypes.byref(err))
     _check_err(err)
     return GoHandle(r, tag="Polynomial")
 
 
-def generate_polynomial_chebyshev(coeffs: list[float]) -> GoHandle:
+def new_polynomial_chebyshev(
+    coeffs: list[float],
+    interval_a: float = -1.0,
+    interval_b: float = 1.0,
+) -> GoHandle:
     arr, n = _doubles_ptr(coeffs)
     err = _make_errout()
-    r = _lib_call().GeneratePolynomialChebyshev(arr, n, ctypes.byref(err))
-    _check_err(err)
-    return GoHandle(r, tag="Polynomial")
-
-
-# =========================================================================
-# Minimax sign coefficients
-# =========================================================================
-
-
-def generate_minimax_sign_coeffs(
-    degrees: list[int], prec: int, log_alpha: int, log_err: int, debug: int,
-) -> list[float]:
-    lib = _lib_call()
-    err = _make_errout()
-    out_len = ctypes.c_int(0)
-    n = len(degrees)
-    deg_arr = (ctypes.c_int * n)(*degrees)
-    ptr = lib.GenerateMinimaxSignCoeffs(
-        deg_arr, ctypes.c_int(n),
-        ctypes.c_int(prec),
-        ctypes.c_int(log_alpha),
-        ctypes.c_int(log_err),
-        ctypes.c_int(debug),
-        ctypes.byref(out_len),
+    r = _lib_call().NewPolynomialChebyshev(
+        arr, n,
+        ctypes.c_double(interval_a), ctypes.c_double(interval_b),
         ctypes.byref(err),
     )
     _check_err(err)
-    n_out = out_len.value
-    result = [float(ptr[i]) for i in range(n_out)]
-    lib.FreeCArray(ctypes.cast(ptr, ctypes.c_void_p))
-    return result
+    return GoHandle(r, tag="Polynomial")
+
+
+# =========================================================================
+# Minimax composite polynomial
+# =========================================================================
+
+
+def gen_minimax_composite_polynomial(
+    degrees: list[int],
+    prec: int,
+    log_alpha: int,
+    log_err: int,
+    debug: int,
+) -> tuple[list[float], list[int]]:
+    """Generate raw minimax composite polynomial coefficients.
+
+    Returns (flat_coeffs, separator_indices) where separator_indices[i]
+    is the start offset of polynomial i in flat_coeffs.
+    """
+    lib = _lib_call()
+    err = _make_errout()
+    deg_arr, deg_len = _ints_ptr(degrees)
+
+    out_coeffs = ctypes.POINTER(ctypes.c_double)()
+    out_len = ctypes.c_int(0)
+    out_seps = ctypes.POINTER(ctypes.c_int)()
+    out_num_polys = ctypes.c_int(0)
+
+    lib.GenMinimaxCompositePolynomial(
+        ctypes.c_uint(prec),
+        ctypes.c_int(log_alpha), ctypes.c_int(log_err),
+        deg_arr, deg_len,
+        ctypes.c_int(debug),
+        ctypes.byref(out_coeffs), ctypes.byref(out_len),
+        ctypes.byref(out_seps), ctypes.byref(out_num_polys),
+        ctypes.byref(err),
+    )
+    _check_err(err)
+
+    n_coeffs = out_len.value
+    n_polys = out_num_polys.value
+
+    coeffs = [float(out_coeffs[i]) for i in range(n_coeffs)]
+    seps = [int(out_seps[i]) for i in range(n_polys)]
+
+    lib.FreeCArray(ctypes.cast(out_coeffs, ctypes.c_void_p))
+    lib.FreeCArray(ctypes.cast(out_seps, ctypes.c_void_p))
+
+    return coeffs, seps
+
+
+# =========================================================================
+# Bootstrap
+# =========================================================================
+
+
+def new_bootstrap_params(
+    params_h: GoHandle,
+    logn: int = 0,
+    logp: list[int] | None = None,
+    h: int = 0,
+    log_slots: int = 0,
+) -> GoHandle:
+    lib = _lib_call()
+    err = _make_errout()
+
+    if logp:
+        logp_arr, logp_len = _ints_ptr(logp)
+    else:
+        logp_arr = ctypes.POINTER(ctypes.c_int)()
+        logp_len = ctypes.c_int(0)
+
+    handle = lib.NewBootstrapParams(
+        _uintptr(params_h.raw),
+        ctypes.c_int(logn),
+        logp_arr, logp_len,
+        ctypes.c_int(h),
+        ctypes.c_int(log_slots),
+        ctypes.byref(err),
+    )
+    _check_err(err)
+    return GoHandle(handle, tag="BootstrapParams")
+
+
+def bootstrap_params_gen_eval_keys(
+    btp_params_h: GoHandle,
+    sk_h: GoHandle,
+) -> tuple[GoHandle, GoHandle]:
+    """Generate bootstrap evaluation keys.
+
+    Returns (evk_handle, btp_evk_handle) where:
+    - evk_handle: MemEvaluationKeySet (for the evaluator)
+    - btp_evk_handle: full bootstrap EvaluationKeys (for marshaling)
+    """
+    lib = _lib_call()
+    err = _make_errout()
+    out_evk_h = _uintptr(0)
+
+    btp_evk_h = lib.BootstrapParamsGenEvalKeys(
+        _uintptr(btp_params_h.raw),
+        _uintptr(sk_h.raw),
+        ctypes.byref(out_evk_h),
+        ctypes.byref(err),
+    )
+    _check_err(err)
+
+    return (
+        GoHandle(out_evk_h.value, tag="MemEvaluationKeySet"),
+        GoHandle(btp_evk_h, tag="BootstrapEvalKeys"),
+    )
+
+
+def bootstrap_eval_keys_marshal(h: GoHandle) -> bytes:
+    return _marshal("BootstrapEvalKeysMarshal", h)
