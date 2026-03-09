@@ -13,7 +13,7 @@
  *     5. Generate RLK if manifest.needs_rlk
  *     6. Generate Galois keys from manifest.galois_elements (with progress)
  *     7. If manifest.bootstrap_slots non-empty: construct ParametersLiteral,
- *        call btpParamsGenEvaluationKeys (async, may take 5–30s)
+ *        call bootstrapParamsGenEvalKeys (async, may take 5–30s)
  *     8. POST /session (no body) → session ID
  *     9. Stream keys: generate-marshal-upload-free loop (one key in memory at a time)
  *    10. POST /session/{id}/keys/finalize
@@ -164,23 +164,23 @@ async function initializeKeys(): Promise<void> {
   bridge = await loadLattigo("wasm/lattigo.wasm");
   appendLine(`WASM loaded in ${formatDuration(performance.now() - t1)}`);
 
-  // 3. Create CKKS params (convert orion format → bridge format)
-  // When bootstrap is enabled, set LogNthRoot = btp_logn + 1 so that generated
+  // 3. Create CKKS params (flat args, no JSON)
+  // When bootstrap is enabled, set logNthRoot = btp_logn + 1 so that generated
   // primes satisfy q = 1 mod 2^(btp_logn+1), required by Lattigo's bootstrap.
-  const bridgeParams: Record<string, unknown> = {
-    LogN: ckksData.logn,
-    LogQ: ckksData.logq,
-    LogP: ckksData.logp,
-    LogDefaultScale: ckksData.logscale,
-    H: ckksData.h,
-    RingType: ckksData.ring_type, // bridge handles "conjugate_invariant" directly
-  };
+  let logNthRoot: number | undefined;
   if (ckksData.boot_logp && ckksData.boot_logp.length > 0) {
     const btpLogN = ckksData.btp_logn ?? ckksData.logn;
-    bridgeParams.LogNthRoot = btpLogN + 1;
+    logNthRoot = btpLogN + 1;
   }
-  const bridgeParamsJSON = JSON.stringify(bridgeParams);
-  params = CKKSParameters.fromJSON(bridgeParamsJSON);
+  params = new CKKSParameters({
+    logN: ckksData.logn,
+    logQ: ckksData.logq,
+    logP: ckksData.logp,
+    logDefaultScale: ckksData.logscale,
+    ringType: ckksData.ring_type as "standard" | "conjugate_invariant",
+    h: ckksData.h,
+    logNthRoot,
+  });
   appendLine(
     `CKKS params: ${params.maxSlots()} slots, max level ${params.maxLevel()}`,
   );
@@ -188,15 +188,15 @@ async function initializeKeys(): Promise<void> {
   // 4. Keygen
   appendLine("Generating secret key...");
   const t2 = performance.now();
-  const kg = KeyGenerator.new(params);
+  const kg = new KeyGenerator(params);
   sk = kg.genSecretKey();
   const pk = kg.genPublicKey(sk);
   appendLine(`Keygen in ${formatDuration(performance.now() - t2)}`);
 
   // 5. Create encoder, encryptor, decryptor
-  encoder = Encoder.new(params);
-  encryptor = Encryptor.new(params, pk);
-  decryptor = Decryptor.new(params, sk);
+  encoder = new Encoder(params);
+  encryptor = new Encryptor(params, pk);
+  decryptor = new Decryptor(params, sk);
 
   // 6. Create session (no body — keys will be streamed individually)
   appendLine("Creating session...");
@@ -297,23 +297,20 @@ async function initializeKeys(): Promise<void> {
     appendLine("Generating bootstrap evaluation keys (this may take a while)...");
     const t5 = performance.now();
 
-    // Construct bootstrap parameters literal
-    const btpLit: Record<string, unknown> = {
-      LogN: ckksData.btp_logn ?? ckksData.logn,
-    };
-    if (manifest.boot_logp && manifest.boot_logp.length > 0) {
-      btpLit.LogP = manifest.boot_logp;
-    }
-    if (ckksData.h) {
-      btpLit.H = ckksData.h;
-    }
-    // Use the smallest bootstrap_slots for LogSlots
+    // Construct bootstrap parameters (flat args)
+    const btpLogN = ckksData.btp_logn ?? ckksData.logn;
+    const btpLogP = (manifest.boot_logp && manifest.boot_logp.length > 0)
+      ? manifest.boot_logp : null;
+    const btpH = ckksData.h ?? null;
     const minSlots = Math.min(...manifest.bootstrap_slots);
-    btpLit.LogSlots = Math.round(Math.log2(minSlots));
+    const btpLogSlots = Math.round(Math.log2(minSlots));
 
-    const btpParamsResult = bridge.newBootstrapParametersFromLiteral(
+    const btpParamsResult = bridge.newBootstrapParams(
       params!.handle,
-      JSON.stringify(btpLit),
+      btpLogN,
+      btpLogP,
+      btpH,
+      btpLogSlots,
     );
     if ("error" in btpParamsResult) {
       setStatus(`Bootstrap params error: ${btpParamsResult.error}`);
@@ -323,14 +320,14 @@ async function initializeKeys(): Promise<void> {
     const btpParamsHID = btpParamsResult.handle;
 
     // Generate bootstrap evaluation keys (async — heavy operation)
-    const btpResult = await bridge.btpParamsGenEvaluationKeys(
+    const btpResult = await bridge.bootstrapParamsGenEvalKeys(
       btpParamsHID,
       sk!.handle,
     );
     bridge.deleteHandle(btpParamsHID);
 
     // Marshal bootstrap keys
-    const btpBytes = bridge.btpEvaluationKeysMarshal(btpResult.btpEvkHID);
+    const btpBytes = bridge.bootstrapEvalKeysMarshal(btpResult.btpEvkHID);
     bridge.deleteHandle(btpResult.evkHID);
     bridge.deleteHandle(btpResult.btpEvkHID);
 

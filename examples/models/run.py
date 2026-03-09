@@ -71,17 +71,22 @@ def compile_and_run(net, config, test_input, cleartext):
     params_dict, manifest, input_level = model.client_params()
 
     # Keygen
-    params = Parameters.from_logn(**params_dict)
-    kg = KeyGenerator.new(params)
+    # Translate params_dict to new constructor (logscale → log_default_scale)
+    pd = dict(params_dict)
+    if "logscale" in pd:
+        pd["log_default_scale"] = pd.pop("logscale")
+    pd.setdefault("ring_type", "conjugate_invariant")
+    params = Parameters(**pd)
+    kg = KeyGenerator(params)
     sk = kg.gen_secret_key()
     pk = kg.gen_public_key(sk)
-    encoder = Encoder.new(params)
-    encryptor = Encryptor.new(params, pk)
-    decryptor = Decryptor.new(params, sk)
+    encoder = Encoder(params)
+    encryptor = Encryptor(params, pk)
+    decryptor = Decryptor(params, sk)
 
-    rlk = kg.gen_relinearization_key(sk) if manifest["needs_rlk"] else None
+    rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
     gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
-    evk = MemEvaluationKeySet.new(rlk=rlk, galois_keys=gks)
+    evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
     keys_bytes = evk.marshal_binary()
 
     # Bootstrap keys check
