@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build:wasm": "bash bridge/build.sh",
-    "build:ts": "esbuild src/index.ts --bundle --platform=neutral --format=esm --external:fs --external:path --outfile=dist/index.js && tsc --emitDeclarationOnly",
+    "build:ts": "esbuild src/index.ts --bundle --platform=neutral --format=esm --external:fs --external:path --external:url --outfile=dist/index.js && tsc --emitDeclarationOnly",
     "build": "npm run build:wasm && npm run build:ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/ tests/*.test.ts tests/helpers.ts tests/setup.ts",
