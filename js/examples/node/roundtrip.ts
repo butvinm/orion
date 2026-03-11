@@ -111,18 +111,18 @@ async function main() {
   }
 
   // 11. Cleanup
-  ptResult.free();
-  ct.free();
-  pt.free();
-  decryptor.free();
-  encryptor.free();
-  encoder.free();
-  pk.free();
-  sk.free();
-  kg.free();
-  params.free();
+  ptResult.close();
+  ct.close();
+  pt.close();
+  decryptor.close();
+  encryptor.close();
+  encoder.close();
+  pk.close();
+  sk.close();
+  kg.close();
+  params.close();
 
-  console.log("\nAll resources freed. Done.");
+  console.log("\nAll resources closed. Done.");
 }
 
 main().catch((err) => {

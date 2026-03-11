@@ -215,14 +215,14 @@ async function main() {
   );
 
   // 9. Cleanup
-  evk.free();
-  for (const gk of galoisKeys) gk.free();
-  if (rlk) rlk.free();
-  sk.free();
-  kg.free();
-  params.free();
+  evk.close();
+  for (const gk of galoisKeys) gk.close();
+  if (rlk) rlk.close();
+  sk.close();
+  kg.close();
+  params.close();
 
-  console.log("\nAll resources freed. Done.");
+  console.log("\nAll resources closed. Done.");
 }
 
 main().catch((err) => {
