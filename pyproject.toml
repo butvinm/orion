@@ -59,4 +59,3 @@ module = [
     "orion_compiler.core.fuser",
 ]
 disallow_untyped_defs = false
-check_untyped_defs = false

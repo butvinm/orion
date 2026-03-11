@@ -35,7 +35,7 @@ def get_mnist_datasets(data_dir, batch_size, test_samples=10000, seed=None):
     # [SSL: CERTIFICATE_VERIFY_FAILED] error.
     ssl_context = ssl.create_default_context(cafile=certifi.where())
     old_context = ssl._create_default_https_context
-    ssl._create_default_https_context = lambda: ssl_context  # type: ignore[misc]
+    ssl._create_default_https_context = lambda: ssl_context  # type: ignore[assignment,misc]
 
     try:
         if seed is not None:
@@ -96,7 +96,7 @@ def get_cifar_datasets(data_dir, batch_size, test_samples=10000, seed=None):
     # [SSL: CERTIFICATE_VERIFY_FAILED] error.
     ssl_context = ssl.create_default_context(cafile=certifi.where())
     old_context = ssl._create_default_https_context
-    ssl._create_default_https_context = lambda: ssl_context  # type: ignore[misc]
+    ssl._create_default_https_context = lambda: ssl_context  # type: ignore[assignment,misc]
 
     try:
         if seed is not None:
@@ -165,7 +165,7 @@ def download_and_prepare_tinyimagenet(data_dir="./data"):
         # Create a secure SSL context using certifi
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         old_context = ssl._create_default_https_context
-        ssl._create_default_https_context = lambda: ssl_context  # type: ignore[misc]
+        ssl._create_default_https_context = lambda: ssl_context  # type: ignore[assignment,misc]
 
         try:
             # Download the dataset

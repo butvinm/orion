@@ -113,7 +113,7 @@ class NetworkDAG(nx.DiGraph):
         the fork/join nodes of a residual connection."""
 
         nodes_in_residual = set()
-        edges_in_residual = set()
+        edges_in_residual: set[tuple[str, str]] = set()
 
         # Get all paths from fork -> join and build up a set of unique
         # nodes/edges in its subgraph
