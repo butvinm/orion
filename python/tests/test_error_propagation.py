@@ -1,7 +1,6 @@
 """Verify Go errors surface as Python exceptions with messages."""
 
 import pytest
-
 from lattigo import ffi as lattigo_ffi
 from lattigo.ckks import Parameters
 
@@ -12,12 +11,21 @@ class TestErrorPropagation:
     def test_invalid_params_raises_runtime_error(self):
         """Invalid CKKS parameters should raise RuntimeError, not crash."""
         with pytest.raises(RuntimeError):
-            Parameters(logn=3, logq=[10], logp=[10], log_default_scale=5, ring_type="standard", h=64)
+            Parameters(
+                logn=3, logq=[10], logp=[10], log_default_scale=5, ring_type="standard", h=64
+            )
 
     def test_invalid_ring_type_raises_runtime_error(self):
         """Invalid ring type should raise RuntimeError from the Go bridge."""
         with pytest.raises(RuntimeError):
-            Parameters(logn=13, logq=[40, 40], logp=[40], log_default_scale=40, ring_type="invalid_ring", h=192)
+            Parameters(
+                logn=13,
+                logq=[40, 40],
+                logp=[40],
+                log_default_scale=40,
+                ring_type="invalid_ring",
+                h=192,
+            )
 
     def test_bad_ciphertext_unmarshal_raises(self):
         """Invalid ciphertext bytes should raise RuntimeError."""

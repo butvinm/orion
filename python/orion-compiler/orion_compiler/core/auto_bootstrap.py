@@ -1,9 +1,12 @@
+import itertools
 import math
-import networkx as nx
+
 import matplotlib.pyplot as plt
+import networkx as nx
+
+from orion_compiler.nn.operations import Bootstrap
 
 from .level_dag import LevelDAG
-from orion_compiler.nn.operations import Bootstrap
 
 
 class BootstrapSolver:
@@ -16,7 +19,7 @@ class BootstrapSolver:
 
     def extract_all_residual_subgraphs(self):
         all_residual_subgraphs = []
-        for fork in self.network_dag.residuals.keys():
+        for fork in self.network_dag.residuals:
             subgraph = self.network_dag.extract_residual_subgraph(fork)
             all_residual_subgraphs.append(subgraph)
 
@@ -47,19 +50,15 @@ class BootstrapSolver:
         sorted_residual_subgraphs = self.sort_residual_subgraphs()
         self.network_dag.solved_residual_level_dags = {}
 
-        for (fork, _, paths) in sorted_residual_subgraphs:
+        for fork, _, paths in sorted_residual_subgraphs:
             aggregate_level_dag = LevelDAG(
                 l_eff=self.l_eff, network_dag=self.network_dag, path=None
             )
             for path in paths:
                 path_dag = nx.DiGraph()
-                nodes_in_path = [
-                    (node, self.network_dag.nodes[node])
-                    for node in path
-                ]
+                nodes_in_path = [(node, self.network_dag.nodes[node]) for node in path]
                 edges_in_path = [
-                    (u, v, self.network_dag[u][v])
-                    for u, v in zip(path[:-1], path[1:])
+                    (u, v, self.network_dag[u][v]) for u, v in itertools.pairwise(path)
                 ]
                 path_dag.add_nodes_from(nodes_in_path)
                 path_dag.add_edges_from(edges_in_path)
@@ -98,7 +97,7 @@ class BootstrapSolver:
         self.full_level_dag.add_node("source", weight=0)
         self.full_level_dag.add_node("target", weight=0)
 
-        for head, tail in zip(heads, tails):
+        for head, tail in zip(heads, tails, strict=False):
             self.full_level_dag.add_edge("source", head, weight=0)
             self.full_level_dag.add_edge(tail, "target", weight=0)
 
@@ -116,7 +115,7 @@ class BootstrapSolver:
         shortest_path = shortest_path[1:-1]
 
         reconstructed_path = set()
-        for u, v in zip(shortest_path[:-1], shortest_path[1:]):
+        for u, v in itertools.pairwise(shortest_path):
             edge = self.full_level_dag[u][v]
             reconstructed_path.update(edge["path"])
 
@@ -154,9 +153,7 @@ class BootstrapSolver:
             name = node.split("@")[0]
             node_map[name] = node
 
-        query = LevelDAG(
-            l_eff=self.l_eff, network_dag=self.network_dag, path=None
-        )
+        query = LevelDAG(l_eff=self.l_eff, network_dag=self.network_dag, path=None)
 
         total_bootstraps = 0
         bootstrapper_slots = []
@@ -169,8 +166,7 @@ class BootstrapSolver:
 
             for child in children:
                 child_w_level = node_map[child]
-                _, curr_boots = query.estimate_bootstrap_latency(
-                    node_w_level, child_w_level)
+                _, curr_boots = query.estimate_bootstrap_latency(node_w_level, child_w_level)
 
                 total_bootstraps += curr_boots
                 if curr_boots > 0:
@@ -193,7 +189,7 @@ class BootstrapSolver:
 
         return slots
 
-    def plot_shortest_path(self, save_path="", figsize=(10,10)):
+    def plot_shortest_path(self, save_path="", figsize=(10, 10)):
         nodes = {}
         for node in self.shortest_path:
             name = node.split("@")[0]
@@ -211,21 +207,19 @@ class BootstrapSolver:
                 shortest_graph.add_edge(u, v)
 
         try:
-            pos = nx.nx_agraph.graphviz_layout(shortest_graph, prog='dot')
+            pos = nx.nx_agraph.graphviz_layout(shortest_graph, prog="dot")
         except Exception:
             print("Graphviz not installed. Defaulting to worse visualization.\n")
             pos = nx.kamada_kawai_layout(shortest_graph)
 
         plt.figure(figsize=figsize)
-        nx.draw(
-            shortest_graph, pos, with_labels=False, arrows=True, font_size=8)
+        nx.draw(shortest_graph, pos, with_labels=False, arrows=True, font_size=8)
 
         node_labels = {
             node: f"{node}\n(level: {data['level']})"
             for node, data in shortest_graph.nodes(data=True)
         }
-        nx.draw_networkx_labels(
-            shortest_graph, pos, labels=node_labels, font_size=8)
+        nx.draw_networkx_labels(shortest_graph, pos, labels=node_labels, font_size=8)
 
         if save_path:
             plt.savefig(save_path)
@@ -244,14 +238,14 @@ class BootstrapPlacer:
         For each node marked with bootstrap=True, creates a boot_{idx} node
         and inserts it between the node and all its children in the DAG.
         """
-        boot_idx = 0
         # Snapshot node list — we mutate the graph during iteration
         nodes_to_bootstrap = [
-            node for node in self.network_dag.nodes
+            node
+            for node in self.network_dag.nodes
             if self.network_dag.nodes[node].get("bootstrap", False)
         ]
 
-        for node in nodes_to_bootstrap:
+        for boot_idx, node in enumerate(nodes_to_bootstrap):
             module = self.network_dag.nodes[node]["module"]
             bootstrapper = self._create_bootstrapper(module)
 
@@ -278,8 +272,6 @@ class BootstrapPlacer:
                 self.network_dag.remove_edge(node, child)
                 self.network_dag.add_edge(boot_name, child)
             self.network_dag.add_edge(node, boot_name)
-
-            boot_idx += 1
 
     def _create_bootstrapper(self, module):
         btp_input_level = module.level - module.depth

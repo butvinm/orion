@@ -13,4 +13,4 @@ Usage::
 from .evaluator import Evaluator
 from .model import Model
 
-__all__ = ["Model", "Evaluator"]
+__all__ = ["Evaluator", "Model"]

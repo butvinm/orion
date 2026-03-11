@@ -15,7 +15,8 @@ class Model:
         # ... use params to create keys, encrypt input ...
         model.close()
     """
-    __slots__ = ('_handle',)
+
+    __slots__ = ("_handle",)
 
     def __init__(self, handle: int):
         self._handle = handle

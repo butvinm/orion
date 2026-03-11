@@ -37,7 +37,7 @@ def _load_library():
     try:
         return ctypes.CDLL(lib_path)
     except OSError as e:
-        raise RuntimeError(f"Failed to load library at {lib_path}: {e}")
+        raise RuntimeError(f"Failed to load library at {lib_path}: {e}") from e
 
 
 def _get_lib():
@@ -63,8 +63,10 @@ def _setup_prototypes(lib):
 
     lib.EvalModelClientParams.argtypes = [
         _uintptr,
-        ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_ulong),  # params
-        ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_ulong),  # manifest
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.POINTER(ctypes.c_ulong),  # params
+        ctypes.POINTER(ctypes.c_char_p),
+        ctypes.POINTER(ctypes.c_ulong),  # manifest
         ctypes.POINTER(ctypes.c_int),  # input level
         _errout,
     ]
@@ -76,8 +78,10 @@ def _setup_prototypes(lib):
     # --- Evaluator ---
     lib.EvalNewEvaluator.argtypes = [
         ctypes.c_char_p,  # params JSON
-        ctypes.c_void_p, ctypes.c_ulong,  # keys data
-        ctypes.c_void_p, ctypes.c_ulong,  # btp keys data (optional, NULL/0 when not needed)
+        ctypes.c_void_p,
+        ctypes.c_ulong,  # keys data
+        ctypes.c_void_p,
+        ctypes.c_ulong,  # btp keys data (optional, NULL/0 when not needed)
         _errout,
     ]
     lib.EvalNewEvaluator.restype = _uintptr
@@ -85,7 +89,8 @@ def _setup_prototypes(lib):
     lib.EvalForward.argtypes = [
         _uintptr,  # eval handle
         _uintptr,  # model handle
-        ctypes.c_void_p, ctypes.c_ulong,  # ct data
+        ctypes.c_void_p,
+        ctypes.c_ulong,  # ct data
         ctypes.POINTER(ctypes.c_ulong),  # out len
         _errout,
     ]
@@ -155,8 +160,10 @@ def model_client_params(handle: int) -> tuple[str, str, int]:
 
     lib.EvalModelClientParams(
         _uintptr(handle),
-        ctypes.byref(params_out), ctypes.byref(params_len),
-        ctypes.byref(manifest_out), ctypes.byref(manifest_len),
+        ctypes.byref(params_out),
+        ctypes.byref(params_len),
+        ctypes.byref(manifest_out),
+        ctypes.byref(manifest_len),
         ctypes.byref(input_level),
         ctypes.byref(err),
     )
@@ -200,8 +207,10 @@ def new_evaluator(params_json: str, keys_bytes: bytes, btp_keys_bytes: bytes | N
 
     h = lib.EvalNewEvaluator(
         params_json.encode("utf-8"),
-        ptr, length,
-        btp_ptr, btp_length,
+        ptr,
+        length,
+        btp_ptr,
+        btp_length,
         ctypes.byref(err),
     )
     _check_err(err)
@@ -218,7 +227,8 @@ def evaluator_forward(eval_handle: int, model_handle: int, ct_bytes: bytes) -> b
     result_ptr = lib.EvalForward(
         _uintptr(eval_handle),
         _uintptr(model_handle),
-        ptr, length,
+        ptr,
+        length,
         ctypes.byref(out_len),
         ctypes.byref(err),
     )

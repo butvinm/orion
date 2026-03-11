@@ -3,18 +3,16 @@
 import struct
 
 import pytest
-
-from orion_compiler.params import CostProfile
 from orion_compiler.compiled_model import (
-    GraphNode,
-    GraphEdge,
     Graph,
-    pack_raw_diagonals,
-    unpack_raw_diagonals,
+    GraphEdge,
+    GraphNode,
     pack_raw_bias,
+    pack_raw_diagonals,
     unpack_raw_bias,
+    unpack_raw_diagonals,
 )
-
+from orion_compiler.params import CostProfile
 
 # -----------------------------------------------------------------------
 # CostProfile
@@ -66,9 +64,7 @@ class TestCostProfile:
         assert cp.bootstrap_key_count == 4
 
     def test_roundtrip(self):
-        original = CostProfile(
-            bootstrap_count=7, galois_key_count=55, bootstrap_key_count=3
-        )
+        original = CostProfile(bootstrap_count=7, galois_key_count=55, bootstrap_key_count=3)
         restored = CostProfile.from_dict(original.to_dict())
         assert restored == original
 
@@ -470,7 +466,7 @@ class TestPackRawBias:
         max_slots = 4
         packed = pack_raw_bias(bias, max_slots)
         restored = unpack_raw_bias(packed, max_slots)
-        for a, b in zip(bias, restored):
+        for a, b in zip(bias, restored, strict=False):
             assert a == pytest.approx(b)
 
     def test_bias_blob_length(self):

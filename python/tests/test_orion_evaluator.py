@@ -1,7 +1,8 @@
 """Tests for the orion-evaluator Python package.
 
 Unit tests for Model and Evaluator lifecycle, plus E2E test:
-compile (orion-compiler) -> keygen+encrypt (lattigo) -> forward (orion-evaluator) -> decrypt (lattigo).
+compile (orion-compiler) -> keygen+encrypt (lattigo) ->
+forward (orion-evaluator) -> decrypt (lattigo).
 """
 
 import gc
@@ -10,15 +11,14 @@ import os
 
 import pytest
 import torch
-
-from orion_evaluator import Model, Evaluator
-from lattigo.ckks import Parameters, Encoder
+from lattigo.ckks import Encoder, Parameters
 from lattigo.rlwe import (
-    KeyGenerator,
-    Encryptor,
     Decryptor,
+    Encryptor,
+    KeyGenerator,
     MemEvaluationKeySet,
 )
+from orion_evaluator import Evaluator, Model
 
 # Path to pre-compiled test models
 TESTDATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "evaluator", "testdata")
@@ -287,6 +287,7 @@ class TestBootstrapKeyParameter:
         assert len(result_bytes) > 0
 
         from lattigo.rlwe import Ciphertext as RLWECiphertext
+
         result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
         result_pt = decryptor.decrypt_new(result_ct)
         decoded = encoder.decode(result_pt, max_slots)
@@ -371,6 +372,7 @@ class TestE2EForward:
 
         # Decrypt result
         from lattigo.rlwe import Ciphertext as RLWECiphertext
+
         result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
         result_pt = decryptor.decrypt_new(result_ct)
         decoded = encoder.decode(result_pt, max_slots)
@@ -412,9 +414,9 @@ class TestE2EForward:
 
         This test exercises the full pipeline from PyTorch model to encrypted inference.
         """
-        from orion_compiler.params import CKKSParams
-        from orion_compiler.compiler import Compiler
         import orion_compiler.nn as on
+        from orion_compiler.compiler import Compiler
+        from orion_compiler.params import CKKSParams
 
         class TinyMLP(on.Module):
             def __init__(self):
@@ -481,6 +483,7 @@ class TestE2EForward:
 
         # Decrypt
         from lattigo.rlwe import Ciphertext as RLWECiphertext
+
         result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
         result_pt = decryptor.decrypt_new(result_ct)
         decoded = encoder.decode(result_pt, max_slots)
@@ -522,12 +525,13 @@ class TestE2EForward:
 
     def test_forward_conv2d_small_channels(self):
         """E2E: Conv2d(1,5,k=2,s=2,p=0) with small channel count and output rotations."""
-        from orion_compiler.params import CKKSParams
-        from orion_compiler.compiler import Compiler
         import orion_compiler.nn as on
+        from orion_compiler.compiler import Compiler
+        from orion_compiler.params import CKKSParams
 
         class SmallConvNet(on.Module):
             """Minimal Conv2d model with small channel count and output rotations."""
+
             def __init__(self):
                 super().__init__()
                 self.conv1 = on.Conv2d(1, 5, kernel_size=2, stride=2, padding=0)
@@ -592,6 +596,7 @@ class TestE2EForward:
 
         # Decrypt
         from lattigo.rlwe import Ciphertext as RLWECiphertext
+
         result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
         result_pt = decryptor.decrypt_new(result_ct)
         decoded = encoder.decode(result_pt, max_slots)

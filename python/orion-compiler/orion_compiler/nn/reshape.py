@@ -2,6 +2,7 @@ import torch
 
 from .module import Module
 
+
 class Flatten(Module):
     def __init__(self):
         super().__init__()

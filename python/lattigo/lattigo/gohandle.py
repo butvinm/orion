@@ -35,7 +35,7 @@ def _load_library():
     try:
         return ctypes.CDLL(lib_path)
     except OSError as e:
-        raise RuntimeError(f"Failed to load library at {lib_path}: {e}")
+        raise RuntimeError(f"Failed to load library at {lib_path}: {e}") from e
 
 
 def get_lib():
@@ -56,7 +56,8 @@ def get_lib():
 
 class GoHandle:
     """RAII wrapper for a cgo.Handle (opaque uintptr_t). Idempotent close."""
-    __slots__ = ('_raw', '_tag')
+
+    __slots__ = ("_raw", "_tag")
 
     def __init__(self, raw: int, tag: str = ""):
         self._raw = raw

@@ -1,4 +1,5 @@
 import math
+
 import torch
 import torch.nn.functional as F
 
@@ -7,20 +8,30 @@ from .linear import Conv2d
 
 class AvgPool2d(Conv2d):
     def __init__(
-            self,
-            kernel_size,
-            stride=None,
-            padding=0,
-            bsgs_ratio=2,
-            level=None,
+        self,
+        kernel_size,
+        stride=None,
+        padding=0,
+        bsgs_ratio=2,
+        level=None,
     ):
-        super().__init__(1, 1, kernel_size, stride or kernel_size, padding,
-                         dilation=1, groups=1, bias=False,
-                         bsgs_ratio=bsgs_ratio, level=level)
+        super().__init__(
+            1,
+            1,
+            kernel_size,
+            stride or kernel_size,
+            padding,
+            dilation=1,
+            groups=1,
+            bias=False,
+            bsgs_ratio=bsgs_ratio,
+            level=level,
+        )
 
     def extra_repr(self):
-        return (f"AvgPool2d(kernel_size={self.kernel_size}, stride={self.stride} " +
-                f"level = {self.level})"
+        return (
+            f"AvgPool2d(kernel_size={self.kernel_size}, stride={self.stride} "
+            + f"level = {self.level})"
         )
 
     def update_params(self):
@@ -34,23 +45,15 @@ class AvgPool2d(Conv2d):
 
 
 class AdaptiveAvgPool2d(AvgPool2d):
-    def __init__(
-            self,
-            output_size,
-            bsgs_ratio=2,
-            level=None
-        ):
-        super().__init__(kernel_size=1, stride=1, padding=0,
-                         bsgs_ratio=bsgs_ratio, level=level)
+    def __init__(self, output_size, bsgs_ratio=2, level=None):
+        super().__init__(kernel_size=1, stride=1, padding=0, bsgs_ratio=bsgs_ratio, level=level)
 
         if isinstance(output_size, int):
             output_size = (output_size, output_size)
         self.output_size = output_size
 
     def extra_repr(self):
-        return (f"AdaptiveAvgPool2d(output_size={self.output_size}) " +
-                f"level={self.level})"
-        )
+        return f"AdaptiveAvgPool2d(output_size={self.output_size}) " + f"level={self.level})"
 
     def update_params(self):
         Hi, Wi = self.input_shape[2:]
@@ -63,15 +66,15 @@ class AdaptiveAvgPool2d(AvgPool2d):
         super().update_params()
 
     def compute_fhe_output_gap(self, **kwargs):
-        input_gap = kwargs['input_gap']
-        input_shape = kwargs['input_shape']
-        output_shape = kwargs['output_shape']
+        input_gap = kwargs["input_gap"]
+        input_shape = kwargs["input_shape"]
+        output_shape = kwargs["output_shape"]
         return input_gap * (input_shape[2] // output_shape[2])
 
     def compute_fhe_output_shape(self, **kwargs):
-        input_shape = kwargs['input_shape']
-        output_shape = kwargs['clear_output_shape']
-        input_gap = kwargs['input_gap']
+        input_shape = kwargs["input_shape"]
+        output_shape = kwargs["clear_output_shape"]
+        input_gap = kwargs["input_gap"]
 
         Hi, Wi = input_shape[2:]
         No, Co, Ho, Wo = output_shape
@@ -81,8 +84,8 @@ class AdaptiveAvgPool2d(AvgPool2d):
         )
 
         on_Co = math.ceil(Co / (output_gap**2))
-        on_Ho = max(Hi, Ho*output_gap)
-        on_Wo = max(Wi, Wo*output_gap)
+        on_Ho = max(Hi, Ho * output_gap)
+        on_Wo = max(Wi, Wo * output_gap)
 
         return torch.Size((No, on_Co, on_Ho, on_Wo))
 
@@ -90,7 +93,7 @@ class AdaptiveAvgPool2d(AvgPool2d):
         Ho, Wo = self.output_size
         if x.shape[2] % Ho != 0 or x.shape[3] % Wo != 0:
             raise ValueError(
-                f"Output spatial dimensions {self.output_size} are not " +
-                f"a multiple of the input spatial dimensions {x.shape[2:]}."
+                f"Output spatial dimensions {self.output_size} are not "
+                + f"a multiple of the input spatial dimensions {x.shape[2:]}."
             )
         return F.adaptive_avg_pool2d(x, self.output_size)

@@ -43,14 +43,14 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 1: Bump Python minimum to 3.11 and add ruff
 
-- [ ] Update `python = ">=3.9,<3.13"` to `">=3.11,<3.13"` in all three `pyproject.toml` files (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`)
-- [ ] Remove unnecessary `from __future__ import annotations` imports (in `ckks.py`, `rlwe.py`, `compiler_backend.py`) — no longer needed with 3.11+
-- [ ] Add `[tool.ruff]` and `[tool.ruff.lint]` to root `pyproject.toml` — target Python 3.11, enable `E`, `F`, `W`, `I` (isort), `UP` (pyupgrade), `B` (bugbear), `SIM`, `RUF` rule sets
-- [ ] Add `[tool.ruff.format]` section (quote-style double, line-length 99)
-- [ ] Run `ruff check --fix python/` to auto-fix lint issues
-- [ ] Run `ruff format python/` to format all Python files
-- [ ] Review and manually fix any remaining lint errors
-- [ ] Run `pytest python/tests/` — must pass before next task
+- [x] Update `python = ">=3.9,<3.13"` to `">=3.11,<3.13"` in all three `pyproject.toml` files (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`)
+- [x] Remove unnecessary `from __future__ import annotations` imports (in `ckks.py`, `rlwe.py`, `compiler_backend.py`) — no longer needed with 3.11+
+- [x] Add `[tool.ruff]` and `[tool.ruff.lint]` to root `pyproject.toml` — target Python 3.11, enable `E`, `F`, `W`, `I` (isort), `UP` (pyupgrade), `B` (bugbear), `SIM`, `RUF` rule sets
+- [x] Add `[tool.ruff.format]` section (quote-style double, line-length 99)
+- [x] Run `ruff check --fix python/` to auto-fix lint issues
+- [x] Run `ruff format python/` to format all Python files
+- [x] Review and manually fix any remaining lint errors
+- [x] Run `pytest python/tests/` — must pass before next task
 
 ### Task 2: Add library-specific exceptions
 

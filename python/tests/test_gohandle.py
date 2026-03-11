@@ -6,27 +6,21 @@ GoHandle tests verify RAII semantics, close idempotency, and repr formatting.
 
 import gc
 
-import torch
-import pytest
-
-from orion_compiler.params import CKKSParams
-from orion_compiler.compiler import Compiler
 import orion_compiler.nn as on
+import pytest
+import torch
 
 # Lattigo primitive imports
-from lattigo.ckks import Parameters, Encoder
-from lattigo.rlwe import (
-    KeyGenerator,
-    Encryptor,
-    Decryptor,
-    Ciphertext,
-    Plaintext,
-    MemEvaluationKeySet,
-)
+from lattigo.ckks import Encoder, Parameters
 from lattigo.gohandle import GoHandle
-
-from lattigo import ffi as lattigo_ffi
-
+from lattigo.rlwe import (
+    Ciphertext,
+    Decryptor,
+    Encryptor,
+    KeyGenerator,
+    Plaintext,
+)
+from orion_compiler.params import CKKSParams
 
 MLP_PARAMS = CKKSParams(
     logn=13,
@@ -489,7 +483,9 @@ class TestGoErrorPropagation:
     def test_error_propagation(self):
         """Trigger a Go error, verify Python gets RuntimeError, not process crash."""
         with pytest.raises(RuntimeError) as exc_info:
-            Parameters(logn=3, logq=[10], logp=[10], log_default_scale=5, ring_type="standard", h=64)
+            Parameters(
+                logn=3, logq=[10], logp=[10], log_default_scale=5, ring_type="standard", h=64
+            )
 
         assert len(str(exc_info.value)) > 0
 

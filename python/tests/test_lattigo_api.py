@@ -163,9 +163,7 @@ class TestEncodeDecode:
         decoded = encoder.decode(pt, params.max_slots())
         # CKKS is approximate — check within tolerance
         for i in range(len(values)):
-            assert abs(decoded[i] - values[i]) < 1e-7, (
-                f"decoded[{i}]={decoded[i]} != {values[i]}"
-            )
+            assert abs(decoded[i] - values[i]) < 1e-7, f"decoded[{i}]={decoded[i]} != {values[i]}"
 
         pt.close()
         encoder.close()
@@ -191,9 +189,7 @@ class TestEncryptDecrypt:
         decoded = encoder.decode(pt_dec, params.max_slots())
 
         for i in range(len(values)):
-            assert abs(decoded[i] - values[i]) < 1e-4, (
-                f"decoded[{i}]={decoded[i]} != {values[i]}"
-            )
+            assert abs(decoded[i] - values[i]) < 1e-4, f"decoded[{i}]={decoded[i]} != {values[i]}"
 
         pt.close()
         ct.close()
@@ -228,9 +224,7 @@ class TestCiphertextSerialization:
         decoded = encoder.decode(pt_dec, params.max_slots())
 
         for i in range(len(values)):
-            assert abs(decoded[i] - values[i]) < 1e-4, (
-                f"decoded[{i}]={decoded[i]} != {values[i]}"
-            )
+            assert abs(decoded[i] - values[i]) < 1e-4, f"decoded[{i}]={decoded[i]} != {values[i]}"
 
         pt.close()
         ct.close()

@@ -5,7 +5,6 @@ that work with raw Lattigo types. No Orion imports.
 """
 
 import ctypes
-
 import threading
 
 from .gohandle import GoHandle, get_lib
@@ -50,13 +49,15 @@ def _setup_prototypes(lib):
     """Declare C function prototypes for Lattigo primitive exports."""
     # --- CKKS Parameters ---
     lib.NewCKKSParams.argtypes = [
-        ctypes.c_int,                        # logn
-        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # logqPtr, logqLen
-        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # logpPtr, logpLen
-        ctypes.c_int,                        # logDefaultScale
-        ctypes.c_int,                        # h
-        ctypes.c_char_p,                     # ringType
-        ctypes.c_int,                        # logNthRoot
+        ctypes.c_int,  # logn
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_int,  # logqPtr, logqLen
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_int,  # logpPtr, logpLen
+        ctypes.c_int,  # logDefaultScale
+        ctypes.c_int,  # h
+        ctypes.c_char_p,  # ringType
+        ctypes.c_int,  # logNthRoot
         _errout,
     ]
     lib.NewCKKSParams.restype = _uintptr
@@ -101,14 +102,20 @@ def _setup_prototypes(lib):
 
     lib.EncoderEncode.argtypes = [
         _uintptr,
-        ctypes.POINTER(ctypes.c_double), ctypes.c_int,
-        ctypes.c_int, ctypes.c_ulonglong, _errout,
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_ulonglong,
+        _errout,
     ]
     lib.EncoderEncode.restype = _uintptr
 
     lib.EncoderDecode.argtypes = [
-        _uintptr, _uintptr, ctypes.c_int,
-        ctypes.POINTER(ctypes.c_int), _errout,
+        _uintptr,
+        _uintptr,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+        _errout,
     ]
     lib.EncoderDecode.restype = ctypes.POINTER(ctypes.c_double)
 
@@ -176,7 +183,10 @@ def _setup_prototypes(lib):
 
     # --- MemEvaluationKeySet ---
     lib.NewMemEvalKeySet.argtypes = [
-        _uintptr, ctypes.POINTER(_uintptr), ctypes.c_int, _errout,
+        _uintptr,
+        ctypes.POINTER(_uintptr),
+        ctypes.c_int,
+        _errout,
     ]
     lib.NewMemEvalKeySet.restype = _uintptr
 
@@ -188,43 +198,53 @@ def _setup_prototypes(lib):
 
     # --- Polynomial generation ---
     lib.NewPolynomialMonomial.argtypes = [
-        ctypes.POINTER(ctypes.c_double), ctypes.c_int, _errout,
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.c_int,
+        _errout,
     ]
     lib.NewPolynomialMonomial.restype = _uintptr
 
     lib.NewPolynomialChebyshev.argtypes = [
-        ctypes.POINTER(ctypes.c_double), ctypes.c_int,
-        ctypes.c_double, ctypes.c_double,
+        ctypes.POINTER(ctypes.c_double),
+        ctypes.c_int,
+        ctypes.c_double,
+        ctypes.c_double,
         _errout,
     ]
     lib.NewPolynomialChebyshev.restype = _uintptr
 
     # --- Minimax composite polynomial ---
     lib.GenMinimaxCompositePolynomial.argtypes = [
-        ctypes.c_uint,                       # prec
-        ctypes.c_int, ctypes.c_int,          # logAlpha, logErr
-        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # degreesPtr, numDegrees
-        ctypes.c_int,                        # debug
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.c_int),  # outCoeffs, outLen
-        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)), ctypes.POINTER(ctypes.c_int),     # outSeps, outNumPolys
+        ctypes.c_uint,  # prec
+        ctypes.c_int,
+        ctypes.c_int,  # logAlpha, logErr
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_int,  # degreesPtr, numDegrees
+        ctypes.c_int,  # debug
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_double)),
+        ctypes.POINTER(ctypes.c_int),  # outCoeffs, outLen
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
+        ctypes.POINTER(ctypes.c_int),  # outSeps, outNumPolys
         _errout,
     ]
     lib.GenMinimaxCompositePolynomial.restype = None
 
     # --- Bootstrap ---
     lib.NewBootstrapParams.argtypes = [
-        _uintptr,                            # paramsH
-        ctypes.c_int,                        # logn
-        ctypes.POINTER(ctypes.c_int), ctypes.c_int,  # logpPtr, logpLen
-        ctypes.c_int,                        # h
-        ctypes.c_int,                        # logSlots
+        _uintptr,  # paramsH
+        ctypes.c_int,  # logn
+        ctypes.POINTER(ctypes.c_int),
+        ctypes.c_int,  # logpPtr, logpLen
+        ctypes.c_int,  # h
+        ctypes.c_int,  # logSlots
         _errout,
     ]
     lib.NewBootstrapParams.restype = _uintptr
 
     lib.BootstrapParamsGenEvalKeys.argtypes = [
-        _uintptr, _uintptr,                 # btpParamsH, skH
-        ctypes.POINTER(_uintptr),            # outEvkH
+        _uintptr,
+        _uintptr,  # btpParamsH, skH
+        ctypes.POINTER(_uintptr),  # outEvkH
         _errout,
     ]
     lib.BootstrapParamsGenEvalKeys.restype = _uintptr
@@ -268,8 +288,10 @@ def new_ckks_params(
     logp_arr, logp_len = _ints_ptr(logp)
     handle = lib.NewCKKSParams(
         ctypes.c_int(logn),
-        logq_arr, logq_len,
-        logp_arr, logp_len,
+        logq_arr,
+        logq_len,
+        logp_arr,
+        logp_len,
         ctypes.c_int(log_default_scale),
         ctypes.c_int(h),
         ring_type.encode("utf-8"),
@@ -293,9 +315,12 @@ def ckks_params_default_scale(h: GoHandle) -> int:
 
 
 def ckks_params_galois_element(h: GoHandle, rotation: int) -> int:
-    return int(_lib_call().CKKSParamsGaloisElement(
-        _uintptr(h.raw), ctypes.c_int(rotation),
-    ))
+    return int(
+        _lib_call().CKKSParamsGaloisElement(
+            _uintptr(h.raw),
+            ctypes.c_int(rotation),
+        )
+    )
 
 
 def ckks_params_moduli_chain(h: GoHandle) -> list[int]:
@@ -351,7 +376,9 @@ def keygen_gen_public_key(kg_h: GoHandle, sk_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     h = lib.KeyGenGenPublicKey(
-        _uintptr(kg_h.raw), _uintptr(sk_h.raw), ctypes.byref(err),
+        _uintptr(kg_h.raw),
+        _uintptr(sk_h.raw),
+        ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="PublicKey")
@@ -361,7 +388,9 @@ def keygen_gen_relin_key(kg_h: GoHandle, sk_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     h = lib.KeyGenGenRelinKey(
-        _uintptr(kg_h.raw), _uintptr(sk_h.raw), ctypes.byref(err),
+        _uintptr(kg_h.raw),
+        _uintptr(sk_h.raw),
+        ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="RelinKey")
@@ -371,8 +400,10 @@ def keygen_gen_galois_key(kg_h: GoHandle, sk_h: GoHandle, galois_element: int) -
     lib = _lib_call()
     err = _make_errout()
     h = lib.KeyGenGenGaloisKey(
-        _uintptr(kg_h.raw), _uintptr(sk_h.raw),
-        ctypes.c_ulonglong(galois_element), ctypes.byref(err),
+        _uintptr(kg_h.raw),
+        _uintptr(sk_h.raw),
+        ctypes.c_ulonglong(galois_element),
+        ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="GaloisKey")
@@ -393,14 +424,19 @@ def new_encoder(params_h: GoHandle) -> GoHandle:
 
 def encoder_encode(
     enc_h: GoHandle,
-    values: list[float], level: int, scale: int,
+    values: list[float],
+    level: int,
+    scale: int,
 ) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     arr, n = _doubles_ptr(values)
     h = lib.EncoderEncode(
         _uintptr(enc_h.raw),
-        arr, n, ctypes.c_int(level), ctypes.c_ulonglong(scale),
+        arr,
+        n,
+        ctypes.c_int(level),
+        ctypes.c_ulonglong(scale),
         ctypes.byref(err),
     )
     _check_err(err)
@@ -412,8 +448,11 @@ def encoder_decode(enc_h: GoHandle, pt_h: GoHandle, num_slots: int) -> list[floa
     err = _make_errout()
     out_len = ctypes.c_int(0)
     ptr = lib.EncoderDecode(
-        _uintptr(enc_h.raw), _uintptr(pt_h.raw),
-        ctypes.c_int(num_slots), ctypes.byref(out_len), ctypes.byref(err),
+        _uintptr(enc_h.raw),
+        _uintptr(pt_h.raw),
+        ctypes.c_int(num_slots),
+        ctypes.byref(out_len),
+        ctypes.byref(err),
     )
     _check_err(err)
     n = out_len.value
@@ -431,7 +470,9 @@ def new_encryptor(params_h: GoHandle, pk_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     h = lib.NewEncryptor(
-        _uintptr(params_h.raw), _uintptr(pk_h.raw), ctypes.byref(err),
+        _uintptr(params_h.raw),
+        _uintptr(pk_h.raw),
+        ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="Encryptor")
@@ -441,7 +482,8 @@ def encryptor_encrypt_new(enc_h: GoHandle, pt_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     h = lib.EncryptorEncryptNew(
-        _uintptr(enc_h.raw), _uintptr(pt_h.raw),
+        _uintptr(enc_h.raw),
+        _uintptr(pt_h.raw),
         ctypes.byref(err),
     )
     _check_err(err)
@@ -457,7 +499,9 @@ def new_decryptor(params_h: GoHandle, sk_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     h = lib.NewDecryptor(
-        _uintptr(params_h.raw), _uintptr(sk_h.raw), ctypes.byref(err),
+        _uintptr(params_h.raw),
+        _uintptr(sk_h.raw),
+        ctypes.byref(err),
     )
     _check_err(err)
     return GoHandle(h, tag="Decryptor")
@@ -467,7 +511,8 @@ def decryptor_decrypt_new(dec_h: GoHandle, ct_h: GoHandle) -> GoHandle:
     lib = _lib_call()
     err = _make_errout()
     h = lib.DecryptorDecryptNew(
-        _uintptr(dec_h.raw), _uintptr(ct_h.raw),
+        _uintptr(dec_h.raw),
+        _uintptr(ct_h.raw),
         ctypes.byref(err),
     )
     _check_err(err)
@@ -612,8 +657,10 @@ def new_polynomial_chebyshev(
     arr, n = _doubles_ptr(coeffs)
     err = _make_errout()
     r = _lib_call().NewPolynomialChebyshev(
-        arr, n,
-        ctypes.c_double(interval_a), ctypes.c_double(interval_b),
+        arr,
+        n,
+        ctypes.c_double(interval_a),
+        ctypes.c_double(interval_b),
         ctypes.byref(err),
     )
     _check_err(err)
@@ -648,11 +695,15 @@ def gen_minimax_composite_polynomial(
 
     lib.GenMinimaxCompositePolynomial(
         ctypes.c_uint(prec),
-        ctypes.c_int(log_alpha), ctypes.c_int(log_err),
-        deg_arr, deg_len,
+        ctypes.c_int(log_alpha),
+        ctypes.c_int(log_err),
+        deg_arr,
+        deg_len,
         ctypes.c_int(debug),
-        ctypes.byref(out_coeffs), ctypes.byref(out_len),
-        ctypes.byref(out_seps), ctypes.byref(out_num_polys),
+        ctypes.byref(out_coeffs),
+        ctypes.byref(out_len),
+        ctypes.byref(out_seps),
+        ctypes.byref(out_num_polys),
         ctypes.byref(err),
     )
     _check_err(err)
@@ -693,7 +744,8 @@ def new_bootstrap_params(
     handle = lib.NewBootstrapParams(
         _uintptr(params_h.raw),
         ctypes.c_int(logn),
-        logp_arr, logp_len,
+        logp_arr,
+        logp_len,
         ctypes.c_int(h),
         ctypes.c_int(log_slots),
         ctypes.byref(err),

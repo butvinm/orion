@@ -1,2 +1,23 @@
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "SIM105",  # contextlib.suppress — __del__ try/except/pass is canonical for Go handle cleanup
+    "F403",    # star imports — intentional in nn/__init__.py
+    "F405",    # may be undefined from star imports — consequence of F403
+    "UP038",   # isinstance(x, A | B) — changes semantics (creates union type at runtime)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"python/lattigo/setup.py" = ["E402"]  # generated file, imports after setup_kwargs
+"python/orion-evaluator/setup.py" = ["E402"]
+"python/tests/*" = ["SIM115"]  # open().read() is fine in tests
+
+[tool.ruff.format]
+quote-style = "double"

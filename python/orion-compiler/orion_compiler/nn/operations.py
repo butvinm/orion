@@ -1,7 +1,9 @@
 import math
+
 import torch
 
 from .module import Module
+
 
 class Add(Module):
     def __init__(self):
@@ -55,8 +57,7 @@ class Bootstrap(Module):
         prescale_vec[:elements] = self.prescale
 
         ql = context.encoder.get_moduli_chain()[self.input_level]
-        self.prescale_ptxt = context.encoder.encode(
-            prescale_vec, level=self.input_level, scale=ql)
+        self.prescale_ptxt = context.encoder.encode(prescale_vec, level=self.input_level, scale=ql)
 
     def forward(self, x):
         return x

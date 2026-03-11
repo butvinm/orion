@@ -59,9 +59,7 @@ def bsgs_index(
     return index, sorted(rot_n1_set), sorted(rot_n2_set)
 
 
-def find_best_bsgs_ratio(
-    non_zero_diags: list[int], max_n: int, log_max_ratio: int
-) -> int:
+def find_best_bsgs_ratio(non_zero_diags: list[int], max_n: int, log_max_ratio: int) -> int:
     """Find optimal N1 for baby-step giant-step.
 
     Reimplements lintrans.FindBestBSGSRatio().
@@ -159,9 +157,7 @@ def compute_galois_elements_for_linear_transform(
     """
     nth_root = nth_root_for_ring(logn, ring_type)
     if bsgs_ratio > 0 and bsgs_ratio != 2 ** int(math.log2(bsgs_ratio)):
-        raise ValueError(
-            f"bsgs_ratio must be a power of 2, got {bsgs_ratio}"
-        )
+        raise ValueError(f"bsgs_ratio must be a power of 2, got {bsgs_ratio}")
     log_bsgs = int(math.log2(bsgs_ratio)) if bsgs_ratio > 0 else -1
 
     all_galois = set()

@@ -36,14 +36,12 @@ class CKKSParams:
             raise ValueError("logp must be non-empty")
         if len(self.logp) > len(self.logq):
             raise ValueError(
-                f"logp length ({len(self.logp)}) cannot exceed "
-                f"logq length ({len(self.logq)})"
+                f"logp length ({len(self.logp)}) cannot exceed logq length ({len(self.logq)})"
             )
         valid_ring_types = {"conjugate_invariant", "standard"}
         if self.ring_type not in valid_ring_types:
             raise ValueError(
-                f"ring_type must be one of {valid_ring_types}, "
-                f"got '{self.ring_type}'"
+                f"ring_type must be one of {valid_ring_types}, got '{self.ring_type}'"
             )
         # Coerce list inputs to tuples for frozen dataclass
         if isinstance(self.logq, list):
@@ -107,13 +105,9 @@ class CostProfile:
 
     def __post_init__(self):
         if self.bootstrap_count < 0:
-            raise ValueError(
-                f"bootstrap_count must be non-negative, got {self.bootstrap_count}"
-            )
+            raise ValueError(f"bootstrap_count must be non-negative, got {self.bootstrap_count}")
         if self.galois_key_count < 0:
-            raise ValueError(
-                f"galois_key_count must be non-negative, got {self.galois_key_count}"
-            )
+            raise ValueError(f"galois_key_count must be non-negative, got {self.galois_key_count}")
         if self.bootstrap_key_count < 0:
             raise ValueError(
                 f"bootstrap_key_count must be non-negative, got {self.bootstrap_key_count}"
@@ -147,6 +141,5 @@ class CompilerConfig:
         valid_methods = {"hybrid", "square"}
         if self.embedding_method not in valid_methods:
             raise ValueError(
-                f"embedding_method must be one of {valid_methods}, "
-                f"got '{self.embedding_method}'"
+                f"embedding_method must be one of {valid_methods}, got '{self.embedding_method}'"
             )

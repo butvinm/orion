@@ -19,7 +19,8 @@ class Evaluator:
         result_ct_bytes = evaluator.forward(model, input_ct_bytes)
         evaluator.close()
     """
-    __slots__ = ('_handle',)
+
+    __slots__ = ("_handle",)
 
     def __init__(self, params: dict, keys_bytes: bytes, btp_keys_bytes: bytes | None = None):
         """Create evaluator from CKKS params dict and MemEvaluationKeySet binary bytes.

@@ -1,16 +1,13 @@
 """Unit tests for orion.core.galois — pure Python Galois element computation."""
 
-import pytest
-
 from orion_compiler.core.galois import (
     GALOIS_GEN,
-    galois_element,
     bsgs_index,
     compute_galois_elements,
-    nth_root_for_ring,
     compute_galois_elements_for_linear_transform,
+    galois_element,
+    nth_root_for_ring,
 )
-
 
 # -----------------------------------------------------------------------
 # galois_element
@@ -206,5 +203,3 @@ class TestComputeGaloisElementsForLinearTransform:
         )
         assert isinstance(result, set)
         assert len(result) > 0
-
-

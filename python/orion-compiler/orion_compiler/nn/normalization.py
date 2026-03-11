@@ -3,8 +3,9 @@ from abc import abstractmethod
 import torch
 import torch.nn as nn
 
-from .module import Module
 from ..core import packing
+from .module import Module
+
 
 class BatchNormNd(Module):
     def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=True):
@@ -20,12 +21,12 @@ class BatchNormNd(Module):
             self.weight = nn.Parameter(torch.ones(num_features))
             self.bias = nn.Parameter(torch.zeros(num_features))
         else:
-            self.register_parameter('weight', None)
-            self.register_parameter('bias', None)
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
 
-        self.register_buffer('running_mean', torch.zeros(num_features))
-        self.register_buffer('running_var', torch.ones(num_features))
-        self.register_buffer('num_batches_tracked', torch.tensor(0, dtype=torch.long))
+        self.register_buffer("running_mean", torch.zeros(num_features))
+        self.register_buffer("running_var", torch.ones(num_features))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
 
     @abstractmethod
     def _check_input_dim(self, x):
@@ -56,8 +57,8 @@ class BatchNormNd(Module):
         self.on_inv_running_std_ptxt = encoder.encode(b, level=level, scale=q1)
 
         if self.affine:
-            self.on_weight_ptxt = encoder.encode(c, level=level-1, scale=q2)
-            self.on_bias_ptxt = encoder.encode(d, level=level-1, scale=q2)
+            self.on_weight_ptxt = encoder.encode(c, level=level - 1, scale=q2)
+            self.on_bias_ptxt = encoder.encode(d, level=level - 1, scale=q2)
 
     def forward(self, x):
         self._check_input_dim(x)
@@ -81,14 +82,14 @@ class BatchNormNd(Module):
             self.bias,
             self.training,
             exponential_average_factor,
-            self.eps
+            self.eps,
         )
 
 
 class BatchNorm1d(BatchNormNd):
     def _check_input_dim(self, x):
         if x.dim() != 2 and x.dim() != 3:
-            raise ValueError(f'expected 2D or 3D input (got {x.dim()}D input)')
+            raise ValueError(f"expected 2D or 3D input (got {x.dim()}D input)")
 
     def compile(self, context):
         a, b, c, d = packing.pack_bn1d(self)
@@ -98,7 +99,7 @@ class BatchNorm1d(BatchNormNd):
 class BatchNorm2d(BatchNormNd):
     def _check_input_dim(self, x):
         if x.dim() != 4:
-            raise ValueError(f'expected 4D input (got {x.dim()}D input)')
+            raise ValueError(f"expected 4D input (got {x.dim()}D input)")
 
     def compile(self, context):
         a, b, c, d = packing.pack_bn2d(self)

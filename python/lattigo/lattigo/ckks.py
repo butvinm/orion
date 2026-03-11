@@ -3,8 +3,6 @@
 Wraps Lattigo's ckks.Parameters and ckks.Encoder via the bridge FFI.
 """
 
-from __future__ import annotations
-
 from typing import Literal
 
 from . import ffi
@@ -28,11 +26,17 @@ class Parameters:
         log_nth_root: int = 0,
     ):
         self._handle = ffi.new_ckks_params(
-            logn, logq, logp, log_default_scale, h, ring_type, log_nth_root,
+            logn,
+            logq,
+            logp,
+            log_default_scale,
+            h,
+            ring_type,
+            log_nth_root,
         )
 
     @classmethod
-    def _from_handle(cls, handle: GoHandle) -> Parameters:
+    def _from_handle(cls, handle: GoHandle) -> "Parameters":
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
@@ -84,7 +88,7 @@ class Encoder:
         self._params = params
 
     @classmethod
-    def _from_handle(cls, handle: GoHandle, params: Parameters) -> Encoder:
+    def _from_handle(cls, handle: GoHandle, params: Parameters) -> "Encoder":
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
@@ -98,6 +102,7 @@ class Encoder:
         Import it lazily to avoid circular imports.
         """
         from . import rlwe
+
         pt_h = ffi.encoder_encode(self._handle, values, level, scale)
         return rlwe.Plaintext(pt_h)
 

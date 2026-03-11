@@ -5,45 +5,45 @@ Produces a CompiledModel containing raw diagonal blobs, computation
 graph (nodes + edges), polynomial coefficients, and a KeyManifest.
 """
 
-import time
 import math
+import time
 import types
 
 import torch
-from tqdm import tqdm
 from torch.utils.data import DataLoader, RandomSampler
+from tqdm import tqdm
 
-from orion_compiler.params import CKKSParams, CostProfile, CompilerConfig
 from orion_compiler.compiled_model import (
     CompiledModel,
-    KeyManifest,
-    GraphNode,
-    GraphEdge,
     Graph,
-    pack_raw_diagonals,
+    GraphEdge,
+    GraphNode,
+    KeyManifest,
     pack_raw_bias,
+    pack_raw_diagonals,
 )
-from orion_compiler.nn.module import Module
-from orion_compiler.nn.linear import LinearTransform, Conv2d
-from orion_compiler.nn.activation import Activation, Chebyshev, Quad
-from orion_compiler.nn.operations import Bootstrap, Add, Mult
-from orion_compiler.nn.reshape import Flatten
+from orion_compiler.core import packing
+from orion_compiler.core.auto_bootstrap import BootstrapPlacer, BootstrapSolver
 from orion_compiler.core.compiler_backend import (
     CompilerBackend,
-    NewParameters,
     NewEncoder,
+    NewParameters,
     PolynomialGenerator,
 )
-from orion_compiler.core.tracer import StatsTracker, OrionTracer
 from orion_compiler.core.fuser import Fuser
-from orion_compiler.core.network_dag import NetworkDAG
-from orion_compiler.core.auto_bootstrap import BootstrapSolver, BootstrapPlacer
 from orion_compiler.core.galois import (
     compute_galois_elements_for_linear_transform,
     galois_element,
     nth_root_for_ring,
 )
-from orion_compiler.core import packing
+from orion_compiler.core.network_dag import NetworkDAG
+from orion_compiler.core.tracer import OrionTracer, StatsTracker
+from orion_compiler.nn.activation import Activation, Chebyshev, Quad
+from orion_compiler.nn.linear import Conv2d, LinearTransform
+from orion_compiler.nn.module import Module
+from orion_compiler.nn.operations import Add, Bootstrap, Mult
+from orion_compiler.nn.reshape import Flatten
+from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
 
 
 class Compiler:
@@ -66,9 +66,7 @@ class Compiler:
         self.config = config or CompilerConfig()
 
         # Build legacy NewParameters from v2 dataclasses
-        self.params = NewParameters.from_ckks_params(
-            params, self.config
-        )
+        self.params = NewParameters.from_ckks_params(params, self.config)
 
         # Initialize Go backend (no keys)
         self.backend = CompilerBackend()
@@ -131,14 +129,14 @@ class Compiler:
         param = next(iter(net.parameters()), None)
         device = param.device if param is not None else torch.device("cpu")
 
-        print("\n[1/5] Finding per-layer input/output ranges and shapes...",
-              flush=True)
+        print("\n[1/5] Finding per-layer input/output ranges and shapes...", flush=True)
         if isinstance(input_data, DataLoader):
             user_batch_size = input_data.batch_size
             if user_batch_size is not None and batch_size > user_batch_size:
                 dataset = input_data.dataset
-                shuffle = (input_data.sampler is None or
-                           isinstance(input_data.sampler, RandomSampler))
+                shuffle = input_data.sampler is None or isinstance(
+                    input_data.sampler, RandomSampler
+                )
                 input_data = DataLoader(
                     dataset=dataset,
                     batch_size=batch_size,
@@ -148,8 +146,7 @@ class Compiler:
                     drop_last=input_data.drop_last,
                 )
 
-            for batch in tqdm(input_data, desc="Processing input data",
-                              unit="batch", leave=True):
+            for batch in tqdm(input_data, desc="Processing input data", unit="batch", leave=True):
                 stats_tracker.propagate(batch[0].to(device))
 
             stats_tracker.update_batch_size(user_batch_size)
@@ -168,7 +165,7 @@ class Compiler:
         for module in net.modules():
             if hasattr(module, "fit") and callable(module.fit):
                 module.fit(self._context)
-        print(f"done! [{time.time()-start:.3f} secs.]")
+        print(f"done! [{time.time() - start:.3f} secs.]")
 
     def compile(self) -> CompiledModel:
         """Compile the fitted network into a CompiledModel.
@@ -180,8 +177,7 @@ class Compiler:
         """
         if self._traced is None:
             raise ValueError(
-                "Network has not been fit yet! Call compiler.fit(data) "
-                "before compiler.compile()."
+                "Network has not been fit yet! Call compiler.fit(data) before compiler.compile()."
             )
 
         net = self.net
@@ -192,16 +188,12 @@ class Compiler:
 
         # Initialize Orion params (clone weights/biases)
         for module in net.modules():
-            if hasattr(module, "init_orion_params") and callable(
-                module.init_orion_params
-            ):
+            if hasattr(module, "init_orion_params") and callable(module.init_orion_params):
                 module.init_orion_params()
 
         # Resolve pooling kernels
         for module in net.modules():
-            if hasattr(module, "update_params") and callable(
-                module.update_params
-            ):
+            if hasattr(module, "update_params") and callable(module.update_params):
                 module.update_params()
 
         # Set scheme ref on modules for backward compat with packing.py
@@ -239,20 +231,16 @@ class Compiler:
         print("\n[4/5] Running bootstrap placement... ", end="", flush=True)
         start = time.time()
         l_eff = len(self.params.get_logq()) - 1
-        btp_solver = BootstrapSolver(
-            net, network_dag, l_eff=l_eff, context=self._context
-        )
+        btp_solver = BootstrapSolver(net, network_dag, l_eff=l_eff, context=self._context)
         input_level, num_bootstraps, bootstrapper_slots = btp_solver.solve()
-        print(f"done! [{time.time()-start:.3f} secs.]", flush=True)
+        print(f"done! [{time.time() - start:.3f} secs.]", flush=True)
         print(
             f"├── Network requires {num_bootstraps} bootstrap "
             f"{'operation' if num_bootstraps == 1 else 'operations'}."
         )
 
         if bootstrapper_slots:
-            slots_str = ", ".join(
-                [str(int(math.log2(slot))) for slot in bootstrapper_slots]
-            )
+            slots_str = ", ".join([str(int(math.log2(slot))) for slot in bootstrapper_slots])
             print(
                 f"├── [compiler] Recorded bootstrap slots for logslots = "
                 f"{slots_str} (no key generation in compiler mode)"
@@ -265,9 +253,7 @@ class Compiler:
         print("\n[5/5] Building computation graph...", flush=True)
 
         max_slots = self.params.get_slots()
-        nth_root = nth_root_for_ring(
-            self.ckks_params.logn, self.ckks_params.ring_type
-        )
+        nth_root = nth_root_for_ring(self.ckks_params.logn, self.ckks_params.ring_type)
         slots = max_slots
 
         blobs = []
@@ -286,8 +272,7 @@ class Compiler:
                 continue
 
             graph_node = self._build_graph_node(
-                node, module, blobs, max_slots, slots, nth_root,
-                galois_elements
+                node, module, blobs, max_slots, slots, nth_root, galois_elements
             )
             if graph_node is not None:
                 graph_nodes.append(graph_node)
@@ -312,13 +297,9 @@ class Compiler:
                 break
 
         if graph_input is None:
-            raise ValueError(
-                "Could not determine graph input: no node without incoming edges"
-            )
+            raise ValueError("Could not determine graph input: no node without incoming edges")
         if graph_output is None:
-            raise ValueError(
-                "Could not determine graph output: no node without outgoing edges"
-            )
+            raise ValueError("Could not determine graph output: no node without outgoing edges")
 
         graph = Graph(
             input=graph_input,
@@ -343,15 +324,9 @@ class Compiler:
 
         manifest = KeyManifest(
             galois_elements=frozenset(galois_elements),
-            bootstrap_slots=tuple(sorted(bootstrapper_slots))
-            if bootstrapper_slots
-            else (),
-            boot_logp=tuple(self.params.get_boot_logp())
-            if bootstrapper_slots
-            else None,
-            btp_logn=self.ckks_params.btp_logn
-            if bootstrapper_slots
-            else None,
+            bootstrap_slots=tuple(sorted(bootstrapper_slots)) if bootstrapper_slots else (),
+            boot_logp=tuple(self.params.get_boot_logp()) if bootstrapper_slots else None,
+            btp_logn=self.ckks_params.btp_logn if bootstrapper_slots else None,
             needs_rlk=True,
         )
 
@@ -374,8 +349,7 @@ class Compiler:
         return compiled
 
     def _build_graph_node(
-        self, node_name, module, blobs, max_slots, slots, nth_root,
-        galois_elements
+        self, node_name, module, blobs, max_slots, slots, nth_root, galois_elements
     ):
         """Build a GraphNode from a DAG node + module."""
 
@@ -422,9 +396,7 @@ class Compiler:
                 shape["output"] = list(module.output_shape)
 
             # Compute Galois elements for this LT (pure Python)
-            diag_indices_per_block = {
-                k: list(v.keys()) for k, v in module.diagonals.items()
-            }
+            diag_indices_per_block = {k: list(v.keys()) for k, v in module.diagonals.items()}
             lt_galois = compute_galois_elements_for_linear_transform(
                 diag_indices_per_block,
                 slots,
@@ -437,8 +409,7 @@ class Compiler:
         elif isinstance(module, Chebyshev):
             if module.coeffs is None:
                 raise ValueError(
-                    f"Chebyshev module '{node_name}' has no coefficients. "
-                    "Was fit() called?"
+                    f"Chebyshev module '{node_name}' has no coefficients. Was fit() called?"
                 )
             config = {
                 "coeffs": list(module.coeffs),
@@ -476,10 +447,7 @@ class Compiler:
         elif isinstance(module, Quad):
             pass  # empty config, depth=1
 
-        elif isinstance(module, (Add, Mult)):
-            pass  # empty config
-
-        elif isinstance(module, Flatten):
+        elif isinstance(module, (Add, Mult, Flatten)):
             pass  # empty config
 
         return GraphNode(

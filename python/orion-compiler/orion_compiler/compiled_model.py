@@ -6,11 +6,10 @@ The binary format uses a magic header, JSON metadata, and length-prefixed blobs.
 
 import json
 import struct
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
 from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
-
 
 # -- Binary format helpers --
 
@@ -42,9 +41,7 @@ def _pack_container(magic: bytes, metadata: dict, blobs: list[bytes]) -> bytes:
     return b"".join(parts)
 
 
-def _unpack_container(
-    data: bytes, expected_magic: bytes
-) -> tuple[dict, list[bytes]]:
+def _unpack_container(data: bytes, expected_magic: bytes) -> tuple[dict, list[bytes]]:
     """Unpack a binary container, verifying magic.
 
     Returns (metadata_dict, list_of_blobs).
@@ -53,9 +50,7 @@ def _unpack_container(
     if len(data) < 16:  # 8 magic + 4 meta_len + 4 blob_count
         raise ValueError("Data too short to contain a valid container")
     if data[:8] != expected_magic:
-        raise ValueError(
-            f"Invalid magic: expected {expected_magic!r}, got {data[:8]!r}"
-        )
+        raise ValueError(f"Invalid magic: expected {expected_magic!r}, got {data[:8]!r}")
 
     offset = 8
     (meta_len,) = struct.unpack_from("<I", data, offset)
@@ -107,9 +102,7 @@ def pack_raw_diagonals(diags: dict[int, Sequence[float]], max_slots: int) -> byt
     return b"".join(parts)
 
 
-def unpack_raw_diagonals(
-    data: bytes, max_slots: int
-) -> dict[int, list[float]]:
+def unpack_raw_diagonals(data: bytes, max_slots: int) -> dict[int, list[float]]:
     """Unpack a raw diagonal blob into {diag_index: [float64_values]}.
 
     Inverse of pack_raw_diagonals().
@@ -164,18 +157,12 @@ class KeyManifest:
 
     def __post_init__(self):
         if self.bootstrap_slots and self.boot_logp is None:
-            raise ValueError(
-                "boot_logp must not be None when bootstrap_slots is non-empty"
-            )
+            raise ValueError("boot_logp must not be None when bootstrap_slots is non-empty")
         # Coerce list inputs
         if isinstance(self.galois_elements, (set, list)):
-            object.__setattr__(
-                self, "galois_elements", frozenset(self.galois_elements)
-            )
+            object.__setattr__(self, "galois_elements", frozenset(self.galois_elements))
         if isinstance(self.bootstrap_slots, list):
-            object.__setattr__(
-                self, "bootstrap_slots", tuple(self.bootstrap_slots)
-            )
+            object.__setattr__(self, "bootstrap_slots", tuple(self.bootstrap_slots))
         if isinstance(self.boot_logp, list):
             object.__setattr__(self, "boot_logp", tuple(self.boot_logp))
 
@@ -274,23 +261,15 @@ class Graph:
         # Validate input/output exist in nodes
         node_names = {n.name for n in self.nodes}
         if self.input not in node_names:
-            raise ValueError(
-                f"input '{self.input}' not found in graph nodes"
-            )
+            raise ValueError(f"input '{self.input}' not found in graph nodes")
         if self.output not in node_names:
-            raise ValueError(
-                f"output '{self.output}' not found in graph nodes"
-            )
+            raise ValueError(f"output '{self.output}' not found in graph nodes")
         # Validate all edge endpoints reference existing nodes
         for edge in self.edges:
             if edge.src not in node_names:
-                raise ValueError(
-                    f"edge src '{edge.src}' not found in graph nodes"
-                )
+                raise ValueError(f"edge src '{edge.src}' not found in graph nodes")
             if edge.dst not in node_names:
-                raise ValueError(
-                    f"edge dst '{edge.dst}' not found in graph nodes"
-                )
+                raise ValueError(f"edge dst '{edge.dst}' not found in graph nodes")
 
     def to_dict(self) -> dict:
         return {
@@ -336,11 +315,7 @@ class CompiledModel:
                 "logscale": self.params.logscale,
                 "h": self.params.h,
                 "ring_type": self.params.ring_type,
-                "boot_logp": (
-                    list(self.params.boot_logp)
-                    if self.params.boot_logp
-                    else None
-                ),
+                "boot_logp": (list(self.params.boot_logp) if self.params.boot_logp else None),
                 "btp_logn": self.params.btp_logn,
             },
             "config": {
@@ -392,5 +367,3 @@ class CompiledModel:
             graph=graph,
             blobs=blobs,
         )
-
-

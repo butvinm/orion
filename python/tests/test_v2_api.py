@@ -7,29 +7,27 @@ import gc
 import json
 import struct
 
-import torch
+import orion_compiler.nn as on
 import pytest
-
-from orion_compiler.params import CKKSParams, CostProfile
+import torch
+from lattigo.ckks import Encoder, Parameters
+from lattigo.rlwe import (
+    Ciphertext,
+    Decryptor,
+    Encryptor,
+    KeyGenerator,
+    MemEvaluationKeySet,
+    Plaintext,
+    SecretKey,
+)
 from orion_compiler.compiled_model import (
     CompiledModel,
-    KeyManifest,
     Graph,
+    KeyManifest,
     unpack_raw_diagonals,
 )
 from orion_compiler.compiler import Compiler
-import orion_compiler.nn as on
-from lattigo.ckks import Parameters, Encoder
-from lattigo.rlwe import (
-    KeyGenerator,
-    Encryptor,
-    Decryptor,
-    SecretKey,
-    Ciphertext,
-    Plaintext,
-    MemEvaluationKeySet,
-)
-
+from orion_compiler.params import CKKSParams, CostProfile
 
 # -----------------------------------------------------------------------
 # Test params matching the MLP test config
@@ -131,9 +129,7 @@ class TestCompiler:
         assert len(compiled.graph.edges) > 0
 
         # Check that linear_transform nodes exist
-        has_lt = any(
-            n.op == "linear_transform" for n in compiled.graph.nodes
-        )
+        has_lt = any(n.op == "linear_transform" for n in compiled.graph.nodes)
         assert has_lt
 
     def test_compiled_model_serialization_roundtrip(self, compiled_mlp):
@@ -195,12 +191,8 @@ class TestCompiler:
         node_names = {n.name for n in compiled.graph.nodes}
 
         for edge in compiled.graph.edges:
-            assert edge.src in node_names, (
-                f"Edge src '{edge.src}' not in node names"
-            )
-            assert edge.dst in node_names, (
-                f"Edge dst '{edge.dst}' not in node names"
-            )
+            assert edge.src in node_names, f"Edge src '{edge.src}' not in node names"
+            assert edge.dst in node_names, f"Edge dst '{edge.dst}' not in node names"
 
     def test_linear_transform_blobs_are_raw_float64(self, compiled_mlp):
         """All linear_transform blobs unpack with unpack_raw_diagonals."""
@@ -215,7 +207,7 @@ class TestCompiler:
                         diags = unpack_raw_diagonals(blob, max_slots)
                         assert isinstance(diags, dict)
                         assert len(diags) > 0
-                        for diag_idx, vals in diags.items():
+                        for _diag_idx, vals in diags.items():
                             assert len(vals) == max_slots
 
     def test_bias_blobs_correct_length(self, compiled_mlp):
@@ -224,13 +216,11 @@ class TestCompiler:
         max_slots = MLP_PARAMS.max_slots
 
         for node in compiled.graph.nodes:
-            if node.op == "linear_transform" and node.blob_refs:
-                if "bias" in node.blob_refs:
-                    blob = compiled.blobs[node.blob_refs["bias"]]
-                    assert len(blob) == max_slots * 8, (
-                        f"Bias blob for {node.name}: expected "
-                        f"{max_slots * 8} bytes, got {len(blob)}"
-                    )
+            if node.op == "linear_transform" and node.blob_refs and "bias" in node.blob_refs:
+                blob = compiled.blobs[node.blob_refs["bias"]]
+                assert len(blob) == max_slots * 8, (
+                    f"Bias blob for {node.name}: expected {max_slots * 8} bytes, got {len(blob)}"
+                )
 
     def test_polynomial_coeffs_inline(self, compiled_mlp):
         """Polynomial coefficients are inline in node config (not blobs)."""
@@ -264,9 +254,7 @@ class TestCompiler:
         assert isinstance(compiled.cost, CostProfile)
         assert compiled.cost.bootstrap_count >= 0
         assert compiled.cost.galois_key_count > 0
-        assert compiled.cost.galois_key_count == len(
-            compiled.manifest.galois_elements
-        )
+        assert compiled.cost.galois_key_count == len(compiled.manifest.galois_elements)
         assert compiled.cost.bootstrap_key_count >= 0
 
 

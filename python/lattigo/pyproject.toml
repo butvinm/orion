@@ -10,7 +10,7 @@ authors = []
 packages = [{include = "lattigo"}]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.13"
+python = ">=3.11,<3.13"
 
 [tool.poetry.build]
 generate-setup-file = true

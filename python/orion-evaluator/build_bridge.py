@@ -41,10 +41,12 @@ def build(setup_kwargs=None):
             env["GOARCH"] = "amd64"
 
     build_cmd = [
-        "go", "build",
+        "go",
+        "build",
         "-buildmode=c-shared",
         "-buildvcs=false",
-        "-o", str(output_path),
+        "-o",
+        str(output_path),
         str(bridge_dir),
     ]
 

@@ -1,9 +1,9 @@
 import math
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 
 from orion_compiler.nn.module import Module
 from orion_compiler.nn.operations import Mult
@@ -17,10 +17,10 @@ class Activation(Module):
         self.set_depth()
 
     def extra_repr(self):
-        return super().extra_repr() + f", degree={len(self.coeffs)-1}"
+        return super().extra_repr() + f", degree={len(self.coeffs) - 1}"
 
     def set_depth(self, depth=None):
-        self.depth = depth if depth is not None else int(math.ceil(math.log2(len(self.coeffs))))
+        self.depth = depth if depth is not None else math.ceil(math.log2(len(self.coeffs)))
 
     def set_output_scale(self, output_scale):
         self.output_scale = output_scale
@@ -89,7 +89,7 @@ class Chebyshev(Module):
         if depth is not None:
             self.depth = depth
         else:
-            self.depth = int(math.ceil(math.log2(self.degree+1)))
+            self.depth = math.ceil(math.log2(self.degree + 1))
             if self.prescale != 1:
                 self.depth += 1
 
@@ -174,11 +174,13 @@ class Mish(Chebyshev):
 class _Sign(Module):
     def __init__(
         self,
-        degrees=[15,15,27],
+        degrees=None,
         prec=128,
         logalpha=6,
         logerr=12,
     ):
+        if degrees is None:
+            degrees = [15, 15, 27]
         super().__init__()
         self.degrees = degrees
         self.prec = prec
@@ -188,7 +190,7 @@ class _Sign(Module):
 
         acts = []
         for i, degree in enumerate(degrees):
-            is_last = (i == len(degrees) - 1)
+            is_last = i == len(degrees) - 1
             fn = self.fn1 if not is_last else self.fn2
             act = Chebyshev(degree, fn, within_composite=True)
             acts.append(act)
@@ -201,7 +203,8 @@ class _Sign(Module):
     def fit(self, context):
         debug = context.params.get_debug_status()
         self.coeffs = context.poly_evaluator.generate_minimax_sign_coeffs(
-            self.degrees, self.prec, self.logalpha, self.logerr, debug)
+            self.degrees, self.prec, self.logalpha, self.logerr, debug
+        )
 
         for i, coeffs in enumerate(self.coeffs):
             self.acts[i].set_coeffs(coeffs)
@@ -220,12 +223,15 @@ class _Sign(Module):
 
 
 class ReLU(Module):
-    def __init__(self,
-                 degrees=[15,15,27],
-                 prec=128,
-                 logalpha=6,
-                 logerr=12,
+    def __init__(
+        self,
+        degrees=None,
+        prec=128,
+        logalpha=6,
+        logerr=12,
     ):
+        if degrees is None:
+            degrees = [15, 15, 27]
         super().__init__()
         self.degrees = degrees
         self.prec = prec
@@ -248,7 +254,7 @@ class ReLU(Module):
         margin = context.margin
         absmax = max(abs(self.input_min), abs(self.input_max)) * margin
         if absmax > 1:
-            self.postscale = int(math.ceil(absmax))
+            self.postscale = math.ceil(absmax)
             self.prescale = 1 / self.postscale
 
     def forward(self, x):

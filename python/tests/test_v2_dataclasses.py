@@ -2,17 +2,15 @@
 KeyManifest, CompiledModel, EvalKeys, and the NewParameters adapter."""
 
 import pytest
-
-from orion_compiler.params import CKKSParams, CostProfile, CompilerConfig
 from orion_compiler.compiled_model import (
     CompiledModel,
-    KeyManifest,
     Graph,
-    GraphNode,
     GraphEdge,
+    GraphNode,
+    KeyManifest,
 )
 from orion_compiler.core.compiler_backend import NewParameters
-
+from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
 
 # ---------------------------------------------------------------------------
 # CKKSParams
@@ -99,12 +97,14 @@ class TestCKKSParams:
 
     def test_btp_logn_in_bridge_json(self):
         import json
+
         p = self._default_params(boot_logp=(61, 61), btp_logn=15)
         d = json.loads(p.to_bridge_json())
         assert d["btp_logn"] == 15
 
     def test_btp_logn_absent_from_bridge_json_when_none(self):
         import json
+
         p = self._default_params()
         d = json.loads(p.to_bridge_json())
         assert "btp_logn" not in d
@@ -210,12 +210,27 @@ class TestKeyManifest:
 
 def _sample_graph():
     nodes = [
-        GraphNode(name="fc1", op="linear_transform", level=2, depth=1,
-                  config={"bsgs_ratio": 2.0, "output_rotations": 0},
-                  blob_refs={"diag_0_0": 0, "bias": 1}),
-        GraphNode(name="act1", op="polynomial", level=1, depth=2,
-                  config={"coeffs": [0.5, 0.1], "basis": "chebyshev",
-                          "prescale": 1, "postscale": 1, "constant": 0}),
+        GraphNode(
+            name="fc1",
+            op="linear_transform",
+            level=2,
+            depth=1,
+            config={"bsgs_ratio": 2.0, "output_rotations": 0},
+            blob_refs={"diag_0_0": 0, "bias": 1},
+        ),
+        GraphNode(
+            name="act1",
+            op="polynomial",
+            level=1,
+            depth=2,
+            config={
+                "coeffs": [0.5, 0.1],
+                "basis": "chebyshev",
+                "prescale": 1,
+                "postscale": 1,
+                "constant": 0,
+            },
+        ),
     ]
     edges = [GraphEdge(src="fc1", dst="act1")]
     return Graph(input="fc1", output="act1", nodes=nodes, edges=edges)
@@ -287,7 +302,8 @@ class TestCompiledModel:
     def test_empty_blobs(self):
         params = CKKSParams(logn=14, logq=(55, 40), logp=(61,), logscale=40)
         graph = Graph(
-            input="x", output="x",
+            input="x",
+            output="x",
             nodes=[GraphNode(name="x", op="flatten", level=0, depth=0)],
             edges=[],
         )
@@ -302,8 +318,7 @@ class TestCompiledModel:
                 needs_rlk=False,
             ),
             input_level=1,
-            cost=CostProfile(bootstrap_count=0, galois_key_count=0,
-                             bootstrap_key_count=0),
+            cost=CostProfile(bootstrap_count=0, galois_key_count=0, bootstrap_key_count=0),
             graph=graph,
             blobs=[],
         )
@@ -317,7 +332,8 @@ class TestCompiledModel:
         params = CKKSParams(logn=14, logq=(55, 40), logp=(61,), logscale=40)
         big_blob = bytes(range(256)) * 4096  # ~1MB
         graph = Graph(
-            input="x", output="x",
+            input="x",
+            output="x",
             nodes=[GraphNode(name="x", op="flatten", level=0, depth=0)],
             edges=[],
         )
@@ -332,8 +348,7 @@ class TestCompiledModel:
                 needs_rlk=False,
             ),
             input_level=1,
-            cost=CostProfile(bootstrap_count=0, galois_key_count=0,
-                             bootstrap_key_count=0),
+            cost=CostProfile(bootstrap_count=0, galois_key_count=0, bootstrap_key_count=0),
             graph=graph,
             blobs=[big_blob],
         )
@@ -344,12 +359,16 @@ class TestCompiledModel:
     def test_serialization_roundtrip_with_bootstrap(self):
         """Verify btp_logn round-trips through to_bytes/from_bytes."""
         params = CKKSParams(
-            logn=14, logq=(55, 40, 40, 40), logp=(61, 61),
-            logscale=40, ring_type="standard",
+            logn=14,
+            logq=(55, 40, 40, 40),
+            logp=(61, 61),
+            logscale=40,
+            ring_type="standard",
             boot_logp=(61, 61, 61, 61, 61, 61),
         )
         graph = Graph(
-            input="x", output="x",
+            input="x",
+            output="x",
             nodes=[GraphNode(name="x", op="flatten", level=0, depth=0)],
             edges=[],
         )
@@ -365,8 +384,7 @@ class TestCompiledModel:
             config=CompilerConfig(),
             manifest=manifest,
             input_level=3,
-            cost=CostProfile(bootstrap_count=1, galois_key_count=1,
-                             bootstrap_key_count=1),
+            cost=CostProfile(bootstrap_count=1, galois_key_count=1, bootstrap_key_count=1),
             graph=graph,
             blobs=[],
         )
@@ -453,4 +471,3 @@ class TestNewParametersAdapter:
         assert np.get_margin() == 2
         assert np.get_embedding_method() == "hybrid"
         assert np.get_fuse_modules() is True
-

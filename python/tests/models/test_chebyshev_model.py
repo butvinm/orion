@@ -9,13 +9,11 @@ This exercises code paths that Quad-only models skip:
 
 import gc
 
-import torch
-import pytest
-
-from orion_compiler.params import CKKSParams
-from orion_compiler.compiler import Compiler
 import orion_compiler.nn as on
-
+import pytest
+import torch
+from orion_compiler.compiler import Compiler
+from orion_compiler.params import CKKSParams
 
 # Deeper moduli chain to accommodate Chebyshev polynomial depth.
 # Sigmoid(degree=7) consumes ceil(log2(8))=3 multiplicative levels,
@@ -61,15 +59,11 @@ def test_sigmoid_compile_produces_polynomial_nodes():
     compiled = compiler.compile()
 
     # Verify polynomial node is present in graph
-    has_poly = any(
-        n.op == "polynomial" for n in compiled.graph.nodes
-    )
+    has_poly = any(n.op == "polynomial" for n in compiled.graph.nodes)
     assert has_poly, "Expected polynomial node in graph"
 
     # Verify polynomial coefficients are inline
-    poly_node = next(
-        n for n in compiled.graph.nodes if n.op == "polynomial"
-    )
+    poly_node = next(n for n in compiled.graph.nodes if n.op == "polynomial")
     assert "coeffs" in poly_node.config
     assert "basis" in poly_node.config
     assert poly_node.config["basis"] == "chebyshev"

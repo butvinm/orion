@@ -8,9 +8,9 @@ import gc
 
 import networkx as nx
 import numpy as np
+import orion_compiler.nn as on
 import pytest
 import torch
-
 from orion_compiler.compiled_model import (
     CompiledModel,
     pack_raw_diagonals,
@@ -19,8 +19,6 @@ from orion_compiler.compiled_model import (
 )
 from orion_compiler.compiler import Compiler
 from orion_compiler.params import CKKSParams
-import orion_compiler.nn as on
-
 
 # -----------------------------------------------------------------------
 # Test params
@@ -148,12 +146,8 @@ class TestStructural:
         compiled, _, _ = compiled_result
         node_names = {n.name for n in compiled.graph.nodes}
         for edge in compiled.graph.edges:
-            assert edge.src in node_names, (
-                f"Edge src '{edge.src}' not in node names"
-            )
-            assert edge.dst in node_names, (
-                f"Edge dst '{edge.dst}' not in node names"
-            )
+            assert edge.src in node_names, f"Edge src '{edge.src}' not in node names"
+            assert edge.dst in node_names, f"Edge dst '{edge.dst}' not in node names"
 
     def test_graph_input_output_exist(self, compiled_result):
         """graph.input and graph.output exist in node list."""
@@ -178,9 +172,7 @@ class TestStructural:
         dst_set = {e.dst for e in compiled.graph.edges}
         for node in compiled.graph.nodes:
             if node.name != compiled.graph.input:
-                assert node.name in dst_set, (
-                    f"Non-input node '{node.name}' has no incoming edge"
-                )
+                assert node.name in dst_set, f"Non-input node '{node.name}' has no incoming edge"
 
     def test_add_mult_have_two_incoming_edges(self, compiled_result):
         """add/mult nodes have exactly two incoming edges."""
@@ -316,9 +308,7 @@ class TestNumerical:
                 inp = values[preds[0]]
                 output_rotations = node.config.get("output_rotations", 0)
                 block_height = (
-                    max_slots // (2**output_rotations)
-                    if output_rotations > 0
-                    else max_slots
+                    max_slots // (2**output_rotations) if output_rotations > 0 else max_slots
                 )
 
                 # Unpack diagonals for each block
@@ -331,13 +321,9 @@ class TestNumerical:
                             compiled.blobs[idx], max_slots
                         )
 
-                assert len(diags_by_block) == 1, (
-                    f"Multi-block not supported in test: {node.name}"
-                )
-                block_key = list(diags_by_block.keys())[0]
-                W = reconstruct_dense_matrix(
-                    diags_by_block[block_key], max_slots, block_height
-                )
+                assert len(diags_by_block) == 1, f"Multi-block not supported in test: {node.name}"
+                block_key = next(iter(diags_by_block.keys()))
+                W = reconstruct_dense_matrix(diags_by_block[block_key], max_slots, block_height)
 
                 # Dense matrix-vector product
                 y = np.matmul(W, inp)
@@ -364,9 +350,7 @@ class TestNumerical:
                 constant = node.config.get("constant", 0)
                 x_scaled = inp * prescale + constant
                 if basis == "chebyshev":
-                    result = np.polynomial.chebyshev.chebval(
-                        x_scaled, coeffs
-                    )
+                    result = np.polynomial.chebyshev.chebval(x_scaled, coeffs)
                 else:
                     # Horner's method matching Activation.forward
                     result = np.zeros_like(x_scaled)
@@ -417,9 +401,7 @@ class TestBlobFormat:
                         diags2 = unpack_raw_diagonals(repacked, max_slots)
                         assert diags.keys() == diags2.keys()
                         for k in diags:
-                            np.testing.assert_array_equal(
-                                diags[k], diags2[k]
-                            )
+                            np.testing.assert_array_equal(diags[k], diags2[k])
 
     def test_diagonal_indices_sorted(self, compiled_result):
         """Diagonal indices sorted ascending in packed output."""
@@ -433,9 +415,7 @@ class TestBlobFormat:
                         blob = compiled.blobs[idx]
                         diags = unpack_raw_diagonals(blob, max_slots)
                         indices = list(diags.keys())
-                        assert indices == sorted(indices), (
-                            f"Not sorted: {node.name}/{ref_name}"
-                        )
+                        assert indices == sorted(indices), f"Not sorted: {node.name}/{ref_name}"
 
     def test_diagonal_values_have_max_slots(self, compiled_result):
         """Each diagonal has exactly max_slots values."""
@@ -460,10 +440,8 @@ class TestBlobFormat:
         max_slots = compiled.params.max_slots
 
         for node in compiled.graph.nodes:
-            if node.op == "linear_transform" and node.blob_refs:
-                if "bias" in node.blob_refs:
-                    blob = compiled.blobs[node.blob_refs["bias"]]
-                    assert len(blob) == max_slots * 8, (
-                        f"Bias blob for {node.name}: expected "
-                        f"{max_slots * 8} bytes, got {len(blob)}"
-                    )
+            if node.op == "linear_transform" and node.blob_refs and "bias" in node.blob_refs:
+                blob = compiled.blobs[node.blob_refs["bias"]]
+                assert len(blob) == max_slots * 8, (
+                    f"Bias blob for {node.name}: expected {max_slots * 8} bytes, got {len(blob)}"
+                )

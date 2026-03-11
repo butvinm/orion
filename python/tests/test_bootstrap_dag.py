@@ -8,18 +8,15 @@ from unittest.mock import MagicMock
 
 import networkx as nx
 import torch
-
 from orion_compiler.core.auto_bootstrap import BootstrapPlacer, BootstrapSolver
 from orion_compiler.nn.operations import Bootstrap
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_module(level, depth, output_min=-1.0, output_max=1.0,
-                      fhe_output_shape=None):
+def _make_mock_module(level, depth, output_min=-1.0, output_max=1.0, fhe_output_shape=None):
     """Create a mock Orion module with the attributes BootstrapPlacer needs."""
     m = MagicMock()
     m.level = level
@@ -289,8 +286,8 @@ class TestBootstrapIntegration:
         Verifies that boot_* nodes appear in the DAG after compilation.
         """
         import orion_compiler.nn as on
-        from orion_compiler.params import CKKSParams
         from orion_compiler.compiler import Compiler
+        from orion_compiler.params import CKKSParams
 
         # Short logq chain: l_eff = 2 (only 2 usable levels).
         # MLP with 2 linear layers + 1 quad = 3 depth -> bootstraps needed.
@@ -323,23 +320,19 @@ class TestBootstrapIntegration:
 
         # Access the internal DAG to verify bootstrap insertion.
         # We need to replicate the compile() steps up to bootstrap placement.
-        from orion_compiler.core.network_dag import NetworkDAG
         from orion_compiler.core.fuser import Fuser
+        from orion_compiler.core.network_dag import NetworkDAG
         from orion_compiler.nn.module import Module
 
         network_dag = NetworkDAG(compiler._traced)
         network_dag.build_dag()
 
         for module in net.modules():
-            if hasattr(module, "init_orion_params") and callable(
-                module.init_orion_params
-            ):
+            if hasattr(module, "init_orion_params") and callable(module.init_orion_params):
                 module.init_orion_params()
 
         for module in net.modules():
-            if hasattr(module, "update_params") and callable(
-                module.update_params
-            ):
+            if hasattr(module, "update_params") and callable(module.update_params):
                 module.update_params()
 
         for module in net.modules():
@@ -353,6 +346,7 @@ class TestBootstrapIntegration:
 
         topo_sort = list(network_dag.topological_sort())
         from orion_compiler.nn.linear import LinearTransform
+
         last_linear = None
         for node in reversed(topo_sort):
             module = network_dag.nodes[node]["module"]
@@ -368,27 +362,21 @@ class TestBootstrapIntegration:
         network_dag.find_residuals()
 
         l_eff = len(compiler.params.get_logq()) - 1
-        btp_solver = BootstrapSolver(
-            net, network_dag, l_eff=l_eff, context=compiler._context
-        )
+        btp_solver = BootstrapSolver(net, network_dag, l_eff=l_eff, context=compiler._context)
         input_level, num_bootstraps, bootstrapper_slots = btp_solver.solve()
 
         # With l_eff=2 and 3 depth, we should need at least 1 bootstrap
-        assert num_bootstraps > 0, (
-            f"Expected bootstraps with l_eff={l_eff}, got {num_bootstraps}"
-        )
+        assert num_bootstraps > 0, f"Expected bootstraps with l_eff={l_eff}, got {num_bootstraps}"
 
         btp_placer = BootstrapPlacer(net, network_dag, compiler._context)
         btp_placer.place_bootstraps()
 
         # Verify bootstrap nodes exist in the DAG
         boot_nodes = [
-            n for n in network_dag.nodes
-            if network_dag.nodes[n].get("op") == "bootstrap"
+            n for n in network_dag.nodes if network_dag.nodes[n].get("op") == "bootstrap"
         ]
         assert len(boot_nodes) == num_bootstraps, (
-            f"Expected {num_bootstraps} boot nodes, found {len(boot_nodes)}: "
-            f"{boot_nodes}"
+            f"Expected {num_bootstraps} boot nodes, found {len(boot_nodes)}: {boot_nodes}"
         )
 
         # Verify each boot node has correct attributes
@@ -414,4 +402,5 @@ class TestBootstrapIntegration:
 
         del compiler
         import gc
+
         gc.collect()

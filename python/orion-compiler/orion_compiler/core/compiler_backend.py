@@ -5,16 +5,12 @@ Provides the same interface as the old backend/python/ wrappers
 lattigo bridge shared library.
 """
 
-from __future__ import annotations
-
-import math
 import threading
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Literal
+from typing import TYPE_CHECKING, Literal
 
-import torch
 import numpy as np
-
+import torch
 from lattigo import ffi as lattigo_ffi
 from lattigo.gohandle import GoHandle
 
@@ -26,15 +22,16 @@ if TYPE_CHECKING:
 # NewParameters (moved from backend/python/parameters.py)
 # =========================================================================
 
+
 @dataclass
 class CKKSParameters:
     logn: int
-    logq: List[int]
-    logp: List[int]
+    logq: list[int]
+    logp: list[int]
     logscale: int = field(default=None)
     h: int = 192
     ringtype: str = "standard"
-    boot_logp: List[int] = field(default=None)
+    boot_logp: list[int] = field(default=None)
 
     def __post_init__(self):
         if self.logq and self.logp and len(self.logp) > len(self.logq):
@@ -51,10 +48,7 @@ class CKKSParameters:
             )
         self.logscale = self.logscale or self.logq[-1]
         self.boot_logp = self.boot_logp or self.logp
-        self.logslots = (
-            self.logn - 1 if self.ringtype.lower() == "standard"
-            else self.logn
-        )
+        self.logslots = self.logn - 1 if self.ringtype.lower() == "standard" else self.logn
 
 
 @dataclass
@@ -74,18 +68,10 @@ class NewParameters:
 
     def __post_init__(self):
         params = self.params_json
-        ckks_params = {
-            k.lower(): v for k, v in params.get("ckks_params", {}).items()
-        }
-        boot_params = {
-            k.lower(): v for k, v in params.get("boot_params", {}).items()
-        }
-        orion_params = {
-            k.lower(): v for k, v in params.get("orion", {}).items()
-        }
-        self.ckks_params = CKKSParameters(
-            **ckks_params, boot_logp=boot_params.get("logp")
-        )
+        ckks_params = {k.lower(): v for k, v in params.get("ckks_params", {}).items()}
+        boot_params = {k.lower(): v for k, v in params.get("boot_params", {}).items()}
+        orion_params = {k.lower(): v for k, v in params.get("orion", {}).items()}
+        self.ckks_params = CKKSParameters(**ckks_params, boot_logp=boot_params.get("logp"))
         self.orion_params = OrionParameters(**orion_params)
 
     def get_logn(self):
@@ -138,8 +124,8 @@ class NewParameters:
 
     @classmethod
     def from_ckks_params(
-        cls, ckks_params: CKKSParams, config: CompilerConfig | None = None
-    ) -> NewParameters:
+        cls, ckks_params: "CKKSParams", config: "CompilerConfig | None" = None
+    ) -> "NewParameters":
         from orion_compiler.params import CompilerConfig as _CC
 
         if config is None:
@@ -176,6 +162,7 @@ class NewParameters:
 # CompilerBackend - wraps Lattigo FFI for compile-time operations
 # =========================================================================
 
+
 class CompilerBackend:
     """Adapter providing the LattigoLibrary interface via Lattigo FFI.
 
@@ -199,7 +186,7 @@ class CompilerBackend:
         ring_type = ring_map.get(p.ringtype.lower(), "conjugate_invariant")
 
         log_nth_root = 0
-        if hasattr(p, 'btp_logn') and p.btp_logn and p.btp_logn > 0:
+        if hasattr(p, "btp_logn") and p.btp_logn and p.btp_logn > 0:
             log_nth_root = p.btp_logn + 1
 
         self._params_h = lattigo_ffi.new_ckks_params(
@@ -225,13 +212,18 @@ class CompilerBackend:
         if not isinstance(values, list):
             values = list(values)
         return lattigo_ffi.encoder_encode(
-            self._encoder_h, values, level, scale,
+            self._encoder_h,
+            values,
+            level,
+            scale,
         )
 
     def Decode(self, pt_h):
         """Decode a plaintext handle to float values."""
         return lattigo_ffi.encoder_decode(
-            self._encoder_h, pt_h, self._max_slots,
+            self._encoder_h,
+            pt_h,
+            self._max_slots,
         )
 
     def DeletePlaintext(self, pt_h):
@@ -310,7 +302,11 @@ def _minimax_cache_key(degrees: list[int], prec: int, logalpha: int, logerr: int
 
 
 def _minimax_sign_cached(
-    degrees: list[int], prec: int, logalpha: int, logerr: int, debug: int,
+    degrees: list[int],
+    prec: int,
+    logalpha: int,
+    logerr: int,
+    debug: int,
 ) -> list[float]:
     """Generate minimax sign coefficients with caching and sign→[0,1] rescaling."""
     cleaned = [d for d in degrees if d != 0]
@@ -324,7 +320,11 @@ def _minimax_sign_cached(
 
     # Call raw Lattigo bridge (no rescaling)
     flat_coeffs, seps = lattigo_ffi.gen_minimax_composite_polynomial(
-        cleaned, prec, logalpha, logerr, debug,
+        cleaned,
+        prec,
+        logalpha,
+        logerr,
+        debug,
     )
 
     # Split into per-polynomial lists using separator indices
@@ -355,6 +355,7 @@ def _minimax_sign_cached(
 # =========================================================================
 # PlainTensor (moved from backend/python/encoder.py)
 # =========================================================================
+
 
 class PlainTensor:
     """Compile-time plaintext wrapper using handle-based FFI."""
@@ -389,6 +390,7 @@ class PlainTensor:
 # =========================================================================
 # NewEncoder (moved from backend/python/encoder.py)
 # =========================================================================
+
 
 class NewEncoder:
     def __init__(self, context):
@@ -425,7 +427,7 @@ class NewEncoder:
 
         plaintext_ids = []
         for i in range(num_plaintexts):
-            to_encode = vector[i * num_slots:(i + 1) * num_slots].tolist()
+            to_encode = vector[i * num_slots : (i + 1) * num_slots].tolist()
             plaintext_id = self.backend.Encode(to_encode, level, scale)
             plaintext_ids.append(plaintext_id)
 
@@ -436,7 +438,7 @@ class NewEncoder:
         for plaintext_id in plaintensor.ids:
             values.extend(self.backend.Decode(plaintext_id))
 
-        values = torch.tensor(values)[:plaintensor.on_shape.numel()]
+        values = torch.tensor(values)[: plaintensor.on_shape.numel()]
         return values.reshape(plaintensor.on_shape)
 
     def get_moduli_chain(self):
@@ -449,6 +451,7 @@ class NewEncoder:
 # =========================================================================
 # PolynomialGenerator (moved from backend/python/poly_evaluator.py)
 # =========================================================================
+
 
 class PolynomialGenerator:
     """Compile-time polynomial generation via Lattigo FFI."""
@@ -466,12 +469,8 @@ class PolynomialGenerator:
             coeffs = coeffs.tolist()
         return self.backend.GenerateChebyshev(coeffs)
 
-    def generate_minimax_sign_coeffs(self, degrees, prec=128, logalpha=12,
-                                     logerr=12, debug=False):
-        if isinstance(degrees, int):
-            degrees = [degrees]
-        else:
-            degrees = list(degrees)
+    def generate_minimax_sign_coeffs(self, degrees, prec=128, logalpha=12, logerr=12, debug=False):
+        degrees = [degrees] if isinstance(degrees, int) else list(degrees)
 
         degrees = [d for d in degrees if d != 0]
         if len(degrees) == 0:

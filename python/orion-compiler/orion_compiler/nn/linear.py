@@ -4,8 +4,8 @@ from abc import abstractmethod
 import torch
 import torch.nn as nn
 
-from .module import Module
 from ..core import packing
+from .module import Module
 
 
 class LinearTransform(Module):
@@ -23,8 +23,11 @@ class LinearTransform(Module):
 
     def init_orion_params(self):
         self.on_weight = self.weight.data.clone()
-        self.on_bias = (self.bias.data.clone() if hasattr(self, 'bias') and
-                        self.bias is not None else torch.zeros(self.weight.shape[0]))
+        self.on_bias = (
+            self.bias.data.clone()
+            if hasattr(self, "bias") and self.bias is not None
+            else torch.zeros(self.weight.shape[0])
+        )
 
     @abstractmethod
     def compute_fhe_output_gap(self, **kwargs):
@@ -46,7 +49,7 @@ class Linear(LinearTransform):
         out_features: int,
         bias: bool = True,
         bsgs_ratio: int = 2,
-        level: int = None,
+        level: int | None = None,
     ) -> None:
         super().__init__(bsgs_ratio, level)
 
@@ -57,8 +60,10 @@ class Linear(LinearTransform):
         self.reset_parameters()
 
     def extra_repr(self):
-        return (f"in_features={self.in_features}, out_features={self.out_features}, " +
-                super().extra_repr())
+        return (
+            f"in_features={self.in_features}, out_features={self.out_features}, "
+            + super().extra_repr()
+        )
 
     def reset_parameters(self):
         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
@@ -90,17 +95,17 @@ class Linear(LinearTransform):
 
 class Conv2d(LinearTransform):
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: int,
-            stride: int = 1,
-            padding: int = 0,
-            dilation: int = 1,
-            groups: int = 1,
-            bias: bool = True,
-            bsgs_ratio: int = 2,
-            level: int = None,
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = True,
+        bsgs_ratio: int = 2,
+        level: int | None = None,
     ) -> None:
         super().__init__(bsgs_ratio, level)
 
@@ -130,27 +135,29 @@ class Conv2d(LinearTransform):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def extra_repr(self):
-        return (f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
-                f"kernel_size={self.kernel_size}, stride={self.stride}, "
-                f"padding={self.padding}, dilation={self.dilation}, "
-                f"groups={self.groups}, " + super().extra_repr())
+        return (
+            f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self.padding}, dilation={self.dilation}, "
+            f"groups={self.groups}, " + super().extra_repr()
+        )
 
     def compute_fhe_output_gap(self, **kwargs):
-        input_gap = kwargs['input_gap']
+        input_gap = kwargs["input_gap"]
         return input_gap * self.stride[0]
 
     def compute_fhe_output_shape(self, **kwargs) -> tuple:
-        input_shape = kwargs['input_shape']
-        clear_output_shape = kwargs['clear_output_shape']
-        input_gap = kwargs['input_gap']
+        input_shape = kwargs["input_shape"]
+        clear_output_shape = kwargs["clear_output_shape"]
+        input_gap = kwargs["input_gap"]
 
         Hi, Wi = input_shape[2:]
         N, Co, Ho, Wo = clear_output_shape
         output_gap = self.compute_fhe_output_gap(input_gap=input_gap)
 
         on_Co = math.ceil(Co / (output_gap**2))
-        on_Ho = max(Hi, Ho*output_gap)
-        on_Wo = max(Wi, Wo*output_gap)
+        on_Ho = max(Hi, Ho * output_gap)
+        on_Wo = max(Wi, Wo * output_gap)
 
         return torch.Size((N, on_Co, on_Ho, on_Wo))
 
@@ -165,6 +172,5 @@ class Conv2d(LinearTransform):
                 f"dimension(s): {x.shape}."
             )
         return torch.nn.functional.conv2d(
-            x, self.weight, self.bias, self.stride,
-            self.padding, self.dilation, self.groups
+            x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups
         )
