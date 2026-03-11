@@ -3,7 +3,11 @@ from __future__ import annotations
 import logging
 import math
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from orion_compiler.nn.linear import Conv2d, Linear, LinearTransform
+    from orion_compiler.nn.normalization import BatchNorm1d, BatchNorm2d
 
 import matplotlib.pyplot as plt
 import scipy.sparse as sp
@@ -19,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def pack_conv2d(
-    conv_layer: Any, last: bool
+    conv_layer: Conv2d, last: bool
 ) -> tuple[dict[tuple[int, int], dict[int, list[float]]], int]:
     slots = conv_layer.scheme.params.get_slots()
     embed_method = conv_layer.scheme.params.get_embedding_method()
@@ -34,7 +38,10 @@ def pack_conv2d(
     return diagonals, output_rotations
 
 
-def construct_conv2d_toeplitz(conv_layer: Any, weight: torch.Tensor) -> sp.csr_matrix:
+def construct_conv2d_toeplitz(conv_layer: Conv2d, weight: torch.Tensor) -> sp.csr_matrix:
+    assert conv_layer.fhe_input_shape is not None
+    assert conv_layer.fhe_output_shape is not None
+    assert conv_layer.output_shape is not None
     N, on_Ci, on_Hi, on_Wi = conv_layer.fhe_input_shape
     on_Co, on_Ho, on_Wo = conv_layer.fhe_output_shape[1:]
     Ho, Wo = conv_layer.output_shape[2:]
@@ -112,7 +119,9 @@ def construct_conv2d_toeplitz(conv_layer: Any, weight: torch.Tensor) -> sp.csr_m
     return toeplitz
 
 
-def construct_conv2d_bias(conv_layer: Any) -> torch.Tensor:
+def construct_conv2d_bias(conv_layer: Conv2d) -> torch.Tensor:
+    assert conv_layer.output_shape is not None
+    assert conv_layer.fhe_output_shape is not None
     N, Co, Ho, Wo = conv_layer.output_shape
     on_Co, on_Ho, on_Wo = conv_layer.fhe_output_shape[1:]
 
@@ -130,7 +139,7 @@ def construct_conv2d_bias(conv_layer: Any) -> torch.Tensor:
 
 
 def pack_linear(
-    linear_layer: Any, last: bool
+    linear_layer: Linear, last: bool
 ) -> tuple[dict[tuple[int, int], dict[int, list[float]]], int]:
     slots = linear_layer.scheme.params.get_slots()
     embed_method = linear_layer.scheme.params.get_embedding_method()
@@ -140,7 +149,8 @@ def pack_linear(
     return diagonals, output_rotations
 
 
-def construct_linear_matrix(linear_layer: Any) -> sp.csr_matrix:
+def construct_linear_matrix(linear_layer: Linear) -> sp.csr_matrix:
+    assert linear_layer.input_shape is not None
     if len(linear_layer.input_shape) == 2:
         N = linear_layer.input_shape[0]
         matrix = linear_layer.on_weight
@@ -148,6 +158,7 @@ def construct_linear_matrix(linear_layer: Any) -> sp.csr_matrix:
         out_features = linear_layer.out_features
         input_gap = linear_layer.input_gap
         N, Ci, Hi, Wi = linear_layer.input_shape
+        assert linear_layer.fhe_input_shape is not None
         on_Ci, on_Hi, on_Wi = linear_layer.fhe_input_shape[1:]
 
         reshaped = linear_layer.on_weight.reshape(out_features, Ci, Hi, Wi)
@@ -162,7 +173,8 @@ def construct_linear_matrix(linear_layer: Any) -> sp.csr_matrix:
     return matrix_sparse
 
 
-def construct_linear_bias(linear_layer: Any) -> torch.Tensor:
+def construct_linear_bias(linear_layer: LinearTransform) -> torch.Tensor:
+    assert linear_layer.input_shape is not None
     N = linear_layer.input_shape[0]
     result: torch.Tensor = linear_layer.on_bias.repeat(N)
     return result
@@ -184,7 +196,7 @@ def multiplex(matrix: torch.Tensor, gap: int) -> torch.Tensor:
     return result
 
 
-def resolve_grouped_conv(conv_layer: Any) -> torch.Tensor:
+def resolve_grouped_conv(conv_layer: Conv2d) -> torch.Tensor:
     on_weight = conv_layer.on_weight.repeat(1, conv_layer.groups, 1, 1)
 
     # Zero out input channels to support arbitrary groups
@@ -348,8 +360,9 @@ def plot_toeplitz(matrix: sp.csr_matrix | Any, save_path: str = "") -> None:
 
 
 def pack_bn1d(
-    bn1d_layer: Any,
+    bn1d_layer: BatchNorm1d,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
+    assert bn1d_layer.input_shape is not None
     N = bn1d_layer.input_shape[0]
     on_running_mean = bn1d_layer.on_running_mean
     on_inv_running_std = 1 / torch.sqrt(bn1d_layer.on_running_var + bn1d_layer.eps)
@@ -365,8 +378,10 @@ def pack_bn1d(
 
 
 def pack_bn2d(
-    bn2d_layer: Any,
+    bn2d_layer: BatchNorm2d,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
+    assert bn2d_layer.input_shape is not None
+    assert bn2d_layer.fhe_input_shape is not None
     N, Ci, Hi, Wi = bn2d_layer.input_shape
     on_Ci, on_Hi, on_Wi = bn2d_layer.fhe_input_shape[1:]
 

@@ -36,6 +36,12 @@ class BatchNormNd(Module):
         self.register_buffer("running_var", torch.ones(num_features))
         self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
 
+        # Set by init_orion_params() during compilation
+        self.on_running_mean: torch.Tensor
+        self.on_running_var: torch.Tensor
+        self.on_weight: torch.Tensor
+        self.on_bias: torch.Tensor
+
     @abstractmethod
     def _check_input_dim(self, x: torch.Tensor) -> None:
         raise NotImplementedError("Subclasses must implement _check_input_dim")

@@ -21,6 +21,10 @@ class LinearTransform(Module):
         self.diagonals: dict[tuple[int, int], dict[int, Any]] = {}
         self.output_rotations: int = 0
 
+        # Set by init_orion_params() during compilation
+        self.on_weight: torch.Tensor
+        self.on_bias: torch.Tensor
+
     def extra_repr(self) -> str:
         return super().extra_repr() + f", bsgs_ratio={self.bsgs_ratio}"
 
