@@ -18,7 +18,7 @@ Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orio
 
 ## Build & Development
 
-**System prerequisites:** Go 1.22+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.9–3.12, Node.js 18+.
+**System prerequisites:** Go 1.22+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.11–3.12, Node.js 18+.
 
 ```bash
 # Build the Python CGO shared library (required before installing Python packages)
@@ -56,6 +56,14 @@ cd js/lattigo && npm run typecheck
 
 # JS/WASM — lint TypeScript
 cd js/lattigo && npm run lint
+
+# Python linting and formatting (ruff)
+ruff check python/
+ruff check --fix python/
+ruff format python/
+
+# Python type checking (mypy)
+mypy python/lattigo/ python/orion-compiler/ python/orion-evaluator/
 ```
 
 ## Design Principles
@@ -145,6 +153,15 @@ output = encoder.decode(result_pt, params.max_slots())
 1. **GoHandle wraps every Go object.** Tagged with descriptive strings (`"CKKSParams"`, `"RLWECiphertext"`, etc.).
 2. **Bridge functions borrow, never consume.** Only `DeleteHandle` (called by `GoHandle.close()`) frees the handle slot.
 3. **Canonical `__del__`.** Every handle-owning class uses `def __del__(self): try: self.close() except Exception: pass`.
+4. **Context manager support.** All handle-owning classes support `with` statements (`__enter__`/`__exit__`), which call `close()` on block exit.
+
+### Exception Hierarchies
+
+Each package defines its own exception hierarchy. Use these instead of generic `RuntimeError`/`ValueError`:
+
+- `lattigo.errors` — `LatticeError` (base), `HandleClosedError`, `FFIError`
+- `orion_compiler.errors` — `CompilerError` (base), `CompilationError`, `ValidationError`
+- `orion_evaluator.errors` — `EvaluatorError` (base), `ModelLoadError`
 
 ### Serialization — Lattigo native, no custom formats
 

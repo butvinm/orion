@@ -97,7 +97,7 @@ model.close()
 
 The `Model` object is immutable and safe to share across multiple `Evaluator` instances. Each `Evaluator` holds one client's evaluation keys and is **not** thread-safe (same constraint as the Go evaluator — Lattigo evaluators carry internal buffers).
 
-`Model` and `Evaluator` are `GoHandle`-wrapped — they follow the same RAII pattern as other bridge objects (idempotent `close()`, `__del__` fallback).
+`Model` and `Evaluator` are `GoHandle`-wrapped — they follow the same RAII pattern as other bridge objects (idempotent `close()`, `__del__` fallback, context manager support via `with` statements). Errors raise `EvaluatorError` or `ModelLoadError` (from `orion_evaluator.errors`) instead of generic `RuntimeError`.
 
 This package exists purely for convenience — it enables self-contained Python examples and testing without a separate Go server. Production deployments should use the Go evaluator directly for performance and to avoid CGO overhead.
 
@@ -543,13 +543,13 @@ orion/
 
 ## Dependencies
 
-| Component         | Go import                              | `pip install`     | Depends on                 | Does NOT depend on        |
-| ----------------- | -------------------------------------- | ----------------- | -------------------------- | ------------------------- |
+| Component         | Go import                            | `pip install`     | Depends on                 | Does NOT depend on        |
+| ----------------- | ------------------------------------ | ----------------- | -------------------------- | ------------------------- |
 | `evaluator/`      | `github.com/butvinm/orion/evaluator` | —                 | Lattigo                    | Python, compiler, bridges |
-| `lattigo`         | (CGO, builds .so)                      | `lattigo`         | Lattigo (Go)               | Anything Orion            |
-| `orion-compiler`  | —                                      | `orion-compiler`  | `lattigo`, torch, networkx | `evaluator/`              |
-| `orion-evaluator` | (CGO, builds .so)                      | `orion-evaluator` | `evaluator/`, Lattigo      | torch, compiler           |
-| `js/lattigo/`     | (WASM, builds .wasm)                   | —                 | Lattigo                    | `evaluator/`              |
+| `lattigo`         | (CGO, builds .so)                    | `lattigo`         | Lattigo (Go)               | Anything Orion            |
+| `orion-compiler`  | —                                    | `orion-compiler`  | `lattigo`, torch, networkx | `evaluator/`              |
+| `orion-evaluator` | (CGO, builds .so)                    | `orion-evaluator` | `evaluator/`, Lattigo      | torch, compiler           |
+| `js/lattigo/`     | (WASM, builds .wasm)                 | —                 | Lattigo                    | `evaluator/`              |
 
 No circular dependencies. No shared Go packages. `lattigo` and `orion-evaluator` are the packages with Go code. `orion-compiler` depends on `lattigo` for compile-time operations. `orion-evaluator` has no Python package dependencies.
 
@@ -1153,7 +1153,7 @@ class Evaluator:
     def close(self) -> None: ...
 ```
 
-Both classes wrap `GoHandle` with the standard RAII pattern (idempotent `close()`, `__del__` fallback).
+Both classes wrap `GoHandle` with the standard RAII pattern (idempotent `close()`, `__del__` fallback, context manager support via `with` statements).
 
 **`pyproject.toml`:** `pip install orion-evaluator`. No Python package dependencies (uses its own CGO bridge). Build system triggers Go compilation of `bridge/`.
 
@@ -1238,15 +1238,15 @@ Starts after Phase 3 (packages split, `orion-evaluator` available).
 
 Delete `orion/models/` (or `orion_compiler/models/` after Phase 3). Each model becomes a standalone example:
 
-| Current location          | New location        | Dataset  | Key FHE features                                 |
-| ------------------------- | ------------------- | -------- | ------------------------------------------------ |
-| `orion/models/mlp.py`     | `examples/models/mlp.py`   | MNIST    | Simplest: Linear + Quad                          |
-| `orion/models/lenet.py`   | `examples/models/lenet.py` | MNIST    | Conv2d + pooling                                 |
-| `orion/models/lola.py`    | `examples/models/lola.py`  | MNIST    | Lightweight: 1 Conv + 1 FC                       |
-| `orion/models/alexnet.py` | `examples/models/alexnet.py` | CIFAR-10 | Deeper CNN, SiLU (Chebyshev polynomial)        |
-| `orion/models/vgg.py`     | `examples/models/vgg.py`   | CIFAR-10 | Deep CNN, ReLU (minimax sign approximation)      |
-| `orion/models/resnet.py`  | `examples/models/resnet.py` | CIFAR-10 | Residual connections (`Add`), bootstrapping     |
-| `orion/models/yolo.py`    | `examples/models/yolo.py`  | Custom   | Object detection, ResNet34 backbone, large model |
+| Current location          | New location                 | Dataset  | Key FHE features                                 |
+| ------------------------- | ---------------------------- | -------- | ------------------------------------------------ |
+| `orion/models/mlp.py`     | `examples/models/mlp.py`     | MNIST    | Simplest: Linear + Quad                          |
+| `orion/models/lenet.py`   | `examples/models/lenet.py`   | MNIST    | Conv2d + pooling                                 |
+| `orion/models/lola.py`    | `examples/models/lola.py`    | MNIST    | Lightweight: 1 Conv + 1 FC                       |
+| `orion/models/alexnet.py` | `examples/models/alexnet.py` | CIFAR-10 | Deeper CNN, SiLU (Chebyshev polynomial)          |
+| `orion/models/vgg.py`     | `examples/models/vgg.py`     | CIFAR-10 | Deep CNN, ReLU (minimax sign approximation)      |
+| `orion/models/resnet.py`  | `examples/models/resnet.py`  | CIFAR-10 | Residual connections (`Add`), bootstrapping      |
+| `orion/models/yolo.py`    | `examples/models/yolo.py`    | Custom   | Object detection, ResNet34 backbone, large model |
 
 #### 5.2 Example directory structure
 
@@ -1557,11 +1557,11 @@ For the WASM demo server:
 
 Port models from `models/` to `examples/` using `orion_compiler.nn` imports (the `models/` files use the old `orion.nn` API). Each is a flat file (`examples/<model>.py`) with `Model` + `CONFIG`, using the unified `examples/run.py`.
 
-| Example               | Dataset  | Key FHE features                                        | Bootstrap needed                | Reference CKKS params                                                                                |
-| ---------------------- | -------- | ------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `examples/models/alexnet.py`  | CIFAR-10 | Conv2d E2E validation, SiLU (degree-127 Chebyshev)      | Maybe (depends on param choice) | TBD — start with `logn=15`                                                                           |
-| `examples/models/vgg.py`      | CIFAR-10 | ReLU (minimax sign, 15 levels/activation)               | Yes (heaviest activation)       | TBD — likely `logn=16`                                                                               |
-| `examples/models/resnet.py`   | CIFAR-10 | Residual connections (`Add`), multi-bootstrap placement | Yes                             | `logn=16`, `logq=[55,40×10]`, `logp=[61×3]`, `boot_logp=[61×8]` (from original `configs/resnet.yml`) |
+| Example                      | Dataset  | Key FHE features                                        | Bootstrap needed                | Reference CKKS params                                                                                |
+| ---------------------------- | -------- | ------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `examples/models/alexnet.py` | CIFAR-10 | Conv2d E2E validation, SiLU (degree-127 Chebyshev)      | Maybe (depends on param choice) | TBD — start with `logn=15`                                                                           |
+| `examples/models/vgg.py`     | CIFAR-10 | ReLU (minimax sign, 15 levels/activation)               | Yes (heaviest activation)       | TBD — likely `logn=16`                                                                               |
+| `examples/models/resnet.py`  | CIFAR-10 | Residual connections (`Add`), multi-bootstrap placement | Yes                             | `logn=16`, `logq=[55,40×10]`, `logp=[61×3]`, `boot_logp=[61×8]` (from original `configs/resnet.yml`) |
 
 **Model-specific notes:**
 

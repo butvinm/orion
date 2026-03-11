@@ -145,8 +145,8 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 9: [Final] Update documentation
 
-- [ ] Update CLAUDE.md with new exception types, context manager usage, and tool commands (ruff, mypy)
-- [ ] Update ARCH.md if relevant sections reference error handling or API patterns
+- [x] Update CLAUDE.md with new exception types, context manager usage, and tool commands (ruff, mypy)
+- [x] Update ARCH.md if relevant sections reference error handling or API patterns
 
 ## Technical Details
 
