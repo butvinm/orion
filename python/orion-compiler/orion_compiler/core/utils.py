@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import shutil
@@ -17,7 +19,9 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
-def get_mnist_datasets(data_dir, batch_size, test_samples=10000, seed=None):
+def get_mnist_datasets(
+    data_dir: str, batch_size: int, test_samples: int = 10000, seed: int | None = None
+) -> tuple[DataLoader[object], DataLoader[object]]:
     """
     Loads MNIST datasets and returns training and test DataLoaders.
 
@@ -78,7 +82,9 @@ def get_mnist_datasets(data_dir, batch_size, test_samples=10000, seed=None):
         ssl._create_default_https_context = old_context
 
 
-def get_cifar_datasets(data_dir, batch_size, test_samples=10000, seed=None):
+def get_cifar_datasets(
+    data_dir: str, batch_size: int, test_samples: int = 10000, seed: int | None = None
+) -> tuple[DataLoader[object], DataLoader[object]]:
     """
     Loads CIFAR-10 datasets and returns training and test DataLoaders.
 
@@ -151,7 +157,7 @@ def get_cifar_datasets(data_dir, batch_size, test_samples=10000, seed=None):
         ssl._create_default_https_context = old_context
 
 
-def download_and_prepare_tinyimagenet(data_dir="./data"):
+def download_and_prepare_tinyimagenet(data_dir: str = "./data") -> None:
     # Set paths
     url = "http://cs231n.stanford.edu/tiny-imagenet-200.zip"
     dataset_dir = os.path.join(data_dir, "tiny-imagenet-200")
@@ -231,7 +237,9 @@ def download_and_prepare_tinyimagenet(data_dir="./data"):
             ssl._create_default_https_context = old_context
 
 
-def get_tiny_datasets(data_dir, batch_size, test_samples=10000, seed=None):
+def get_tiny_datasets(
+    data_dir: str, batch_size: int, test_samples: int = 10000, seed: int | None = None
+) -> tuple[DataLoader[object], DataLoader[object]]:
     """
     Loads Tiny-ImageNet datasets and returns training and test DataLoaders.
 
@@ -292,16 +300,16 @@ def get_tiny_datasets(data_dir, batch_size, test_samples=10000, seed=None):
 
 
 def train_on_mnist(
-    model,
-    data_dir="./data",
-    epochs=200,
-    batch_size=128,
-    lr=0.1,
-    momentum=0.9,
-    weight_decay=5e-4,
-    device="cpu",
-    save_path=None,
-):
+    model: nn.Module,
+    data_dir: str = "./data",
+    epochs: int = 200,
+    batch_size: int = 128,
+    lr: float = 0.1,
+    momentum: float = 0.9,
+    weight_decay: float = 5e-4,
+    device: str = "cpu",
+    save_path: str | None = None,
+) -> None:
     """
     Train a model on the MNIST dataset.
     """
@@ -310,16 +318,16 @@ def train_on_mnist(
 
 
 def train_on_cifar(
-    model,
-    data_dir="./data",
-    epochs=200,
-    batch_size=128,
-    lr=0.1,
-    momentum=0.9,
-    weight_decay=5e-4,
-    device="cpu",
-    save_path=None,
-):
+    model: nn.Module,
+    data_dir: str = "./data",
+    epochs: int = 200,
+    batch_size: int = 128,
+    lr: float = 0.1,
+    momentum: float = 0.9,
+    weight_decay: float = 5e-4,
+    device: str = "cpu",
+    save_path: str | None = None,
+) -> None:
     """
     Train a model on the CIFAR-10 dataset.
     """
@@ -328,16 +336,16 @@ def train_on_cifar(
 
 
 def train_on_tiny(
-    model,
-    data_dir="./data",
-    epochs=200,
-    batch_size=128,
-    lr=0.1,
-    momentum=0.9,
-    weight_decay=5e-4,
-    device="cpu",
-    save_path=None,
-):
+    model: nn.Module,
+    data_dir: str = "./data",
+    epochs: int = 200,
+    batch_size: int = 128,
+    lr: float = 0.1,
+    momentum: float = 0.9,
+    weight_decay: float = 5e-4,
+    device: str = "cpu",
+    save_path: str | None = None,
+) -> None:
     """
     Train a model on the Tiny-ImageNet dataset.
     """
@@ -346,16 +354,16 @@ def train_on_tiny(
 
 
 def train(
-    model,
-    train_loader,
-    test_loader,
-    epochs,
-    lr,
-    momentum,
-    weight_decay,
-    device="cpu",
-    save_path=None,
-):
+    model: nn.Module,
+    train_loader: DataLoader[object],
+    test_loader: DataLoader[object],
+    epochs: int,
+    lr: float,
+    momentum: float,
+    weight_decay: float,
+    device: str | torch.device = "cpu",
+    save_path: str | None = None,
+) -> None:
     """
     Train the model on the given dataset using SGD and CosineAnnealingLR.
     """
@@ -390,7 +398,14 @@ def train(
     model.to("cpu")
 
 
-def train_epoch(epoch, model, train_loader, criterion, optimizer, device):
+def train_epoch(
+    epoch: int,
+    model: nn.Module,
+    train_loader: DataLoader[object],
+    criterion: nn.Module,
+    optimizer: optim.Optimizer,
+    device: str | torch.device,
+) -> None:
     """
     Perform one training epoch.
     """
@@ -426,7 +441,12 @@ def train_epoch(epoch, model, train_loader, criterion, optimizer, device):
         )
 
 
-def test_epoch(model, test_loader, criterion, device):
+def test_epoch(
+    model: nn.Module,
+    test_loader: DataLoader[object],
+    criterion: nn.Module,
+    device: str | torch.device,
+) -> float:
     """
     Evaluate the model on the test dataset.
     """
@@ -458,7 +478,7 @@ def test_epoch(model, test_loader, criterion, device):
     return 100.0 * correct / total
 
 
-def mae(tensor1, tensor2):
+def mae(tensor1: torch.Tensor, tensor2: torch.Tensor) -> float:
     if tensor1.shape != tensor2.shape:
         raise ValueError(
             f"Tensors must have the same size, but got {tensor1.shape} and {tensor2.shape}."
@@ -468,7 +488,7 @@ def mae(tensor1, tensor2):
     return mse_value
 
 
-def mse(tensor1, tensor2):
+def mse(tensor1: torch.Tensor, tensor2: torch.Tensor) -> float:
     if tensor1.shape != tensor2.shape:
         raise ValueError(
             f"Tensors must have the same size, but got {tensor1.shape} and {tensor2.shape}."

@@ -49,13 +49,3 @@ module = [
 # torch.fx.Node uses dynamic attributes extensively and torch buffer typing
 # produces Tensor | Module unions — these are unfixable without per-line ignores.
 ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = [
-    "orion_compiler.core.utils",
-    "orion_compiler.core.network_dag",
-    "orion_compiler.core.level_dag",
-    "orion_compiler.core.auto_bootstrap",
-    "orion_compiler.core.fuser",
-]
-disallow_untyped_defs = false

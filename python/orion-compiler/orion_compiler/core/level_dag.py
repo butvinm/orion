@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import math
+from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import torch.nn as nn
 
 from orion_compiler.nn.linear import LinearTransform
+
+if TYPE_CHECKING:
+    from .network_dag import NetworkDAG
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +26,17 @@ class LevelDAG(nx.DiGraph):
     and locations of bootstrap operations in a given neural network.
     """
 
-    def __init__(self, l_eff, network_dag, path=None):
+    def __init__(
+        self, l_eff: int, network_dag: NetworkDAG, path: nx.DiGraph | None = None
+    ) -> None:
         super().__init__()
         self.l_eff = l_eff
         self.network_dag = network_dag
         self.path = path
+        self.topo_path: list[str] = []
         self.build_level_dag_from_path()
 
-    def __add__(self, other):
+    def __add__(self, other: LevelDAG) -> LevelDAG:
         """
         Accepts two level DAGs and computes their aggregate level DAG
         by "adding" the two together. This addition is a bit abstract;
@@ -86,7 +95,7 @@ class LevelDAG(nx.DiGraph):
 
         return aggregate_level_dag
 
-    def append(self, other):
+    def append(self, other: LevelDAG) -> None:
         """Append the LevelDAG "other" to the end of the LevelDAG "self"."""
 
         if self.number_of_nodes() == 0:
@@ -110,7 +119,7 @@ class LevelDAG(nx.DiGraph):
                 weight, _ = self.estimate_bootstrap_latency(tail, head)
                 self.add_edge(tail, head, weight=weight, path=[tail, head])
 
-    def build_level_dag_from_path(self):
+    def build_level_dag_from_path(self) -> None:
         """If a path parameter is provided, this method automatically
         generates a level digraph for this path. If this path contains
         a previously solved SESE region, then we insert it before
@@ -148,7 +157,7 @@ class LevelDAG(nx.DiGraph):
                     self.connect_layer_to_existing_dag(curr_dag_nodes, prev_dag_nodes)
                     prev_dag_nodes = curr_dag_nodes
 
-    def build_layer(self, node: str):
+    def build_layer(self, node: str) -> list[str]:
         """Builds the next layer of nodes in the level DAG and estimates
         their latency, eventually used in shortest path."""
 
@@ -162,7 +171,7 @@ class LevelDAG(nx.DiGraph):
 
         return level_dag_nodes
 
-    def estimate_layer_latency(self, module, level):
+    def estimate_layer_latency(self, module: Any, level: int) -> float:
         """
         Analytical model for estimating linear layer latency. A more
         comprehensive profiler could provide more accurate estimates.
@@ -190,14 +199,16 @@ class LevelDAG(nx.DiGraph):
             # Iterate over blocks, extract number of diagonals and estimate
             # linear transform latency analytically based on params.
             alpha = 0.001
-            runtime = 0
+            runtime: float = 0
             for diags in module.diagonals.values():  # iterate over blocks
                 runtime += alpha * len(diags) * level
             return runtime
         else:
             return 0
 
-    def connect_layer_to_existing_dag(self, curr_dag_nodes, prev_dag_nodes):
+    def connect_layer_to_existing_dag(
+        self, curr_dag_nodes: list[str], prev_dag_nodes: list[str] | None
+    ) -> None:
         """
         Connect the layer built in build_layer() to the existing level DAG
         through edges weighted by if a bootstrap is required.
@@ -211,7 +222,7 @@ class LevelDAG(nx.DiGraph):
                 weight, _ = self.estimate_bootstrap_latency(prev_node, curr_node)
                 self.add_edge(prev_node, curr_node, weight=weight, path=[curr_node, prev_node])
 
-    def estimate_bootstrap_latency(self, prev_node: str, curr_node: str):
+    def estimate_bootstrap_latency(self, prev_node: str, curr_node: str) -> tuple[float, int]:
         """Estimate bootstrap latency between nodes in the network."""
 
         # Extract node information
@@ -249,18 +260,18 @@ class LevelDAG(nx.DiGraph):
         # Case 4: No bootstrap required
         return (0, 0)
 
-    def get_num_input_cts(self, module):
+    def get_num_input_cts(self, module: Any) -> int:
         num_slots = module.scheme.params.get_slots()
         num_elements = module.fhe_input_shape.numel()
-        return math.ceil(num_elements / num_slots)
+        return int(math.ceil(num_elements / num_slots))  # noqa: RUF046
 
-    def shortest_path(self, source, target):
+    def shortest_path(self, source: str, target: str) -> tuple[list[str], float]:
         """Relaxation stage of topological sort."""
 
         # Initialize distances and predecessors
-        distances = {node: float("inf") for node in self.nodes}
+        distances: dict[str, float] = {node: float("inf") for node in self.nodes}
         distances[source] = self.nodes[source]["weight"]
-        predecessors = {node: None for node in self.nodes}
+        predecessors: dict[str, str | None] = {node: None for node in self.nodes}
 
         for node in nx.topological_sort(self):
             if distances[node] == float("inf"):
@@ -275,8 +286,8 @@ class LevelDAG(nx.DiGraph):
                     predecessors[neighbor] = node
 
         # Reconstruct shortest path
-        path = []
-        current = target
+        path: list[str] = []
+        current: str | None = target
         while current is not None:
             path.append(current)
             current = predecessors[current]
@@ -284,21 +295,21 @@ class LevelDAG(nx.DiGraph):
 
         return path, distances[target]
 
-    def head(self):
+    def head(self) -> list[str]:
         head_nodes = []
         for node in self.nodes:
             if self.in_degree(node) == 0:
                 head_nodes.append(node)
         return head_nodes
 
-    def tail(self):
+    def tail(self) -> list[str]:
         tail_nodes = []
         for node in self.nodes:
             if self.out_degree(node) == 0:
                 tail_nodes.append(node)
         return tail_nodes
 
-    def plot(self, save_path="", figsize=(10, 10)):
+    def plot(self, save_path: str = "", figsize: tuple[int, int] = (10, 10)) -> None:
         """Plot the level digraph with edge colors based on 'weight'."""
         try:
             pos = nx.nx_agraph.graphviz_layout(self, prog="dot")

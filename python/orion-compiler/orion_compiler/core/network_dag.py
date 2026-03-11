@@ -1,10 +1,17 @@
+from __future__ import annotations
+
 import itertools
 import logging
+from collections.abc import Generator
+from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
 
 from orion_compiler.nn.normalization import BatchNormNd
+
+if TYPE_CHECKING:
+    import torch.fx
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +24,13 @@ class NetworkDAG(nx.DiGraph):
     methods that we will use in our automatic bootstrap placement algorithm.
     """
 
-    def __init__(self, trace):
+    def __init__(self, trace: torch.fx.GraphModule) -> None:
         super().__init__()
         self.trace = trace
-        self.residuals = {}
+        self.residuals: dict[str, str] = {}
+        self.solved_residual_level_dags: dict[str, Any] = {}
 
-    def build_dag(self):
+    def build_dag(self) -> None:
         """Builds the DAG representation of the neural network based on
         the provided symbolic trace."""
 
@@ -40,7 +48,7 @@ class NetworkDAG(nx.DiGraph):
                 for input_node in node.all_input_nodes:
                     self.add_edge(input_node.name, node.name)
 
-    def find_residuals(self):
+    def find_residuals(self) -> None:
         """Finds pairs of fork/join nodes representing residual connections.
         We consider a fork (join) node to be any Orion module or arithmetic
         operation in our computational graph that has two or more children
@@ -82,7 +90,7 @@ class NetworkDAG(nx.DiGraph):
                 fork, join = self.insert_fork_and_join_nodes(start_node, end_node)
                 self.residuals[fork] = join
 
-    def insert_fork_and_join_nodes(self, start, end):
+    def insert_fork_and_join_nodes(self, start: str, end: str) -> tuple[str, str]:
         """Inserts special fork/join nodes into the graph around the residual
         connection. This makes our automatic bootstrap placement algorithm
         slightly cleaner."""
@@ -108,7 +116,7 @@ class NetworkDAG(nx.DiGraph):
 
         return fork, join
 
-    def extract_residual_subgraph(self, fork):
+    def extract_residual_subgraph(self, fork: str) -> nx.DiGraph:
         """A helper function designed to extract the subgraphs between
         the fork/join nodes of a residual connection."""
 
@@ -129,7 +137,7 @@ class NetworkDAG(nx.DiGraph):
 
         return residual_subgraph
 
-    def remove_fused_batchnorms(self):
+    def remove_fused_batchnorms(self) -> None:
         """Removes BatchNorm nodes from the graph when it is known that they
         can be fused with preceding linear layers."""
 
@@ -154,10 +162,10 @@ class NetworkDAG(nx.DiGraph):
                         self.add_edge(parent, child)
                     self.remove_node(node)
 
-    def topological_sort(self):
-        return nx.topological_sort(self)
+    def topological_sort(self) -> Generator[Any, None, None]:
+        return nx.topological_sort(self)  # type: ignore[no-any-return]
 
-    def plot(self, save_path="", figsize=(10, 10)):
+    def plot(self, save_path: str = "", figsize: tuple[int, int] = (10, 10)) -> None:
         """Plot the network digraph. For the best visualization, please install
         Graphviz and PyGraphviz."""
 

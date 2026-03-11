@@ -1,26 +1,39 @@
+from __future__ import annotations
+
 import itertools
 import logging
 import math
+import types
+from typing import Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import torch.nn as nn
 
 from orion_compiler.nn.operations import Bootstrap
 
 from .level_dag import LevelDAG
+from .network_dag import NetworkDAG
 
 logger = logging.getLogger(__name__)
 
 
 class BootstrapSolver:
-    def __init__(self, net, network_dag, l_eff, context=None):
+    def __init__(
+        self,
+        net: nn.Module,
+        network_dag: NetworkDAG,
+        l_eff: int,
+        context: types.SimpleNamespace | None = None,
+    ) -> None:
         self.net = net
         self.network_dag = network_dag
         self.l_eff = l_eff
         self.context = context
         self.full_level_dag = LevelDAG(l_eff=l_eff, network_dag=network_dag)
+        self.shortest_path: set[str] = set()
 
-    def extract_all_residual_subgraphs(self):
+    def extract_all_residual_subgraphs(self) -> list[nx.DiGraph]:
         all_residual_subgraphs = []
         for fork in self.network_dag.residuals:
             subgraph = self.network_dag.extract_residual_subgraph(fork)
@@ -28,7 +41,7 @@ class BootstrapSolver:
 
         return all_residual_subgraphs
 
-    def sort_residual_subgraphs(self):
+    def sort_residual_subgraphs(self) -> list[tuple[str, list[list[str]], list[list[str]]]]:
         all_residual_subgraphs = self.extract_all_residual_subgraphs()
 
         residuals = []
@@ -49,7 +62,7 @@ class BootstrapSolver:
 
         return sorted_subgraphs
 
-    def first_solve_residual_subgraphs(self):
+    def first_solve_residual_subgraphs(self) -> dict[str, LevelDAG]:
         sorted_residual_subgraphs = self.sort_residual_subgraphs()
         self.network_dag.solved_residual_level_dags = {}
 
@@ -73,7 +86,7 @@ class BootstrapSolver:
 
         return self.network_dag.solved_residual_level_dags
 
-    def then_build_full_level_dag(self, solved_residual_level_dags):
+    def then_build_full_level_dag(self, solved_residual_level_dags: dict[str, LevelDAG]) -> None:
         all_forks = self.network_dag.residuals.keys()
 
         visited = set()
@@ -93,7 +106,7 @@ class BootstrapSolver:
 
                 self.full_level_dag.append(next_level_dag)
 
-    def finally_solve_full_level_dag(self):
+    def finally_solve_full_level_dag(self) -> int:
         heads = self.full_level_dag.head()
         tails = self.full_level_dag.tail()
 
@@ -127,7 +140,7 @@ class BootstrapSolver:
         input_level = int(shortest_path[1].split("=")[-1])
         return input_level
 
-    def solve(self):
+    def solve(self) -> tuple[int, int, list[int]]:
         solved_residual_dags = self.first_solve_residual_subgraphs()
         self.then_build_full_level_dag(solved_residual_dags)
         input_level = self.finally_solve_full_level_dag()
@@ -137,7 +150,7 @@ class BootstrapSolver:
 
         return input_level, num_bootstraps, bootstrapper_slots
 
-    def assign_levels_to_layers(self):
+    def assign_levels_to_layers(self) -> None:
         for node in self.network_dag.nodes:
             node_module = self.network_dag.nodes[node]["module"]
             for layer in self.shortest_path:
@@ -150,7 +163,7 @@ class BootstrapSolver:
                         node_module.level = level
                     break
 
-    def mark_bootstrap_locations(self):
+    def mark_bootstrap_locations(self) -> tuple[int, list[int]]:
         node_map = {}
         for node in self.shortest_path:
             name = node.split("@")[0]
@@ -182,8 +195,9 @@ class BootstrapSolver:
 
         return total_bootstraps, bootstrapper_slots
 
-    def get_bootstrap_slots(self, node):
+    def get_bootstrap_slots(self, node: str) -> int:
         module = self.network_dag.nodes[node]["module"]
+        assert self.context is not None
         max_slots = self.context.params.get_slots()
 
         elements = module.fhe_output_shape.numel()
@@ -192,7 +206,7 @@ class BootstrapSolver:
 
         return slots
 
-    def plot_shortest_path(self, save_path="", figsize=(10, 10)):
+    def plot_shortest_path(self, save_path: str = "", figsize: tuple[int, int] = (10, 10)) -> None:
         nodes = {}
         for node in self.shortest_path:
             name = node.split("@")[0]
@@ -230,12 +244,14 @@ class BootstrapSolver:
 
 
 class BootstrapPlacer:
-    def __init__(self, net, network_dag, context):
+    def __init__(
+        self, net: nn.Module, network_dag: NetworkDAG, context: types.SimpleNamespace
+    ) -> None:
         self.net = net
         self.network_dag = network_dag
         self.context = context
 
-    def place_bootstraps(self):
+    def place_bootstraps(self) -> None:
         """Insert explicit bootstrap nodes into the DAG.
 
         For each node marked with bootstrap=True, creates a boot_{idx} node
@@ -276,7 +292,7 @@ class BootstrapPlacer:
                 self.network_dag.add_edge(boot_name, child)
             self.network_dag.add_edge(node, boot_name)
 
-    def _create_bootstrapper(self, module):
+    def _create_bootstrapper(self, module: Any) -> Bootstrap:
         btp_input_level = module.level - module.depth
         btp_input_min = module.output_min
         btp_input_max = module.output_max

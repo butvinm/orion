@@ -1,23 +1,28 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+
 import networkx as nx
 import torch
 
 from orion_compiler.nn.activation import Chebyshev
-from orion_compiler.nn.linear import Conv2d, Linear
-from orion_compiler.nn.normalization import BatchNorm1d, BatchNorm2d
+from orion_compiler.nn.linear import Conv2d, Linear, LinearTransform
+from orion_compiler.nn.normalization import BatchNorm1d, BatchNorm2d, BatchNormNd
 
 
 class Fuser:
     def __init__(self, network_dag: nx.DiGraph):
         self.network_dag = network_dag
 
-    def _fuse_linear_chebyshev(self, linear, cheb):
+    def _fuse_linear_chebyshev(self, linear: LinearTransform, cheb: Chebyshev) -> None:
         linear.on_weight = linear.on_weight * cheb.prescale
         linear.on_bias = linear.on_bias * cheb.prescale + cheb.constant
 
         cheb.fused = True
+        assert cheb.depth is not None
         cheb.depth -= 1  # The prescale no longer consumes a level
 
-    def _fuse_bn_chebyshev(self, bn, cheb):
+    def _fuse_bn_chebyshev(self, bn: BatchNormNd, cheb: Chebyshev) -> None:
         if bn.affine:
             bn.on_weight = bn.on_weight * cheb.prescale
             bn.on_bias = bn.on_bias * cheb.prescale + cheb.constant
@@ -27,9 +32,10 @@ class Fuser:
             bn.on_bias = torch.ones(bn.num_features) * cheb.constant
 
         cheb.fused = True
+        assert cheb.depth is not None
         cheb.depth -= 1
 
-    def _fuse_linear_bn(self, linear, bn):
+    def _fuse_linear_bn(self, linear: LinearTransform, bn: BatchNormNd) -> None:
         on_inv_running_std = 1 / torch.sqrt(bn.on_running_var + bn.eps)
         scale = bn.on_weight * on_inv_running_std
 
@@ -41,11 +47,17 @@ class Fuser:
         linear.on_bias = scale * (linear.on_bias - bn.on_running_mean) + bn.on_bias
 
         bn.fused = True
+        assert bn.depth is not None
         bn.depth -= 2 if bn.affine else 1
 
-    def fuse_two_layers(self, parent_class, child_class, fusing_function):
-        def get_parent_modules(node):
-            parent_modules = []
+    def fuse_two_layers(
+        self,
+        parent_class: type | tuple[type, ...],
+        child_class: type | tuple[type, ...],
+        fusing_function: Callable[..., None],
+    ) -> None:
+        def get_parent_modules(node: str) -> list[object]:
+            parent_modules: list[object] = []
             for parent in self.network_dag.predecessors(node):
                 parent_module = self.network_dag.nodes[parent]["module"]
                 if isinstance(parent_module, parent_class):
@@ -64,17 +76,17 @@ class Fuser:
                 for parent_module in parent_modules:
                     fusing_function(parent_module, child_module)
 
-    def fuse_linear_chebyshev(self):
+    def fuse_linear_chebyshev(self) -> None:
         self.fuse_two_layers((Linear, Conv2d), Chebyshev, self._fuse_linear_chebyshev)
 
-    def fuse_bn_chebyshev(self):
+    def fuse_bn_chebyshev(self) -> None:
         self.fuse_two_layers((BatchNorm1d, BatchNorm2d), Chebyshev, self._fuse_bn_chebyshev)
 
-    def fuse_linear_bn(self):
+    def fuse_linear_bn(self) -> None:
         self.fuse_two_layers(Linear, BatchNorm1d, self._fuse_linear_bn)
         self.fuse_two_layers(Conv2d, BatchNorm2d, self._fuse_linear_bn)
 
-    def fuse_modules(self):
+    def fuse_modules(self) -> None:
         self.fuse_linear_chebyshev()
         self.fuse_bn_chebyshev()
         self.fuse_linear_bn()
