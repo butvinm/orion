@@ -480,6 +480,126 @@ class TestModuliChain:
         _cleanup()
 
 
+class TestContextManager:
+    """Verify __enter__/__exit__ context manager protocol."""
+
+    def test_parameters_with_statement(self):
+        """with Parameters(...) as p: works, p is closed after block."""
+        with Parameters(
+            logn=13,
+            logq=[29, 26, 26, 26, 26, 26],
+            logp=[29, 29],
+            log_default_scale=26,
+            ring_type="conjugate_invariant",
+            h=8192,
+        ) as p:
+            assert p._handle
+            slots = p.max_slots()
+            assert slots > 0
+        assert not p._handle
+        _cleanup()
+
+    def test_encoder_with_statement(self):
+        """with Encoder(params) as enc: works, enc is closed after block."""
+        params = _make_params()
+        with Encoder(params) as enc:
+            pt = enc.encode([1.0, 2.0], params.max_level(), params.default_scale())
+            assert isinstance(pt, Plaintext)
+            pt.close()
+        assert not enc._handle
+        params.close()
+        _cleanup()
+
+    def test_nested_with_statements(self):
+        """Nested with statements work correctly."""
+        with _make_params() as params:
+            with Encoder(params) as enc:
+                with KeyGenerator(params) as kg:
+                    sk = kg.gen_secret_key()
+                    pk = kg.gen_public_key(sk)
+                    with Encryptor(params, pk) as encryptor:
+                        pt = enc.encode([1.0, 2.0], params.max_level(), params.default_scale())
+                        ct = encryptor.encrypt_new(pt)
+                        assert ct._handle
+                        ct.close()
+                        pt.close()
+                    assert not encryptor._handle
+                    pk.close()
+                    sk.close()
+                assert not kg._handle
+            assert not enc._handle
+        assert not params._handle
+        _cleanup()
+
+    def test_exit_called_on_exception(self):
+        """__exit__ is called even when an exception occurs inside the with block."""
+        params = _make_params()
+        encoder = None
+        with pytest.raises(ValueError, match="test error"), Encoder(params) as enc:
+            encoder = enc
+            assert enc._handle
+            raise ValueError("test error")
+        assert encoder is not None
+        assert not encoder._handle
+        params.close()
+        _cleanup()
+
+    def test_gohandle_context_manager(self):
+        """GoHandle itself supports with statement."""
+        params = _make_params()
+        # GoHandle context manager
+        with GoHandle(0) as gh:
+            assert gh._raw == 0  # closed handle, but no error from __exit__
+        params.close()
+        _cleanup()
+
+    def test_keygen_with_statement(self):
+        """KeyGenerator works as context manager."""
+        params = _make_params()
+        with KeyGenerator(params) as kg:
+            sk = kg.gen_secret_key()
+            assert sk._handle
+            sk.close()
+        assert not kg._handle
+        params.close()
+        _cleanup()
+
+    def test_decryptor_with_statement(self):
+        """Decryptor works as context manager."""
+        params = _make_params()
+        kg = KeyGenerator(params)
+        sk = kg.gen_secret_key()
+        with Decryptor(params, sk) as dec:
+            assert dec._handle
+        assert not dec._handle
+        sk.close()
+        kg.close()
+        params.close()
+        _cleanup()
+
+    def test_ciphertext_with_statement(self):
+        """Ciphertext works as context manager."""
+        params = _make_params()
+        encoder = Encoder(params)
+        kg = KeyGenerator(params)
+        sk = kg.gen_secret_key()
+        pk = kg.gen_public_key(sk)
+        encryptor = Encryptor(params, pk)
+        pt = encoder.encode([1.0, 2.0], params.max_level(), params.default_scale())
+        with encryptor.encrypt_new(pt) as ct:
+            assert ct._handle
+            assert ct.level() >= 0
+        assert not ct._handle
+        pt.close()
+        encryptor.close()
+        pk.close()
+        sk.close()
+        kg.close()
+        encoder.close()
+        params.close()
+        _cleanup()
+
+
 class TestGoErrorPropagation:
     def test_error_propagation(self):
         """Trigger a Go error, verify Python gets FFIError, not process crash."""

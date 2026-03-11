@@ -72,15 +72,15 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 3: Add context manager support to Python classes
 
-- [ ] Add `__enter__`/`__exit__` to `GoHandle` in `gohandle.py` (`__exit__` calls `self.close()`)
-- [ ] Add `__enter__`/`__exit__` to all lattigo classes in `ckks.py` (Parameters, Encoder)
-- [ ] Add `__enter__`/`__exit__` to all lattigo classes in `rlwe.py` (SecretKey, PublicKey, RelinearizationKey, GaloisKey, Ciphertext, Plaintext, KeyGenerator, Encryptor, Decryptor, MemEvaluationKeySet)
-- [ ] Add `__enter__`/`__exit__` to `Compiler`, `CompilerBackend`, `PlainTensor` in orion-compiler
-- [ ] Add `__enter__`/`__exit__` to `Model` and `Evaluator` in orion-evaluator
-- [ ] Write tests: `with Parameters(...) as p:` works, `p` is closed after block
-- [ ] Write tests: nested `with` statements work correctly
-- [ ] Write tests: `__exit__` is called even on exception
-- [ ] Run `pytest python/tests/` — must pass before next task
+- [x] Add `__enter__`/`__exit__` to `GoHandle` in `gohandle.py` (`__exit__` calls `self.close()`)
+- [x] Add `__enter__`/`__exit__` to all lattigo classes in `ckks.py` (Parameters, Encoder)
+- [x] Add `__enter__`/`__exit__` to all lattigo classes in `rlwe.py` (SecretKey, PublicKey, RelinearizationKey, GaloisKey, Ciphertext, Plaintext, KeyGenerator, Encryptor, Decryptor, MemEvaluationKeySet)
+- [x] Add `__enter__`/`__exit__` to `Compiler`, `CompilerBackend`, `PlainTensor` in orion-compiler
+- [x] Add `__enter__`/`__exit__` to `Model` and `Evaluator` in orion-evaluator
+- [x] Write tests: `with Parameters(...) as p:` works, `p` is closed after block
+- [x] Write tests: nested `with` statements work correctly
+- [x] Write tests: `__exit__` is called even on exception
+- [x] Run `pytest python/tests/` — must pass before next task
 
 ### Task 4: Replace print() with logging in orion-compiler
 

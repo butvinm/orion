@@ -57,6 +57,12 @@ class Evaluator:
             ffi.delete_handle(self._handle)
             self._handle = 0
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()

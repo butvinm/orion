@@ -73,6 +73,12 @@ class Parameters:
     def close(self):
         self._handle.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()
@@ -112,6 +118,12 @@ class Encoder:
 
     def close(self):
         self._handle.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
         try:

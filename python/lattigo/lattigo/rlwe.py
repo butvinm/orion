@@ -28,6 +28,12 @@ class SecretKey:
     def close(self):
         self._handle.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()
@@ -50,6 +56,12 @@ class PublicKey:
 
     def close(self):
         self._handle.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
         try:
@@ -74,6 +86,12 @@ class RelinearizationKey:
     def close(self):
         self._handle.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()
@@ -96,6 +114,12 @@ class GaloisKey:
 
     def close(self):
         self._handle.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
         try:
@@ -128,6 +152,12 @@ class Ciphertext:
     def close(self):
         self._handle.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()
@@ -153,6 +183,12 @@ class Plaintext:
 
     def close(self):
         self._handle.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
         try:
@@ -194,6 +230,12 @@ class KeyGenerator:
     def close(self):
         self._handle.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()
@@ -226,6 +268,12 @@ class Encryptor:
     def close(self):
         self._handle.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()
@@ -252,6 +300,12 @@ class Decryptor:
 
     def close(self):
         self._handle.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
         try:
@@ -294,6 +348,12 @@ class MemEvaluationKeySet:
 
     def close(self):
         self._handle.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
         try:

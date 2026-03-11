@@ -281,6 +281,12 @@ class CompilerBackend:
         """Release the Go backend. Idempotent."""
         self.DeleteScheme()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()
@@ -376,6 +382,12 @@ class PlainTensor:
                 h.close()
             except Exception:
                 pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
     def __del__(self):
         try:

@@ -82,6 +82,12 @@ class GoHandle:
             get_lib().DeleteHandle(_uintptr(self._raw))
             self._raw = 0
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
     def __del__(self):
         try:
             self.close()
