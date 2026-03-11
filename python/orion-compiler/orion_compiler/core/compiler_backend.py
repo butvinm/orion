@@ -381,7 +381,7 @@ class PlainTensor:
 
     def __init__(
         self,
-        context: Any,
+        context: CompilationContext,
         ptxt_ids: GoHandle | list[GoHandle],
         shape: torch.Size,
         on_shape: torch.Size | None = None,
@@ -424,7 +424,7 @@ class PlainTensor:
 
 
 class NewEncoder:
-    def __init__(self, context: Any):
+    def __init__(self, context: CompilationContext):
         self.context = context
         self.params: NewParameters = context.params
         self.backend: CompilerBackend = context.backend
@@ -529,3 +529,20 @@ class PolynomialGenerator:
         coeffs_tensor = torch.tensor(coeffs_flat)
         splits = [degree + 1 for degree in degrees]
         return torch.split(coeffs_tensor, splits)
+
+
+# =========================================================================
+# CompilationContext — typed context for Module.fit() / Module.compile()
+# =========================================================================
+
+
+@dataclass
+class CompilationContext:
+    """Typed context passed to Module.fit() and Module.compile() during compilation."""
+
+    backend: CompilerBackend
+    params: NewParameters
+    encoder: NewEncoder
+    poly_evaluator: PolynomialGenerator
+    margin: int
+    config: CompilerConfig

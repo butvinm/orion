@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING
 
 import torch
 
 from .module import Module
+
+if TYPE_CHECKING:
+    from orion_compiler.core.compiler_backend import CompilationContext
 
 
 class Add(Module):
@@ -39,7 +42,7 @@ class Bootstrap(Module):
     def extra_repr(self) -> str:
         return f"input_level={self.input_level}"
 
-    def fit(self, context: Any) -> None:
+    def fit(self, context: CompilationContext) -> None:
         margin = context.margin
         center = (self.input_min + self.input_max) / 2
         half_range = (self.input_max - self.input_min) / 2
@@ -52,7 +55,7 @@ class Bootstrap(Module):
 
         self.constant = -(self.low + self.high) / 2
 
-    def compile(self, context: Any) -> None:
+    def compile(self, context: CompilationContext) -> None:
         assert self.fhe_input_shape is not None
         elements = self.fhe_input_shape.numel()
         curr_slots = 2 ** math.ceil(math.log2(elements))

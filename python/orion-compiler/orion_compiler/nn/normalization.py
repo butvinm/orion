@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
 
 from ..core import packing
 from .module import Module
+
+if TYPE_CHECKING:
+    from orion_compiler.core.compiler_backend import CompilationContext
 
 
 class BatchNormNd(Module):
@@ -53,7 +56,7 @@ class BatchNormNd(Module):
 
     def _compile_with_vectors(
         self,
-        context: Any,
+        context: CompilationContext,
         a: torch.Tensor,
         b: torch.Tensor,
         c: torch.Tensor | None,
@@ -70,6 +73,7 @@ class BatchNormNd(Module):
         self.on_inv_running_std_ptxt = encoder.encode(b, level=level, scale=q1)
 
         if self.affine:
+            assert c is not None and d is not None
             self.on_weight_ptxt = encoder.encode(c, level=level - 1, scale=q2)
             self.on_bias_ptxt = encoder.encode(d, level=level - 1, scale=q2)
 
@@ -104,7 +108,7 @@ class BatchNorm1d(BatchNormNd):
         if x.dim() != 2 and x.dim() != 3:
             raise ValueError(f"expected 2D or 3D input (got {x.dim()}D input)")
 
-    def compile(self, context: Any) -> None:
+    def compile(self, context: CompilationContext) -> None:
         a, b, c, d = packing.pack_bn1d(self)
         self._compile_with_vectors(context, a, b, c, d)
 
@@ -114,6 +118,6 @@ class BatchNorm2d(BatchNormNd):
         if x.dim() != 4:
             raise ValueError(f"expected 4D input (got {x.dim()}D input)")
 
-    def compile(self, context: Any) -> None:
+    def compile(self, context: CompilationContext) -> None:
         a, b, c, d = packing.pack_bn2d(self)
         self._compile_with_vectors(context, a, b, c, d)

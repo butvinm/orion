@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
@@ -10,6 +10,9 @@ import torch.nn.functional as F
 
 from orion_compiler.nn.module import Module
 from orion_compiler.nn.operations import Mult
+
+if TYPE_CHECKING:
+    from orion_compiler.core.compiler_backend import CompilationContext
 
 
 class Activation(Module):
@@ -28,7 +31,7 @@ class Activation(Module):
     def set_output_scale(self, output_scale: float) -> None:
         self.output_scale = output_scale
 
-    def compile(self, context: Any) -> None:
+    def compile(self, context: CompilationContext) -> None:
         self.poly = context.poly_evaluator.generate_monomial(self.coeffs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -64,7 +67,7 @@ class Chebyshev(Module):
     def extra_repr(self) -> str:
         return super().extra_repr() + f", degree={self.degree}"
 
-    def fit(self, context: Any) -> None:
+    def fit(self, context: CompilationContext) -> None:
         if not self.within_composite:
             margin = context.margin
             center = (self.input_min + self.input_max) / 2
@@ -99,7 +102,8 @@ class Chebyshev(Module):
     def set_output_scale(self, output_scale: float) -> None:
         self.output_scale = output_scale
 
-    def compile(self, context: Any) -> None:
+    def compile(self, context: CompilationContext) -> None:
+        assert self.coeffs is not None
         self.poly = context.poly_evaluator.generate_chebyshev(self.coeffs)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -203,7 +207,7 @@ class _Sign(Module):
     def extra_repr(self) -> str:
         return super().extra_repr() + f", degrees={self.degrees}"
 
-    def fit(self, context: Any) -> None:
+    def fit(self, context: CompilationContext) -> None:
         debug = context.params.get_debug_status()
         self.coeffs = context.poly_evaluator.generate_minimax_sign_coeffs(
             self.degrees, self.prec, self.logalpha, self.logerr, debug
@@ -250,7 +254,7 @@ class ReLU(Module):
     def extra_repr(self) -> str:
         return super().extra_repr() + f", degrees={self.degrees}"
 
-    def fit(self, context: Any) -> None:
+    def fit(self, context: CompilationContext) -> None:
         self.input_min = self.mult1.input_min
         self.input_max = self.mult1.input_max
 

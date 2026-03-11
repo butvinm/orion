@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import math
 import time
-import types
 from typing import Any
 
 import torch
@@ -29,6 +28,7 @@ from orion_compiler.compiled_model import (
 from orion_compiler.core import packing
 from orion_compiler.core.auto_bootstrap import BootstrapPlacer, BootstrapSolver
 from orion_compiler.core.compiler_backend import (
+    CompilationContext,
     CompilerBackend,
     NewEncoder,
     NewParameters,
@@ -79,16 +79,15 @@ class Compiler:
         self.backend = CompilerBackend()
         self.backend.setup_bindings(self.params)
 
-        # Build compile-time wrappers
-        self._encoder = NewEncoder(self)
-        self._poly_evaluator = PolynomialGenerator(self.backend)
-
         # Will be set by fit()
         self._traced: Any = None
         self._margin = self.config.margin
 
-        # Build the context namespace that modules will receive
+        # Build compile-time wrappers and context
+        self._poly_evaluator = PolynomialGenerator(self.backend)
         self._context = self._build_context()
+        self._encoder = NewEncoder(self._context)
+        self._context.encoder = self._encoder
 
     # -- Properties expected by NewEncoder and other wrappers --
 
@@ -104,20 +103,20 @@ class Compiler:
     def margin(self) -> int:
         return self._margin
 
-    def _build_context(self) -> types.SimpleNamespace:
-        """Build a namespace object for module.fit(context)."""
-        ctx = types.SimpleNamespace()
-        ctx.backend = self.backend
-        ctx.params = self.params
-        ctx.encoder = self._encoder
-        ctx.poly_evaluator = self._poly_evaluator
-        ctx.margin = self._margin
-        ctx.config = self.config
-        # Not available in compile mode
-        ctx.evaluator = None
-        ctx.encryptor = None
-        ctx.bootstrapper = None
-        return ctx
+    def _build_context(self) -> CompilationContext:
+        """Build a typed context for module.fit(context) and module.compile(context).
+
+        Note: encoder is set to None initially and assigned after NewEncoder
+        is created in __init__, since NewEncoder requires the context.
+        """
+        return CompilationContext(
+            backend=self.backend,
+            params=self.params,
+            encoder=None,  # type: ignore[arg-type]  # set after NewEncoder init
+            poly_evaluator=self._poly_evaluator,
+            margin=self._margin,
+            config=self.config,
+        )
 
     def fit(self, input_data: DataLoader | torch.Tensor, batch_size: int = 128) -> None:
         """Run cleartext forward passes to collect per-layer statistics.

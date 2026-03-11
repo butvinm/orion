@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 import logging
 import math
-import types
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -12,6 +11,7 @@ import torch.nn as nn
 
 from orion_compiler.nn.operations import Bootstrap
 
+from .compiler_backend import CompilationContext
 from .level_dag import LevelDAG
 from .network_dag import NetworkDAG
 
@@ -24,7 +24,7 @@ class BootstrapSolver:
         net: nn.Module,
         network_dag: NetworkDAG,
         l_eff: int,
-        context: types.SimpleNamespace | None = None,
+        context: CompilationContext | None = None,
     ) -> None:
         self.net = net
         self.network_dag = network_dag
@@ -245,7 +245,7 @@ class BootstrapSolver:
 
 class BootstrapPlacer:
     def __init__(
-        self, net: nn.Module, network_dag: NetworkDAG, context: types.SimpleNamespace
+        self, net: nn.Module, network_dag: NetworkDAG, context: CompilationContext
     ) -> None:
         self.net = net
         self.network_dag = network_dag
