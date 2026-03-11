@@ -17,7 +17,7 @@ _lib = None
 _lib_lock = threading.Lock()
 
 
-def _load_library():
+def _load_library() -> ctypes.CDLL:
     """Load the platform-specific shared library."""
     if platform.system() == "Linux":
         lib_name = "orionclient-linux.so"
@@ -40,7 +40,7 @@ def _load_library():
         raise FFIError(f"Failed to load library at {lib_path}: {e}") from e
 
 
-def get_lib():
+def get_lib() -> ctypes.CDLL:
     """Get the shared library, loading it on first access."""
     global _lib
     if _lib is None:
@@ -65,7 +65,7 @@ class GoHandle:
         self._raw = raw
         self._tag = tag
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self._raw:
             return f"GoHandle({self._raw} {self._tag})" if self._tag else f"GoHandle({self._raw})"
         return f"GoHandle(closed {self._tag})" if self._tag else "GoHandle(closed)"
@@ -76,23 +76,23 @@ class GoHandle:
             raise HandleClosedError("Use of closed handle")
         return self._raw
 
-    def close(self):
+    def close(self) -> None:
         """Release the Go object. Idempotent — second call is a no-op."""
         if self._raw:
             get_lib().DeleteHandle(_uintptr(self._raw))
             self._raw = 0
 
-    def __enter__(self):
+    def __enter__(self) -> "GoHandle":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
             pass
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self._raw)

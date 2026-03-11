@@ -108,17 +108,17 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 6: Add mypy configuration and fix type annotations
 
-- [ ] Add `[tool.mypy]` to root `pyproject.toml` — `python_version = "3.11"`, `disallow_untyped_defs = true`, `warn_return_any = true`, `check_untyped_defs = true`, `warn_unused_configs = true`, `warn_redundant_casts = true`, `warn_unused_ignores = true`
-- [ ] Add `[[tool.mypy.overrides]]` for third-party libs without stubs (torch, networkx, tqdm, scipy, matplotlib) — `ignore_missing_imports = true`
-- [ ] Add `[[tool.mypy.overrides]]` for tests and examples — `disallow_untyped_defs = false` (relaxed strictness for test code)
-- [ ] Add missing type annotations to `lattigo/ffi.py` (FFI function signatures)
-- [ ] Add missing type annotations to `lattigo/ckks.py` and `lattigo/rlwe.py`
-- [ ] Add missing type annotations to `orion_compiler/compiler.py` (internal methods)
-- [ ] Add missing type annotations to `orion_compiler/core/compiler_backend.py`
-- [ ] Add missing type annotations to `orion_compiler/nn/` modules
-- [ ] Add missing type annotations to `orion_evaluator/model.py` and `evaluator.py`
-- [ ] Run `mypy python/lattigo/ python/orion-compiler/ python/orion-evaluator/` — fix all errors
-- [ ] Run `pytest python/tests/` — must pass before next task
+- [x] Add `[tool.mypy]` to root `pyproject.toml` — `python_version = "3.11"`, `disallow_untyped_defs = true`, `warn_return_any = true`, `check_untyped_defs = true`, `warn_unused_configs = true`, `warn_redundant_casts = true`, `warn_unused_ignores = true`
+- [x] Add `[[tool.mypy.overrides]]` for third-party libs without stubs (torch, networkx, tqdm, scipy, matplotlib) — `ignore_missing_imports = true`
+- [x] Add `[[tool.mypy.overrides]]` for tests and examples — `disallow_untyped_defs = false` (relaxed strictness for test code)
+- [x] Add missing type annotations to `lattigo/ffi.py` (FFI function signatures)
+- [x] Add missing type annotations to `lattigo/ckks.py` and `lattigo/rlwe.py`
+- [x] Add missing type annotations to `orion_compiler/compiler.py` (internal methods)
+- [x] Add missing type annotations to `orion_compiler/core/compiler_backend.py`
+- [x] Add missing type annotations to `orion_compiler/nn/` modules
+- [x] Add missing type annotations to `orion_evaluator/model.py` and `evaluator.py`
+- [x] Run `mypy python/lattigo/ python/orion-compiler/ python/orion-evaluator/` — fix all errors
+- [x] Run `pytest python/tests/` — must pass before next task
 
 ### Task 7: Add py.typed markers
 

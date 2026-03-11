@@ -50,20 +50,20 @@ class Evaluator:
             raise EvaluatorError("Model is closed")
         return ffi.evaluator_forward(self._handle, model._handle, ct_bytes)
 
-    def close(self):
+    def close(self) -> None:
         """Release evaluator resources. Idempotent."""
         if self._handle:
             ffi.evaluator_close(self._handle)
             ffi.delete_handle(self._handle)
             self._handle = 0
 
-    def __enter__(self):
+    def __enter__(self) -> "Evaluator":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:

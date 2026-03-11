@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import math
+from typing import Any
 
 import numpy as np
 import torch
@@ -10,62 +13,62 @@ from orion_compiler.nn.operations import Mult
 
 
 class Activation(Module):
-    def __init__(self, coeffs):
+    def __init__(self, coeffs: list[float]) -> None:
         super().__init__()
         self.coeffs = coeffs
-        self.output_scale = None
+        self.output_scale: float | None = None
         self.set_depth()
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return super().extra_repr() + f", degree={len(self.coeffs) - 1}"
 
-    def set_depth(self, depth=None):
+    def set_depth(self, depth: int | None = None) -> None:
         self.depth = depth if depth is not None else math.ceil(math.log2(len(self.coeffs)))
 
-    def set_output_scale(self, output_scale):
+    def set_output_scale(self, output_scale: float) -> None:
         self.output_scale = output_scale
 
-    def compile(self, context):
+    def compile(self, context: Any) -> None:
         self.poly = context.poly_evaluator.generate_monomial(self.coeffs)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Horner's method
-        out = 0
+        out: torch.Tensor | int = 0
         for coeff in self.coeffs:
             out = coeff + x * out
 
-        return out
+        return out  # type: ignore[return-value]
 
 
 class Quad(Module):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.set_depth(1)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x * x
 
 
 class Chebyshev(Module):
-    def __init__(self, degree: int, fn, within_composite=False):
+    def __init__(self, degree: int, fn: Any, within_composite: bool = False) -> None:
         super().__init__()
         self.degree = degree
         self.fn = fn
         self.within_composite = within_composite
-        self.coeffs = None
+        self.coeffs: list[float] | None = None
 
-        self.output_scale = None
-        self.prescale = 1
-        self.constant = 0
+        self.output_scale: float | None = None
+        self.prescale: float = 1
+        self.constant: float = 0
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return super().extra_repr() + f", degree={self.degree}"
 
-    def fit(self, context):
+    def fit(self, context: Any) -> None:
         if not self.within_composite:
             margin = context.margin
-            center = (self.input_min + self.input_max) / 2
-            half_range = (self.input_max - self.input_min) / 2
+            center = (self.input_min + self.input_max) / 2  # type: ignore[operator]
+            half_range = (self.input_max - self.input_min) / 2  # type: ignore[operator]
             self.low = (center - (margin * half_range)).item()
             self.high = (center + (margin * half_range)).item()
 
@@ -82,10 +85,10 @@ class Chebyshev(Module):
             self.set_coeffs(T.coef.tolist())
             self.set_depth()
 
-    def set_coeffs(self, coeffs):
+    def set_coeffs(self, coeffs: list[float]) -> None:
         self.coeffs = coeffs
 
-    def set_depth(self, depth=None):
+    def set_depth(self, depth: int | None = None) -> None:
         if depth is not None:
             self.depth = depth
         else:
@@ -93,92 +96,92 @@ class Chebyshev(Module):
             if self.prescale != 1:
                 self.depth += 1
 
-    def set_output_scale(self, output_scale):
+    def set_output_scale(self, output_scale: float) -> None:
         self.output_scale = output_scale
 
-    def compile(self, context):
+    def compile(self, context: Any) -> None:
         self.poly = context.poly_evaluator.generate_chebyshev(self.coeffs)
 
-    def forward(self, x):
-        return self.fn(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fn(x)  # type: ignore[no-any-return]
 
 
 class ELU(Chebyshev):
-    def __init__(self, alpha=1.0, degree=31):
+    def __init__(self, alpha: float = 1.0, degree: int = 31) -> None:
         self.alpha = alpha
         super().__init__(degree, self.fn)
 
-    def fn(self, x):
+    def fn(self, x: torch.Tensor) -> torch.Tensor:
         return torch.where(x > 0, x, self.alpha * (torch.exp(x) - 1))
 
 
 class Hardshrink(Chebyshev):
-    def __init__(self, degree=31, lambd=0.5):
+    def __init__(self, degree: int = 31, lambd: float = 0.5) -> None:
         self.lambd = lambd
         super().__init__(degree, self.fn)
 
-    def fn(self, x):
+    def fn(self, x: torch.Tensor) -> torch.Tensor:
         return torch.where((x > self.lambd) | (x < -self.lambd), x, torch.tensor(0.0))
 
 
 class GELU(Chebyshev):
-    def __init__(self, degree=31):
+    def __init__(self, degree: int = 31) -> None:
         super().__init__(degree, self.fn)
 
-    def fn(self, x):
+    def fn(self, x: torch.Tensor) -> torch.Tensor:
         return F.gelu(x)
 
 
 class SiLU(Chebyshev):
-    def __init__(self, degree=31):
+    def __init__(self, degree: int = 31) -> None:
         super().__init__(degree, self.fn)
 
-    def fn(self, x):
+    def fn(self, x: torch.Tensor) -> torch.Tensor:
         return F.silu(x)
 
 
 class Sigmoid(Chebyshev):
-    def __init__(self, degree=31):
+    def __init__(self, degree: int = 31) -> None:
         super().__init__(degree, self.fn)
 
-    def fn(self, x):
+    def fn(self, x: torch.Tensor) -> torch.Tensor:
         return F.sigmoid(x)
 
 
 class SELU(Chebyshev):
-    def __init__(self, degree=31):
+    def __init__(self, degree: int = 31) -> None:
         super().__init__(degree, self.fn)
 
-    def fn(self, x):
+    def fn(self, x: torch.Tensor) -> torch.Tensor:
         alpha = 1.6732632423543772
         scale = 1.0507009873554805
         return scale * torch.where(x > 0, x, alpha * (torch.exp(x) - 1))
 
 
 class Softplus(Chebyshev):
-    def __init__(self, degree=31):
+    def __init__(self, degree: int = 31) -> None:
         super().__init__(degree, self.fn)
 
-    def fn(self, x):
+    def fn(self, x: torch.Tensor) -> torch.Tensor:
         return F.softplus(x)
 
 
 class Mish(Chebyshev):
-    def __init__(self, degree=31):
+    def __init__(self, degree: int = 31) -> None:
         super().__init__(degree, self.fn)
 
-    def fn(self, x):
+    def fn(self, x: torch.Tensor) -> torch.Tensor:
         return x * torch.tanh(F.softplus(x))
 
 
 class _Sign(Module):
     def __init__(
         self,
-        degrees=None,
-        prec=128,
-        logalpha=6,
-        logerr=12,
-    ):
+        degrees: list[int] | None = None,
+        prec: int = 128,
+        logalpha: int = 6,
+        logerr: int = 12,
+    ) -> None:
         if degrees is None:
             degrees = [15, 15, 27]
         super().__init__()
@@ -197,26 +200,26 @@ class _Sign(Module):
 
         self.acts = nn.Sequential(*acts)
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return super().extra_repr() + f", degrees={self.degrees}"
 
-    def fit(self, context):
+    def fit(self, context: Any) -> None:
         debug = context.params.get_debug_status()
         self.coeffs = context.poly_evaluator.generate_minimax_sign_coeffs(
             self.degrees, self.prec, self.logalpha, self.logerr, debug
         )
 
         for i, coeffs in enumerate(self.coeffs):
-            self.acts[i].set_coeffs(coeffs)
-            self.acts[i].set_depth()
+            self.acts[i].set_coeffs(coeffs)  # type: ignore[operator]
+            self.acts[i].set_depth()  # type: ignore[operator]
 
-    def fn1(self, x):
+    def fn1(self, x: torch.Tensor) -> torch.Tensor:
         return torch.where(x <= 0, torch.tensor(-1.0), torch.tensor(1.0))
 
-    def fn2(self, x):
+    def fn2(self, x: torch.Tensor) -> torch.Tensor:
         return torch.where(x <= 0, torch.tensor(0.0), torch.tensor(1.0))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         for act in self.acts:
             x = act(x)
         return x
@@ -225,11 +228,11 @@ class _Sign(Module):
 class ReLU(Module):
     def __init__(
         self,
-        degrees=None,
-        prec=128,
-        logalpha=6,
-        logerr=12,
-    ):
+        degrees: list[int] | None = None,
+        prec: int = 128,
+        logalpha: int = 6,
+        logerr: int = 12,
+    ) -> None:
         if degrees is None:
             degrees = [15, 15, 27]
         super().__init__()
@@ -241,23 +244,23 @@ class ReLU(Module):
         self.mult1 = Mult()
         self.mult2 = Mult()
 
-        self.prescale = 1
-        self.postscale = 1
+        self.prescale: float = 1
+        self.postscale: float = 1
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return super().extra_repr() + f", degrees={self.degrees}"
 
-    def fit(self, context):
+    def fit(self, context: Any) -> None:
         self.input_min = self.mult1.input_min
         self.input_max = self.mult1.input_max
 
         margin = context.margin
-        absmax = max(abs(self.input_min), abs(self.input_max)) * margin
+        absmax = max(abs(self.input_min), abs(self.input_max)) * margin  # type: ignore[arg-type]
         if absmax > 1:
             self.postscale = math.ceil(absmax)
             self.prescale = 1 / self.postscale
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.mult1(x, self.prescale)
         x = self.mult2(x, self.sign(x))
         x *= self.postscale

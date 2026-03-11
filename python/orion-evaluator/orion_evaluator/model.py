@@ -39,20 +39,20 @@ class Model:
         params_json, manifest_json, input_level = ffi.model_client_params(self._handle)
         return json.loads(params_json), json.loads(manifest_json), input_level
 
-    def close(self):
+    def close(self) -> None:
         """Release model resources. Idempotent."""
         if self._handle:
             ffi.model_close(self._handle)
             ffi.delete_handle(self._handle)
             self._handle = 0
 
-    def __enter__(self):
+    def __enter__(self) -> "Model":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:

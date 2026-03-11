@@ -6,6 +6,8 @@ that work with raw Lattigo types. No Orion imports.
 
 import ctypes
 import threading
+from collections.abc import Sequence
+from typing import Any
 
 from .errors import FFIError
 from .gohandle import GoHandle, get_lib
@@ -17,7 +19,7 @@ _prototypes_set = False
 _prototypes_lock = threading.Lock()
 
 
-def _check_err(err_ptr):
+def _check_err(err_ptr: ctypes.c_char_p) -> None:
     """Check errOut and raise if non-NULL, then free the C string."""
     if err_ptr and err_ptr.value:
         msg = err_ptr.value.decode("utf-8")
@@ -25,28 +27,28 @@ def _check_err(err_ptr):
         raise FFIError(msg)
 
 
-def _make_errout():
+def _make_errout() -> ctypes.c_char_p:
     return ctypes.c_char_p(None)
 
 
-def _doubles_ptr(values):
+def _doubles_ptr(values: Sequence[float]) -> tuple[ctypes.Array[ctypes.c_double], ctypes.c_int]:
     n = len(values)
     arr = (ctypes.c_double * n)(*values)
     return arr, ctypes.c_int(n)
 
 
-def _ints_ptr(values):
+def _ints_ptr(values: Sequence[int]) -> tuple[ctypes.Array[ctypes.c_int], ctypes.c_int]:
     n = len(values)
     arr = (ctypes.c_int * n)(*values)
     return arr, ctypes.c_int(n)
 
 
-def _bytes_ptr(data):
+def _bytes_ptr(data: bytes) -> tuple[Any, ctypes.c_ulong]:
     buf = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
     return ctypes.cast(buf, ctypes.c_void_p), ctypes.c_ulong(len(data))
 
 
-def _setup_prototypes(lib):
+def _setup_prototypes(lib: ctypes.CDLL) -> None:
     """Declare C function prototypes for Lattigo primitive exports."""
     # --- CKKS Parameters ---
     lib.NewCKKSParams.argtypes = [
@@ -254,7 +256,7 @@ def _setup_prototypes(lib):
     lib.BootstrapEvalKeysMarshal.restype = ctypes.c_void_p
 
 
-def _ensure_prototypes():
+def _ensure_prototypes() -> None:
     """Ensure prototypes are set up (call once on first FFI use)."""
     global _prototypes_set
     with _prototypes_lock:
@@ -263,7 +265,7 @@ def _ensure_prototypes():
             _prototypes_set = True
 
 
-def _lib_call():
+def _lib_call() -> ctypes.CDLL:
     """Get library with prototypes guaranteed set up."""
     _ensure_prototypes()
     return get_lib()
@@ -739,7 +741,7 @@ def new_bootstrap_params(
     if logp:
         logp_arr, logp_len = _ints_ptr(logp)
     else:
-        logp_arr = ctypes.POINTER(ctypes.c_int)()
+        logp_arr = ctypes.POINTER(ctypes.c_int)()  # type: ignore[assignment]
         logp_len = ctypes.c_int(0)
 
     handle = lib.NewBootstrapParams(

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from abc import abstractmethod
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -8,7 +11,9 @@ from .module import Module
 
 
 class BatchNormNd(Module):
-    def __init__(self, num_features, eps=1e-5, momentum=0.1, affine=True):
+    def __init__(
+        self, num_features: int, eps: float = 1e-5, momentum: float = 0.1, affine: bool = True
+    ) -> None:
         super().__init__()
         self.num_features = num_features
         self.eps = eps
@@ -29,12 +34,12 @@ class BatchNormNd(Module):
         self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
 
     @abstractmethod
-    def _check_input_dim(self, x):
+    def _check_input_dim(self, x: torch.Tensor) -> None:
         raise NotImplementedError("Subclasses must implement _check_input_dim")
 
-    def init_orion_params(self):
-        self.on_running_mean = self.running_mean.data.clone()
-        self.on_running_var = self.running_var.data.clone()
+    def init_orion_params(self) -> None:
+        self.on_running_mean = self.running_mean.data.clone()  # type: ignore[operator]
+        self.on_running_var = self.running_var.data.clone()  # type: ignore[operator]
 
         if self.affine:
             self.on_weight = self.weight.data.clone()
@@ -43,10 +48,18 @@ class BatchNormNd(Module):
             self.on_weight = torch.ones_like(self.on_running_mean)
             self.on_bias = torch.zeros_like(self.on_running_mean)
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return super().extra_repr() + f", level={self.level}, fused={self.fused}"
 
-    def _compile_with_vectors(self, context, a, b, c, d):
+    def _compile_with_vectors(
+        self,
+        context: Any,
+        a: torch.Tensor,
+        b: torch.Tensor,
+        c: torch.Tensor,
+        d: torch.Tensor,
+    ) -> None:
+        assert self.level is not None
         level = self.level
         encoder = context.encoder
 
@@ -60,7 +73,7 @@ class BatchNormNd(Module):
             self.on_weight_ptxt = encoder.encode(c, level=level - 1, scale=q2)
             self.on_bias_ptxt = encoder.encode(d, level=level - 1, scale=q2)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         self._check_input_dim(x)
 
         if self.training:
@@ -68,7 +81,7 @@ class BatchNormNd(Module):
             if self.momentum is not None:
                 exponential_average_factor = self.momentum
             if self.num_batches_tracked is not None:
-                self.num_batches_tracked += 1
+                self.num_batches_tracked += 1  # type: ignore[operator,assignment]
                 if self.momentum is None:
                     exponential_average_factor = 1.0 / self.num_batches_tracked
         else:
@@ -76,8 +89,8 @@ class BatchNormNd(Module):
 
         return torch.nn.functional.batch_norm(
             x,
-            self.running_mean,
-            self.running_var,
+            self.running_mean,  # type: ignore[arg-type]
+            self.running_var,  # type: ignore[arg-type]
             self.weight,
             self.bias,
             self.training,
@@ -87,20 +100,20 @@ class BatchNormNd(Module):
 
 
 class BatchNorm1d(BatchNormNd):
-    def _check_input_dim(self, x):
+    def _check_input_dim(self, x: torch.Tensor) -> None:
         if x.dim() != 2 and x.dim() != 3:
             raise ValueError(f"expected 2D or 3D input (got {x.dim()}D input)")
 
-    def compile(self, context):
+    def compile(self, context: Any) -> None:
         a, b, c, d = packing.pack_bn1d(self)
         self._compile_with_vectors(context, a, b, c, d)
 
 
 class BatchNorm2d(BatchNormNd):
-    def _check_input_dim(self, x):
+    def _check_input_dim(self, x: torch.Tensor) -> None:
         if x.dim() != 4:
             raise ValueError(f"expected 4D input (got {x.dim()}D input)")
 
-    def compile(self, context):
+    def compile(self, context: Any) -> None:
         a, b, c, d = packing.pack_bn2d(self)
         self._compile_with_vectors(context, a, b, c, d)

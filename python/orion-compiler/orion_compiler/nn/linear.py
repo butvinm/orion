@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import math
 from abc import abstractmethod
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -9,36 +12,36 @@ from .module import Module
 
 
 class LinearTransform(Module):
-    def __init__(self, bsgs_ratio, level) -> None:
+    def __init__(self, bsgs_ratio: float, level: int | None) -> None:
         super().__init__()
         self.bsgs_ratio = float(bsgs_ratio)
         self.set_depth(1)
         self.set_level(level)
 
-        self.diagonals = {}
-        self.output_rotations = 0
+        self.diagonals: dict[tuple[int, int], dict[int, Any]] = {}
+        self.output_rotations: int = 0
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return super().extra_repr() + f", bsgs_ratio={self.bsgs_ratio}"
 
-    def init_orion_params(self):
-        self.on_weight = self.weight.data.clone()
+    def init_orion_params(self) -> None:
+        self.on_weight = self.weight.data.clone()  # type: ignore[operator]
         self.on_bias = (
-            self.bias.data.clone()
+            self.bias.data.clone()  # type: ignore[operator]
             if hasattr(self, "bias") and self.bias is not None
-            else torch.zeros(self.weight.shape[0])
+            else torch.zeros(self.weight.shape[0])  # type: ignore[index,arg-type]
         )
 
     @abstractmethod
-    def compute_fhe_output_gap(self, **kwargs):
+    def compute_fhe_output_gap(self, **kwargs: Any) -> int:
         pass
 
     @abstractmethod
-    def compute_fhe_output_shape(self, **kwargs) -> tuple:
+    def compute_fhe_output_shape(self, **kwargs: Any) -> tuple[int, ...]:
         pass
 
     @abstractmethod
-    def generate_diagonals(self, last: bool):
+    def generate_diagonals(self, last: bool) -> None:
         pass
 
 
@@ -59,13 +62,13 @@ class Linear(LinearTransform):
         self.bias = nn.Parameter(torch.empty(out_features)) if bias else None
         self.reset_parameters()
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return (
             f"in_features={self.in_features}, out_features={self.out_features}, "
             + super().extra_repr()
         )
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
         if self.bias is not None:
@@ -73,16 +76,16 @@ class Linear(LinearTransform):
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             nn.init.uniform_(self.bias, -bound, bound)
 
-    def compute_fhe_output_gap(self, **kwargs):
+    def compute_fhe_output_gap(self, **kwargs: Any) -> int:
         return 1
 
-    def compute_fhe_output_shape(self, **kwargs) -> tuple:
-        return kwargs["clear_output_shape"]
+    def compute_fhe_output_shape(self, **kwargs: Any) -> tuple[int, ...]:
+        return kwargs["clear_output_shape"]  # type: ignore[no-any-return]
 
-    def generate_diagonals(self, last):
+    def generate_diagonals(self, last: bool) -> None:
         self.diagonals, self.output_rotations = packing.pack_linear(self, last)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() != 2:
             extra = " Forgot to call on.Flatten() first?" if x.dim() == 4 else ""
             raise ValueError(
@@ -123,10 +126,10 @@ class Conv2d(LinearTransform):
         self.bias = nn.Parameter(torch.empty(out_channels)) if bias else None
         self.reset_parameters()
 
-    def _make_tuple(self, value):
+    def _make_tuple(self, value: int | tuple[int, int]) -> tuple[int, int]:
         return (value, value) if isinstance(value, int) else value
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
         if self.bias is not None:
@@ -134,7 +137,7 @@ class Conv2d(LinearTransform):
             bound = 1 / math.sqrt(fan_in)
             nn.init.uniform_(self.bias, -bound, bound)
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         return (
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
@@ -142,11 +145,11 @@ class Conv2d(LinearTransform):
             f"groups={self.groups}, " + super().extra_repr()
         )
 
-    def compute_fhe_output_gap(self, **kwargs):
+    def compute_fhe_output_gap(self, **kwargs: Any) -> int:
         input_gap = kwargs["input_gap"]
-        return input_gap * self.stride[0]
+        return input_gap * self.stride[0]  # type: ignore[no-any-return]
 
-    def compute_fhe_output_shape(self, **kwargs) -> tuple:
+    def compute_fhe_output_shape(self, **kwargs: Any) -> tuple[int, ...]:
         input_shape = kwargs["input_shape"]
         clear_output_shape = kwargs["clear_output_shape"]
         input_gap = kwargs["input_gap"]
@@ -161,10 +164,10 @@ class Conv2d(LinearTransform):
 
         return torch.Size((N, on_Co, on_Ho, on_Wo))
 
-    def generate_diagonals(self, last):
+    def generate_diagonals(self, last: bool) -> None:
         self.diagonals, self.output_rotations = packing.pack_conv2d(self, last)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() != 4:
             raise ValueError(
                 f"Expected input to {self.__class__.__name__} to have "

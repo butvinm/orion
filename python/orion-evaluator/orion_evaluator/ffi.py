@@ -8,6 +8,7 @@ import ctypes
 import os
 import platform
 import threading
+from typing import Any
 
 from .errors import EvaluatorError
 
@@ -19,7 +20,7 @@ _lib_lock = threading.Lock()
 _prototypes_set = False
 
 
-def _load_library():
+def _load_library() -> ctypes.CDLL:
     """Load the platform-specific shared library."""
     if platform.system() == "Linux":
         lib_name = "orion-evaluator-linux.so"
@@ -42,7 +43,7 @@ def _load_library():
         raise EvaluatorError(f"Failed to load library at {lib_path}: {e}") from e
 
 
-def _get_lib():
+def _get_lib() -> ctypes.CDLL:
     """Get the shared library, loading on first access."""
     global _lib
     if _lib is None:
@@ -57,7 +58,7 @@ def _get_lib():
     return _lib
 
 
-def _setup_prototypes(lib):
+def _setup_prototypes(lib: ctypes.CDLL) -> None:
     """Declare C function prototypes."""
     # --- Model ---
     lib.EvalLoadModel.argtypes = [ctypes.c_void_p, ctypes.c_ulong, _errout]
@@ -102,7 +103,7 @@ def _setup_prototypes(lib):
     lib.EvalClose.restype = None
 
 
-def _ensure_prototypes():
+def _ensure_prototypes() -> None:
     global _prototypes_set
     if _prototypes_set:
         return
@@ -113,23 +114,23 @@ def _ensure_prototypes():
             _prototypes_set = True
 
 
-def _lib_call():
+def _lib_call() -> ctypes.CDLL:
     _ensure_prototypes()
     return _get_lib()
 
 
-def _check_err(err_ptr):
+def _check_err(err_ptr: ctypes.c_char_p) -> None:
     if err_ptr and err_ptr.value:
         msg = err_ptr.value.decode("utf-8")
         _get_lib().FreeCArray(ctypes.cast(err_ptr, ctypes.c_void_p))
         raise EvaluatorError(msg)
 
 
-def _make_errout():
+def _make_errout() -> ctypes.c_char_p:
     return ctypes.c_char_p(None)
 
 
-def _bytes_ptr(data):
+def _bytes_ptr(data: bytes) -> tuple[Any, ctypes.c_ulong]:
     buf = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
     return ctypes.cast(buf, ctypes.c_void_p), ctypes.c_ulong(len(data))
 
@@ -180,12 +181,12 @@ def model_client_params(handle: int) -> tuple[str, str, int]:
     return params_json, manifest_json, input_level.value
 
 
-def model_close(handle: int):
+def model_close(handle: int) -> None:
     """Close model resources."""
     _lib_call().EvalModelClose(_uintptr(handle))
 
 
-def delete_handle(handle: int):
+def delete_handle(handle: int) -> None:
     """Delete a cgo handle."""
     _get_lib().DeleteHandle(_uintptr(handle))
 
@@ -241,6 +242,6 @@ def evaluator_forward(eval_handle: int, model_handle: int, ct_bytes: bytes) -> b
     return result
 
 
-def evaluator_close(eval_handle: int):
+def evaluator_close(eval_handle: int) -> None:
     """Close evaluator resources."""
     _lib_call().EvalClose(_uintptr(eval_handle))

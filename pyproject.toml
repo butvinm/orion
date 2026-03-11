@@ -21,3 +21,38 @@ ignore = [
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = ["build/", "dist/", "\\.egg-info/", "build_bridge\\.py", "setup\\.py"]
+explicit_package_bases = true
+mypy_path = "python/lattigo:python/orion-compiler:python/orion-evaluator"
+
+[[tool.mypy.overrides]]
+module = ["torch.*", "networkx.*", "tqdm.*", "scipy.*", "matplotlib.*", "torchvision.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "examples.*"]
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "orion_compiler.core.utils",
+    "orion_compiler.core.tracer",
+    "orion_compiler.core.packing",
+    "orion_compiler.core.network_dag",
+    "orion_compiler.core.level_dag",
+    "orion_compiler.core.auto_bootstrap",
+    "orion_compiler.core.fuser",
+    "orion_compiler.core.galois",
+]
+disallow_untyped_defs = false
+check_untyped_defs = false
+ignore_errors = true

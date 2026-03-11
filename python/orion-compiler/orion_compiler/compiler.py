@@ -5,10 +5,13 @@ Produces a CompiledModel containing raw diagonal blobs, computation
 graph (nodes + edges), polynomial coefficients, and a KeyManifest.
 """
 
+from __future__ import annotations
+
 import logging
 import math
 import time
 import types
+from typing import Any
 
 import torch
 from torch.utils.data import DataLoader, RandomSampler
@@ -81,7 +84,7 @@ class Compiler:
         self._poly_evaluator = PolynomialGenerator(self.backend)
 
         # Will be set by fit()
-        self._traced = None
+        self._traced: Any = None
         self._margin = self.config.margin
 
         # Build the context namespace that modules will receive
@@ -90,18 +93,18 @@ class Compiler:
     # -- Properties expected by NewEncoder and other wrappers --
 
     @property
-    def encoder(self):
+    def encoder(self) -> NewEncoder:
         return self._encoder
 
     @property
-    def poly_evaluator(self):
+    def poly_evaluator(self) -> PolynomialGenerator:
         return self._poly_evaluator
 
     @property
-    def margin(self):
+    def margin(self) -> int:
         return self._margin
 
-    def _build_context(self):
+    def _build_context(self) -> types.SimpleNamespace:
         """Build a namespace object for module.fit(context)."""
         ctx = types.SimpleNamespace()
         ctx.backend = self.backend
@@ -116,7 +119,7 @@ class Compiler:
         ctx.bootstrapper = None
         return ctx
 
-    def fit(self, input_data, batch_size=128):
+    def fit(self, input_data: DataLoader | torch.Tensor, batch_size: int = 128) -> None:
         """Run cleartext forward passes to collect per-layer statistics.
 
         Traces the model, records min/max ranges, and fits polynomial
@@ -203,7 +206,7 @@ class Compiler:
         # Set scheme ref on modules for backward compat with packing.py
         for module in net.modules():
             if isinstance(module, Module):
-                module.scheme = self
+                module.scheme = self  # type: ignore[assignment]
 
         # Fuse modules
         if self.config.fuse_modules:
@@ -261,9 +264,9 @@ class Compiler:
         nth_root = nth_root_for_ring(self.ckks_params.logn, self.ckks_params.ring_type)
         slots = max_slots
 
-        blobs = []
-        graph_nodes = []
-        galois_elements = set()
+        blobs: list[bytes] = []
+        graph_nodes: list[GraphNode] = []
+        galois_elements: set[int] = set()
 
         # Re-read topo_sort after bootstrap insertion (new nodes added)
         topo_sort = list(network_dag.topological_sort())
@@ -334,7 +337,7 @@ class Compiler:
         manifest = KeyManifest(
             galois_elements=frozenset(galois_elements),
             bootstrap_slots=tuple(sorted(bootstrapper_slots)) if bootstrapper_slots else (),
-            boot_logp=tuple(self.params.get_boot_logp()) if bootstrapper_slots else None,
+            boot_logp=tuple(self.params.get_boot_logp() or []) if bootstrapper_slots else None,
             btp_logn=self.ckks_params.btp_logn if bootstrapper_slots else None,
             needs_rlk=True,
         )
@@ -358,8 +361,15 @@ class Compiler:
         return compiled
 
     def _build_graph_node(
-        self, node_name, module, blobs, max_slots, slots, nth_root, galois_elements
-    ):
+        self,
+        node_name: str,
+        module: Module,
+        blobs: list[bytes],
+        max_slots: int,
+        slots: int,
+        nth_root: int,
+        galois_elements: set[int],
+    ) -> GraphNode | None:
         """Build a GraphNode from a DAG node + module."""
 
         op = self._module_to_op(module)
@@ -368,9 +378,9 @@ class Compiler:
 
         level = getattr(module, "level", 0) or 0
         depth = getattr(module, "depth", 0) or 0
-        config = {}
-        shape = None
-        blob_refs = None
+        config: dict[str, Any] = {}
+        shape: dict[str, list[int]] | None = None
+        blob_refs: dict[str, int] | None = None
 
         if isinstance(module, LinearTransform):
             # Raw diagonals -> blobs (no Go calls)
@@ -396,13 +406,13 @@ class Compiler:
 
             shape = {}
             if hasattr(module, "fhe_input_shape") and module.fhe_input_shape is not None:
-                shape["fhe_input"] = list(module.fhe_input_shape)
+                shape["fhe_input"] = list(module.fhe_input_shape)  # type: ignore[arg-type]
             if hasattr(module, "fhe_output_shape") and module.fhe_output_shape is not None:
-                shape["fhe_output"] = list(module.fhe_output_shape)
+                shape["fhe_output"] = list(module.fhe_output_shape)  # type: ignore[arg-type]
             if hasattr(module, "input_shape") and module.input_shape is not None:
-                shape["input"] = list(module.input_shape)
+                shape["input"] = list(module.input_shape)  # type: ignore[arg-type]
             if hasattr(module, "output_shape") and module.output_shape is not None:
-                shape["output"] = list(module.output_shape)
+                shape["output"] = list(module.output_shape)  # type: ignore[arg-type]
 
             # Compute Galois elements for this LT (pure Python)
             diag_indices_per_block = {k: list(v.keys()) for k, v in module.diagonals.items()}
@@ -438,7 +448,7 @@ class Compiler:
             }
 
         elif isinstance(module, Bootstrap):
-            elements = module.fhe_input_shape.numel()
+            elements = module.fhe_input_shape.numel()  # type: ignore[operator]
             btp_slots = 2 ** math.ceil(math.log2(elements))
             config = {
                 "input_level": module.input_level,
@@ -451,7 +461,7 @@ class Compiler:
             }
             shape = {}
             if hasattr(module, "fhe_input_shape") and module.fhe_input_shape is not None:
-                shape["fhe_input"] = list(module.fhe_input_shape)
+                shape["fhe_input"] = list(module.fhe_input_shape)  # type: ignore[arg-type]
 
         elif isinstance(module, Quad):
             pass  # empty config, depth=1
@@ -470,7 +480,7 @@ class Compiler:
         )
 
     @staticmethod
-    def _module_to_op(module):
+    def _module_to_op(module: Module) -> str | None:
         """Map module class to op string."""
         if isinstance(module, LinearTransform):
             return "linear_transform"
@@ -492,7 +502,7 @@ class Compiler:
         return None
 
     @staticmethod
-    def _extract_edges(network_dag):
+    def _extract_edges(network_dag: Any) -> list[GraphEdge]:
         """Extract edges from NetworkDAG, filtering out fork/join nodes.
 
         For fork nodes: A -> fork -> B, C becomes A -> B and A -> C
@@ -508,11 +518,11 @@ class Compiler:
                 if module is not None and Compiler._module_to_op(module) is not None:
                     real_nodes.add(node)
 
-        def _resolve_successors(node):
+        def _resolve_successors(node: str) -> list[str]:
             """Walk forward through fork/join to find real successors."""
             if node in real_nodes:
                 return [node]
-            result = []
+            result: list[str] = []
             for succ in network_dag.successors(node):
                 result.extend(_resolve_successors(succ))
             return result
@@ -528,19 +538,19 @@ class Compiler:
 
         return edges
 
-    def close(self):
+    def close(self) -> None:
         """Release the Go backend. Idempotent."""
         if hasattr(self, "backend") and self.backend:
             self.backend.DeleteScheme()
-            self.backend = None
+            self.backend = None  # type: ignore[assignment]
 
-    def __enter__(self):
+    def __enter__(self) -> Compiler:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:

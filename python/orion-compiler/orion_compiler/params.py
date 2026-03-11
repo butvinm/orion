@@ -29,7 +29,7 @@ class CKKSParams:
     boot_logp: tuple[int, ...] | None = None
     btp_logn: int | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.logn <= 0:
             raise ValidationError(f"logn must be positive, got {self.logn}")
         if not self.logq:
@@ -105,7 +105,7 @@ class CostProfile:
     galois_key_count: int
     bootstrap_key_count: int
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.bootstrap_count < 0:
             raise ValidationError(
                 f"bootstrap_count must be non-negative, got {self.bootstrap_count}"
@@ -143,7 +143,7 @@ class CompilerConfig:
     embedding_method: Literal["hybrid", "square"] = "hybrid"
     fuse_modules: bool = True
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         valid_methods = {"hybrid", "square"}
         if self.embedding_method not in valid_methods:
             raise ValidationError(

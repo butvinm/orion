@@ -155,7 +155,7 @@ class KeyManifest:
     btp_logn: int | None
     needs_rlk: bool
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.bootstrap_slots and self.boot_logp is None:
             raise ValueError("boot_logp must not be None when bootstrap_slots is non-empty")
         # Coerce list inputs
@@ -249,10 +249,10 @@ class Graph:
 
     input: str
     output: str
-    nodes: tuple[GraphNode, ...]
-    edges: tuple[GraphEdge, ...]
+    nodes: tuple[GraphNode, ...] | list[GraphNode]
+    edges: tuple[GraphEdge, ...] | list[GraphEdge]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Coerce lists to tuples for frozen dataclass
         if isinstance(self.nodes, list):
             object.__setattr__(self, "nodes", tuple(self.nodes))

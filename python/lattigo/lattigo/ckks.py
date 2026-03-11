@@ -3,10 +3,15 @@
 Wraps Lattigo's ckks.Parameters and ckks.Encoder via the bridge FFI.
 """
 
-from typing import Literal
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal
 
 from . import ffi
 from .gohandle import GoHandle
+
+if TYPE_CHECKING:
+    from . import rlwe
 
 RingType = Literal["standard", "conjugate_invariant"]
 
@@ -36,7 +41,7 @@ class Parameters:
         )
 
     @classmethod
-    def _from_handle(cls, handle: GoHandle) -> "Parameters":
+    def _from_handle(cls, handle: GoHandle) -> Parameters:
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
@@ -70,16 +75,16 @@ class Parameters:
         """P primes (auxiliary moduli chain for key switching)."""
         return ffi.ckks_params_aux_moduli_chain(self._handle)
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> Parameters:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -94,38 +99,38 @@ class Encoder:
         self._params = params
 
     @classmethod
-    def _from_handle(cls, handle: GoHandle, params: Parameters) -> "Encoder":
+    def _from_handle(cls, handle: GoHandle, params: Parameters) -> Encoder:
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
         obj._params = params
         return obj
 
-    def encode(self, values: list[float], level: int, scale: int):
+    def encode(self, values: list[float], level: int, scale: int) -> rlwe.Plaintext:
         """Encode float values into a Lattigo rlwe.Plaintext.
 
         Returns an rlwe.Plaintext object (from lattigo.rlwe module).
         Import it lazily to avoid circular imports.
         """
-        from . import rlwe
+        from . import rlwe as _rlwe
 
         pt_h = ffi.encoder_encode(self._handle, values, level, scale)
-        return rlwe.Plaintext(pt_h)
+        return _rlwe.Plaintext(pt_h)
 
-    def decode(self, pt, num_slots: int) -> list[float]:
+    def decode(self, pt: rlwe.Plaintext, num_slots: int) -> list[float]:
         """Decode a Lattigo rlwe.Plaintext back to float values."""
         return ffi.encoder_decode(self._handle, pt._handle, num_slots)
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> Encoder:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:

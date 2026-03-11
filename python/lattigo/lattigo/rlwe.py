@@ -3,6 +3,8 @@
 Wraps raw Lattigo rlwe types via the bridge FFI.
 """
 
+from __future__ import annotations
+
 from . import ffi
 from .ckks import Parameters
 from .gohandle import GoHandle
@@ -22,19 +24,19 @@ class SecretKey:
         return ffi.secret_key_marshal(self._handle)
 
     @classmethod
-    def unmarshal_binary(cls, data: bytes) -> "SecretKey":
+    def unmarshal_binary(cls, data: bytes) -> SecretKey:
         return cls(ffi.secret_key_unmarshal(data))
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> SecretKey:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -51,19 +53,19 @@ class PublicKey:
         return ffi.public_key_marshal(self._handle)
 
     @classmethod
-    def unmarshal_binary(cls, data: bytes) -> "PublicKey":
+    def unmarshal_binary(cls, data: bytes) -> PublicKey:
         return cls(ffi.public_key_unmarshal(data))
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> PublicKey:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -80,19 +82,19 @@ class RelinearizationKey:
         return ffi.relin_key_marshal(self._handle)
 
     @classmethod
-    def unmarshal_binary(cls, data: bytes) -> "RelinearizationKey":
+    def unmarshal_binary(cls, data: bytes) -> RelinearizationKey:
         return cls(ffi.relin_key_unmarshal(data))
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> RelinearizationKey:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -109,19 +111,19 @@ class GaloisKey:
         return ffi.galois_key_marshal(self._handle)
 
     @classmethod
-    def unmarshal_binary(cls, data: bytes) -> "GaloisKey":
+    def unmarshal_binary(cls, data: bytes) -> GaloisKey:
         return cls(ffi.galois_key_unmarshal(data))
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> GaloisKey:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -146,19 +148,19 @@ class Ciphertext:
         return ffi.rlwe_ciphertext_marshal(self._handle)
 
     @classmethod
-    def unmarshal_binary(cls, data: bytes) -> "Ciphertext":
+    def unmarshal_binary(cls, data: bytes) -> Ciphertext:
         return cls(ffi.rlwe_ciphertext_unmarshal(data))
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> Ciphertext:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -178,19 +180,19 @@ class Plaintext:
         return ffi.rlwe_plaintext_marshal(self._handle)
 
     @classmethod
-    def unmarshal_binary(cls, data: bytes) -> "Plaintext":
+    def unmarshal_binary(cls, data: bytes) -> Plaintext:
         return cls(ffi.rlwe_plaintext_unmarshal(data))
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> Plaintext:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -209,7 +211,7 @@ class KeyGenerator:
         self._handle = ffi.new_key_generator(params._h)
 
     @classmethod
-    def _from_handle(cls, handle: GoHandle) -> "KeyGenerator":
+    def _from_handle(cls, handle: GoHandle) -> KeyGenerator:
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
@@ -227,16 +229,16 @@ class KeyGenerator:
     def gen_galois_key(self, sk: SecretKey, galois_element: int) -> GaloisKey:
         return GaloisKey(ffi.keygen_gen_galois_key(self._handle, sk._handle, galois_element))
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> KeyGenerator:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -255,7 +257,7 @@ class Encryptor:
         self._handle = ffi.new_encryptor(params._h, pk._handle)
 
     @classmethod
-    def _from_handle(cls, handle: GoHandle) -> "Encryptor":
+    def _from_handle(cls, handle: GoHandle) -> Encryptor:
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
@@ -265,16 +267,16 @@ class Encryptor:
         ct_h = ffi.encryptor_encrypt_new(self._handle, pt._handle)
         return Ciphertext(ct_h)
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> Encryptor:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -288,7 +290,7 @@ class Decryptor:
         self._handle = ffi.new_decryptor(params._h, sk._handle)
 
     @classmethod
-    def _from_handle(cls, handle: GoHandle) -> "Decryptor":
+    def _from_handle(cls, handle: GoHandle) -> Decryptor:
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
@@ -298,16 +300,16 @@ class Decryptor:
         pt_h = ffi.decryptor_decrypt_new(self._handle, ct._handle)
         return Plaintext(pt_h)
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> Decryptor:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
@@ -333,7 +335,7 @@ class MemEvaluationKeySet:
         )
 
     @classmethod
-    def _from_handle(cls, handle: GoHandle) -> "MemEvaluationKeySet":
+    def _from_handle(cls, handle: GoHandle) -> MemEvaluationKeySet:
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
@@ -343,19 +345,19 @@ class MemEvaluationKeySet:
         return ffi.mem_eval_key_set_marshal(self._handle)
 
     @classmethod
-    def unmarshal_binary(cls, data: bytes) -> "MemEvaluationKeySet":
+    def unmarshal_binary(cls, data: bytes) -> MemEvaluationKeySet:
         return cls._from_handle(ffi.mem_eval_key_set_unmarshal(data))
 
-    def close(self):
+    def close(self) -> None:
         self._handle.close()
 
-    def __enter__(self):
+    def __enter__(self) -> MemEvaluationKeySet:
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             self.close()
         except Exception:
