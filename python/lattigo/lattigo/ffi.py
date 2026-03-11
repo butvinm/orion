@@ -7,6 +7,7 @@ that work with raw Lattigo types. No Orion imports.
 import ctypes
 import threading
 
+from .errors import FFIError
 from .gohandle import GoHandle, get_lib
 
 _uintptr = ctypes.c_size_t
@@ -21,7 +22,7 @@ def _check_err(err_ptr):
     if err_ptr and err_ptr.value:
         msg = err_ptr.value.decode("utf-8")
         get_lib().FreeCArray(ctypes.cast(err_ptr, ctypes.c_void_p))
-        raise RuntimeError(msg)
+        raise FFIError(msg)
 
 
 def _make_errout():

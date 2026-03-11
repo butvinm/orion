@@ -9,6 +9,8 @@ import json
 from dataclasses import dataclass
 from typing import Literal
 
+from orion_compiler.errors import ValidationError
+
 
 @dataclass(frozen=True)
 class CKKSParams:
@@ -29,18 +31,18 @@ class CKKSParams:
 
     def __post_init__(self):
         if self.logn <= 0:
-            raise ValueError(f"logn must be positive, got {self.logn}")
+            raise ValidationError(f"logn must be positive, got {self.logn}")
         if not self.logq:
-            raise ValueError("logq must be non-empty")
+            raise ValidationError("logq must be non-empty")
         if not self.logp:
-            raise ValueError("logp must be non-empty")
+            raise ValidationError("logp must be non-empty")
         if len(self.logp) > len(self.logq):
-            raise ValueError(
+            raise ValidationError(
                 f"logp length ({len(self.logp)}) cannot exceed logq length ({len(self.logq)})"
             )
         valid_ring_types = {"conjugate_invariant", "standard"}
         if self.ring_type not in valid_ring_types:
-            raise ValueError(
+            raise ValidationError(
                 f"ring_type must be one of {valid_ring_types}, got '{self.ring_type}'"
             )
         # Coerce list inputs to tuples for frozen dataclass
@@ -105,11 +107,15 @@ class CostProfile:
 
     def __post_init__(self):
         if self.bootstrap_count < 0:
-            raise ValueError(f"bootstrap_count must be non-negative, got {self.bootstrap_count}")
+            raise ValidationError(
+                f"bootstrap_count must be non-negative, got {self.bootstrap_count}"
+            )
         if self.galois_key_count < 0:
-            raise ValueError(f"galois_key_count must be non-negative, got {self.galois_key_count}")
+            raise ValidationError(
+                f"galois_key_count must be non-negative, got {self.galois_key_count}"
+            )
         if self.bootstrap_key_count < 0:
-            raise ValueError(
+            raise ValidationError(
                 f"bootstrap_key_count must be non-negative, got {self.bootstrap_key_count}"
             )
 
@@ -140,6 +146,6 @@ class CompilerConfig:
     def __post_init__(self):
         valid_methods = {"hybrid", "square"}
         if self.embedding_method not in valid_methods:
-            raise ValueError(
+            raise ValidationError(
                 f"embedding_method must be one of {valid_methods}, got '{self.embedding_method}'"
             )

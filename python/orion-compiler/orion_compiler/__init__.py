@@ -20,6 +20,15 @@ from orion_compiler.compiled_model import (
     KeyManifest as KeyManifest,
 )
 from orion_compiler.compiler import Compiler as Compiler
+from orion_compiler.errors import (
+    CompilationError as CompilationError,
+)
+from orion_compiler.errors import (
+    CompilerError as CompilerError,
+)
+from orion_compiler.errors import (
+    ValidationError as ValidationError,
+)
 from orion_compiler.params import (
     CKKSParams as CKKSParams,
 )

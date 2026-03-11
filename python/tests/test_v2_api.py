@@ -27,6 +27,7 @@ from orion_compiler.compiled_model import (
     unpack_raw_diagonals,
 )
 from orion_compiler.compiler import Compiler
+from orion_compiler.errors import CompilationError
 from orion_compiler.params import CKKSParams, CostProfile
 
 # -----------------------------------------------------------------------
@@ -97,7 +98,7 @@ class TestCompiler:
         """Compiler.fit() requires tensor or dataloader."""
         net = SimpleMLP()
         compiler = Compiler(net, MLP_PARAMS)
-        with pytest.raises(ValueError, match="torch.Tensor or DataLoader"):
+        with pytest.raises(CompilationError, match="torch.Tensor or DataLoader"):
             compiler.fit("invalid")
         del compiler
         _cleanup_backend()
@@ -106,7 +107,7 @@ class TestCompiler:
         """Compiler.compile() raises if fit() not called."""
         net = SimpleMLP()
         compiler = Compiler(net, MLP_PARAMS)
-        with pytest.raises(ValueError, match="not been fit"):
+        with pytest.raises(CompilationError, match="not been fit"):
             compiler.compile()
         del compiler
         _cleanup_backend()

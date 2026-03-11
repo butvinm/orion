@@ -7,5 +7,6 @@ Usage:
 """
 
 from . import ckks, rlwe
+from .errors import FFIError, HandleClosedError, LatticeError
 
-__all__ = ["ckks", "rlwe"]
+__all__ = ["FFIError", "HandleClosedError", "LatticeError", "ckks", "rlwe"]

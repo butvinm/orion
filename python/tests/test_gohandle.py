@@ -12,6 +12,7 @@ import torch
 
 # Lattigo primitive imports
 from lattigo.ckks import Encoder, Parameters
+from lattigo.errors import FFIError, HandleClosedError
 from lattigo.gohandle import GoHandle
 from lattigo.rlwe import (
     Ciphertext,
@@ -121,11 +122,11 @@ class TestGoHandle:
         _cleanup()
 
     def test_gohandle_raw_after_close_raises(self):
-        """h.close(); h.raw -> RuntimeError('Use of closed handle')"""
+        """h.close(); h.raw -> HandleClosedError('Use of closed handle')"""
         params = _make_params()
         h = params._handle
         params.close()
-        with pytest.raises(RuntimeError, match="Use of closed handle"):
+        with pytest.raises(HandleClosedError, match="Use of closed handle"):
             _ = h.raw
         _cleanup()
 
@@ -481,8 +482,8 @@ class TestModuliChain:
 
 class TestGoErrorPropagation:
     def test_error_propagation(self):
-        """Trigger a Go error, verify Python gets RuntimeError, not process crash."""
-        with pytest.raises(RuntimeError) as exc_info:
+        """Trigger a Go error, verify Python gets FFIError, not process crash."""
+        with pytest.raises(FFIError) as exc_info:
             Parameters(
                 logn=3, logq=[10], logp=[10], log_default_scale=5, ring_type="standard", h=64
             )

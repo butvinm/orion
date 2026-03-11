@@ -3,6 +3,7 @@
 import json
 
 from . import ffi
+from .errors import EvaluatorError
 
 
 class Model:
@@ -34,7 +35,7 @@ class Model:
         manifest_dict has keys: galois_elements, bootstrap_slots, boot_logp, needs_rlk
         """
         if not self._handle:
-            raise RuntimeError("Model is closed")
+            raise EvaluatorError("Model is closed")
         params_json, manifest_json, input_level = ffi.model_client_params(self._handle)
         return json.loads(params_json), json.loads(manifest_json), input_level
 

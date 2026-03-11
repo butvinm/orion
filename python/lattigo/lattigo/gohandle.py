@@ -9,6 +9,8 @@ import os
 import platform
 import threading
 
+from .errors import FFIError, HandleClosedError
+
 _uintptr = ctypes.c_size_t
 
 _lib = None
@@ -27,7 +29,7 @@ def _load_library():
     elif platform.system() == "Windows":
         lib_name = "orionclient-windows.dll"
     else:
-        raise RuntimeError(f"Unsupported platform: {platform.system()}")
+        raise FFIError(f"Unsupported platform: {platform.system()}")
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     lib_path = os.path.join(current_dir, lib_name)
@@ -35,7 +37,7 @@ def _load_library():
     try:
         return ctypes.CDLL(lib_path)
     except OSError as e:
-        raise RuntimeError(f"Failed to load library at {lib_path}: {e}") from e
+        raise FFIError(f"Failed to load library at {lib_path}: {e}") from e
 
 
 def get_lib():
@@ -71,7 +73,7 @@ class GoHandle:
     @property
     def raw(self) -> int:
         if not self._raw:
-            raise RuntimeError("Use of closed handle")
+            raise HandleClosedError("Use of closed handle")
         return self._raw
 
     def close(self):

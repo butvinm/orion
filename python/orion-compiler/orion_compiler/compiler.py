@@ -38,6 +38,7 @@ from orion_compiler.core.galois import (
 )
 from orion_compiler.core.network_dag import NetworkDAG
 from orion_compiler.core.tracer import OrionTracer, StatsTracker
+from orion_compiler.errors import CompilationError
 from orion_compiler.nn.activation import Activation, Chebyshev, Quad
 from orion_compiler.nn.linear import Conv2d, LinearTransform
 from orion_compiler.nn.module import Module
@@ -154,7 +155,7 @@ class Compiler:
         elif isinstance(input_data, torch.Tensor):
             stats_tracker.propagate(input_data.to(device))
         else:
-            raise ValueError(
+            raise CompilationError(
                 "Input data must be a torch.Tensor or DataLoader, but "
                 f"received {type(input_data)}."
             )
@@ -176,7 +177,7 @@ class Compiler:
         This method has ZERO Go/Lattigo dependency — only fit() needs Go.
         """
         if self._traced is None:
-            raise ValueError(
+            raise CompilationError(
                 "Network has not been fit yet! Call compiler.fit(data) before compiler.compile()."
             )
 
@@ -297,9 +298,13 @@ class Compiler:
                 break
 
         if graph_input is None:
-            raise ValueError("Could not determine graph input: no node without incoming edges")
+            raise CompilationError(
+                "Could not determine graph input: no node without incoming edges"
+            )
         if graph_output is None:
-            raise ValueError("Could not determine graph output: no node without outgoing edges")
+            raise CompilationError(
+                "Could not determine graph output: no node without outgoing edges"
+            )
 
         graph = Graph(
             input=graph_input,
@@ -408,7 +413,7 @@ class Compiler:
 
         elif isinstance(module, Chebyshev):
             if module.coeffs is None:
-                raise ValueError(
+                raise CompilationError(
                     f"Chebyshev module '{node_name}' has no coefficients. Was fit() called?"
                 )
             config = {

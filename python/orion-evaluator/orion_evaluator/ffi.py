@@ -9,6 +9,8 @@ import os
 import platform
 import threading
 
+from .errors import EvaluatorError
+
 _uintptr = ctypes.c_size_t
 _errout = ctypes.POINTER(ctypes.c_char_p)
 
@@ -29,7 +31,7 @@ def _load_library():
     elif platform.system() == "Windows":
         lib_name = "orion-evaluator-windows.dll"
     else:
-        raise RuntimeError(f"Unsupported platform: {platform.system()}")
+        raise EvaluatorError(f"Unsupported platform: {platform.system()}")
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     lib_path = os.path.join(current_dir, lib_name)
@@ -37,7 +39,7 @@ def _load_library():
     try:
         return ctypes.CDLL(lib_path)
     except OSError as e:
-        raise RuntimeError(f"Failed to load library at {lib_path}: {e}") from e
+        raise EvaluatorError(f"Failed to load library at {lib_path}: {e}") from e
 
 
 def _get_lib():
@@ -120,7 +122,7 @@ def _check_err(err_ptr):
     if err_ptr and err_ptr.value:
         msg = err_ptr.value.decode("utf-8")
         _get_lib().FreeCArray(ctypes.cast(err_ptr, ctypes.c_void_p))
-        raise RuntimeError(msg)
+        raise EvaluatorError(msg)
 
 
 def _make_errout():

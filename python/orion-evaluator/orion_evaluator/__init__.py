@@ -10,7 +10,8 @@ Usage::
     result_bytes = evaluator.forward(model, ciphertext_bytes)
 """
 
+from .errors import EvaluatorError, ModelLoadError
 from .evaluator import Evaluator
 from .model import Model
 
-__all__ = ["Evaluator", "Model"]
+__all__ = ["Evaluator", "EvaluatorError", "Model", "ModelLoadError"]

@@ -3,6 +3,7 @@
 import json
 
 from . import ffi
+from .errors import EvaluatorError
 from .model import Model
 
 
@@ -44,9 +45,9 @@ class Evaluator:
             Output ciphertext bytes (rlwe.Ciphertext.MarshalBinary() format)
         """
         if not self._handle:
-            raise RuntimeError("Evaluator is closed")
+            raise EvaluatorError("Evaluator is closed")
         if not model._handle:
-            raise RuntimeError("Model is closed")
+            raise EvaluatorError("Model is closed")
         return ffi.evaluator_forward(self._handle, model._handle, ct_bytes)
 
     def close(self):

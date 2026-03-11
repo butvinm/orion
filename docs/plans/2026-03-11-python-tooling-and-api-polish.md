@@ -54,21 +54,21 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 2: Add library-specific exceptions
 
-- [ ] Create `python/lattigo/lattigo/errors.py` with `LatticeError(Exception)`, `HandleClosedError(LatticeError)`, `FFIError(LatticeError)`
-- [ ] Create `python/orion-compiler/orion_compiler/errors.py` with `CompilerError(Exception)`, `CompilationError(CompilerError)`, `ValidationError(CompilerError)`
-- [ ] Create `python/orion-evaluator/orion_evaluator/errors.py` with `EvaluatorError(Exception)`, `ModelLoadError(EvaluatorError)`
-- [ ] Replace `RuntimeError("Use of closed handle")` in `gohandle.py` with `HandleClosedError`
-- [ ] Replace `RuntimeError` in lattigo FFI/binding code with `FFIError` or `LatticeError`
-- [ ] Replace `RuntimeError` in evaluator model/evaluator code with `ModelLoadError` / `EvaluatorError`
-- [ ] Replace `ValueError` in `params.py` validation with `ValidationError`
-- [ ] Replace `RuntimeError` in `compiler.py` with `CompilationError`
-- [ ] Keep `RuntimeError` in `core/utils.py` for dataset download/extraction failures (lines 58, 137, 186) — these are IO errors, not compilation errors
-- [ ] Export new exceptions from each package's `__init__.py`
-- [ ] Update `python/tests/test_error_propagation.py` to assert on new exception types (`FFIError` instead of `RuntimeError`)
-- [ ] Update `python/tests/test_gohandle.py` line 134 (`pytest.raises(RuntimeError)` → `HandleClosedError`) and line 491 (`RuntimeError` → `FFIError`)
-- [ ] Update `python/tests/test_orion_evaluator.py` lines 97, 103, 178 (`pytest.raises(RuntimeError)` → `EvaluatorError` / `ModelLoadError`)
-- [ ] Add tests for each new exception type (construct, catch by base class, catch by specific class)
-- [ ] Run `pytest python/tests/` — must pass before next task
+- [x] Create `python/lattigo/lattigo/errors.py` with `LatticeError(Exception)`, `HandleClosedError(LatticeError)`, `FFIError(LatticeError)`
+- [x] Create `python/orion-compiler/orion_compiler/errors.py` with `CompilerError(Exception)`, `CompilationError(CompilerError)`, `ValidationError(CompilerError)`
+- [x] Create `python/orion-evaluator/orion_evaluator/errors.py` with `EvaluatorError(Exception)`, `ModelLoadError(EvaluatorError)`
+- [x] Replace `RuntimeError("Use of closed handle")` in `gohandle.py` with `HandleClosedError`
+- [x] Replace `RuntimeError` in lattigo FFI/binding code with `FFIError` or `LatticeError`
+- [x] Replace `RuntimeError` in evaluator model/evaluator code with `ModelLoadError` / `EvaluatorError`
+- [x] Replace `ValueError` in `params.py` validation with `ValidationError`
+- [x] Replace `RuntimeError` in `compiler.py` with `CompilationError`
+- [x] Keep `RuntimeError` in `core/utils.py` for dataset download/extraction failures (lines 58, 137, 186) — these are IO errors, not compilation errors
+- [x] Export new exceptions from each package's `__init__.py`
+- [x] Update `python/tests/test_error_propagation.py` to assert on new exception types (`FFIError` instead of `RuntimeError`)
+- [x] Update `python/tests/test_gohandle.py` line 134 (`pytest.raises(RuntimeError)` → `HandleClosedError`) and line 491 (`RuntimeError` → `FFIError`)
+- [x] Update `python/tests/test_orion_evaluator.py` lines 97, 103, 178 (`pytest.raises(RuntimeError)` → `EvaluatorError` / `ModelLoadError`)
+- [x] Add tests for each new exception type (construct, catch by base class, catch by specific class)
+- [x] Run `pytest python/tests/` — must pass before next task
 
 ### Task 3: Add context manager support to Python classes
 

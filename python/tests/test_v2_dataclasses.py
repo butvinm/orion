@@ -10,6 +10,7 @@ from orion_compiler.compiled_model import (
     KeyManifest,
 )
 from orion_compiler.core.compiler_backend import NewParameters
+from orion_compiler.errors import ValidationError
 from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
 
 # ---------------------------------------------------------------------------
@@ -64,23 +65,23 @@ class TestCKKSParams:
         assert p.ring_degree == 2**14
 
     def test_invalid_logn(self):
-        with pytest.raises(ValueError, match="logn must be positive"):
+        with pytest.raises(ValidationError, match="logn must be positive"):
             self._default_params(logn=0)
 
     def test_empty_logq(self):
-        with pytest.raises(ValueError, match="logq must be non-empty"):
+        with pytest.raises(ValidationError, match="logq must be non-empty"):
             self._default_params(logq=())
 
     def test_empty_logp(self):
-        with pytest.raises(ValueError, match="logp must be non-empty"):
+        with pytest.raises(ValidationError, match="logp must be non-empty"):
             self._default_params(logp=())
 
     def test_logp_longer_than_logq(self):
-        with pytest.raises(ValueError, match="logp length"):
+        with pytest.raises(ValidationError, match="logp length"):
             self._default_params(logq=(55,), logp=(61, 61))
 
     def test_invalid_ring_type(self):
-        with pytest.raises(ValueError, match="ring_type must be one of"):
+        with pytest.raises(ValidationError, match="ring_type must be one of"):
             self._default_params(ring_type="invalid")
 
     def test_btp_logn_defaults_to_logn_when_boot_logp_set(self):
@@ -129,7 +130,7 @@ class TestCompilerConfig:
         assert c.fuse_modules is False
 
     def test_invalid_embedding_method(self):
-        with pytest.raises(ValueError, match="embedding_method must be one of"):
+        with pytest.raises(ValidationError, match="embedding_method must be one of"):
             CompilerConfig(embedding_method="invalid")
 
 

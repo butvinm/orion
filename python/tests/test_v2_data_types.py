@@ -12,6 +12,7 @@ from orion_compiler.compiled_model import (
     unpack_raw_bias,
     unpack_raw_diagonals,
 )
+from orion_compiler.errors import ValidationError
 from orion_compiler.params import CostProfile
 
 # -----------------------------------------------------------------------
@@ -32,15 +33,15 @@ class TestCostProfile:
             cp.bootstrap_count = 5
 
     def test_negative_bootstrap_count(self):
-        with pytest.raises(ValueError, match="bootstrap_count"):
+        with pytest.raises(ValidationError, match="bootstrap_count"):
             CostProfile(bootstrap_count=-1, galois_key_count=0, bootstrap_key_count=0)
 
     def test_negative_galois_key_count(self):
-        with pytest.raises(ValueError, match="galois_key_count"):
+        with pytest.raises(ValidationError, match="galois_key_count"):
             CostProfile(bootstrap_count=0, galois_key_count=-1, bootstrap_key_count=0)
 
     def test_negative_bootstrap_key_count(self):
-        with pytest.raises(ValueError, match="bootstrap_key_count"):
+        with pytest.raises(ValidationError, match="bootstrap_key_count"):
             CostProfile(bootstrap_count=0, galois_key_count=0, bootstrap_key_count=-1)
 
     def test_to_dict(self):
