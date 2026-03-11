@@ -25,8 +25,8 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  kg?.free();
-  params?.free();
+  kg?.close();
+  params?.close();
 });
 
 describe("Serialization roundtrip", () => {
@@ -38,8 +38,8 @@ describe("Serialization roundtrip", () => {
 
     expect(bytes1).toEqual(bytes2);
 
-    sk.free();
-    sk2.free();
+    sk.close();
+    sk2.close();
   });
 
   it("PublicKey: marshal -> unmarshal -> remarshal produces identical bytes", () => {
@@ -51,9 +51,9 @@ describe("Serialization roundtrip", () => {
 
     expect(bytes1).toEqual(bytes2);
 
-    sk.free();
-    pk.free();
-    pk2.free();
+    sk.close();
+    pk.close();
+    pk2.close();
   });
 
   it("RelinearizationKey: marshal -> unmarshal -> remarshal produces identical bytes", () => {
@@ -65,9 +65,9 @@ describe("Serialization roundtrip", () => {
 
     expect(bytes1).toEqual(bytes2);
 
-    sk.free();
-    rlk.free();
-    rlk2.free();
+    sk.close();
+    rlk.close();
+    rlk2.close();
   });
 
   it("GaloisKey: marshal -> unmarshal -> remarshal produces identical bytes", () => {
@@ -80,9 +80,9 @@ describe("Serialization roundtrip", () => {
 
     expect(bytes1).toEqual(bytes2);
 
-    sk.free();
-    gk.free();
-    gk2.free();
+    sk.close();
+    gk.close();
+    gk2.close();
   });
 
   it("Ciphertext: marshal -> unmarshal -> decrypt produces same values", () => {
@@ -107,15 +107,15 @@ describe("Serialization roundtrip", () => {
       expect(Math.abs(decoded[i] - input[i])).toBeLessThan(tolerance);
     }
 
-    pt.free();
-    ct.free();
-    ct2.free();
-    decPt.free();
-    encoder.free();
-    encryptor.free();
-    decryptor.free();
-    sk.free();
-    pk.free();
+    pt.close();
+    ct.close();
+    ct2.close();
+    decPt.close();
+    encoder.close();
+    encryptor.close();
+    decryptor.close();
+    sk.close();
+    pk.close();
   });
 
   it("Plaintext: marshal -> unmarshal -> decode produces same values", () => {
@@ -132,9 +132,9 @@ describe("Serialization roundtrip", () => {
       expect(Math.abs(decoded[i] - input[i])).toBeLessThan(tolerance);
     }
 
-    pt.free();
-    pt2.free();
-    encoder.free();
+    pt.close();
+    pt2.close();
+    encoder.close();
   });
 
   it("MemEvaluationKeySet: create from RLK + Galois keys -> marshal -> unmarshal", () => {
@@ -158,12 +158,12 @@ describe("Serialization roundtrip", () => {
     const evkBytes2 = evk2.marshalBinary();
     expect(evkBytes).toEqual(evkBytes2);
 
-    evk.free();
-    evk2.free();
-    gk1.free();
-    gk2.free();
-    rlk.free();
-    sk.free();
+    evk.close();
+    evk2.close();
+    gk1.close();
+    gk2.close();
+    rlk.close();
+    sk.close();
   });
 
   it("MemEvaluationKeySet: create with null RLK", () => {
@@ -177,8 +177,8 @@ describe("Serialization roundtrip", () => {
     const evkBytes = evk.marshalBinary();
     expect(evkBytes.length).toBeGreaterThan(0);
 
-    evk.free();
-    gk.free();
-    sk.free();
+    evk.close();
+    gk.close();
+    sk.close();
   });
 });

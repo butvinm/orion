@@ -94,17 +94,17 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 5: Rename JS/TS `free()` to `close()`
 
-- [ ] Rename `free()` → `close()` in `js/lattigo/src/ckks.ts` (CKKSParameters)
-- [ ] Rename `free()` → `close()` in `js/lattigo/src/rlwe.ts` (all key/ciphertext/plaintext classes)
-- [ ] Rename `free()` → `close()` in `js/lattigo/src/encoder.ts` (Encoder, Encryptor, Decryptor)
-- [ ] Update `FinalizationRegistry` callbacks if they reference `free`
-- [ ] Update all test files in `js/lattigo/tests/` — replace `.free()` with `.close()`
-- [ ] Update `js/lattigo/src/index.ts` exports if needed
-- [ ] Update `examples/wasm-demo/client/client.ts` — rename all `.free()` to `.close()` (~16 occurrences)
-- [ ] Rebuild wasm-demo client: `cd examples/wasm-demo/client && npm run build:ts`
-- [ ] Run `cd js/lattigo && npm run lint` — fix any issues
-- [ ] Run `cd js/lattigo && npm run typecheck` — must pass
-- [ ] Run `cd js/lattigo && npm test` — must pass before next task
+- [x] Rename `free()` → `close()` in `js/lattigo/src/ckks.ts` (CKKSParameters)
+- [x] Rename `free()` → `close()` in `js/lattigo/src/rlwe.ts` (all key/ciphertext/plaintext classes)
+- [x] Rename `free()` → `close()` in `js/lattigo/src/encoder.ts` (Encoder, Encryptor, Decryptor)
+- [x] Update `FinalizationRegistry` callbacks if they reference `free`
+- [x] Update all test files in `js/lattigo/tests/` — replace `.free()` with `.close()`
+- [x] Update `js/lattigo/src/index.ts` exports if needed
+- [x] Update `examples/wasm-demo/client/client.ts` — rename all `.free()` to `.close()` (~16 occurrences)
+- [x] Rebuild wasm-demo client: `cd examples/wasm-demo/client && npm run build:ts`
+- [x] Run `cd js/lattigo && npm run lint` — fix any issues
+- [x] Run `cd js/lattigo && npm run typecheck` — must pass
+- [x] Run `cd js/lattigo && npm test` — must pass before next task
 
 ### Task 6: Add mypy configuration and fix type annotations
 

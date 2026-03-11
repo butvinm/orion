@@ -37,12 +37,12 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  encryptor?.free();
-  encoder?.free();
-  pk?.free();
-  sk?.free();
-  kg?.free();
-  params?.free();
+  encryptor?.close();
+  encoder?.close();
+  pk?.close();
+  sk?.close();
+  kg?.close();
+  params?.close();
 });
 
 describe("Cross-platform serialization", () => {
@@ -99,8 +99,8 @@ describe("Cross-platform serialization", () => {
       }
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
-      pt.free();
-      ct.free();
+      pt.close();
+      ct.close();
     }
   });
 });

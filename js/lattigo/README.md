@@ -61,17 +61,17 @@ const ct = encryptor.encryptNew(pt);
 const decPt = decryptor.decryptNew(ct);
 const output = encoder.decode(decPt, params.maxSlots());
 
-// Free handles when done
-ct.free();
-pt.free();
-decPt.free();
-encoder.free();
-encryptor.free();
-decryptor.free();
-kg.free();
-sk.free();
-pk.free();
-params.free();
+// Release handles when done
+ct.close();
+pt.close();
+decPt.close();
+encoder.close();
+encryptor.close();
+decryptor.close();
+kg.close();
+sk.close();
+pk.close();
+params.close();
 ```
 
 ### Browser
@@ -90,15 +90,15 @@ params.free();
 
 ## Memory Management
 
-Every class has a `.free()` method that releases the underlying Go handle. Call it when you are done with an object.
+Every class has a `.close()` method that releases the underlying Go handle. Call it when done with an object.
 
 ```typescript
 const sk = kg.genSecretKey();
 // ... use sk ...
-sk.free(); // explicit cleanup
+sk.close(); // explicit cleanup
 ```
 
-A `FinalizationRegistry` is registered as a safety net to catch forgotten `.free()` calls, but GC timing is not deterministic — prefer explicit cleanup for long-lived sessions.
+A `FinalizationRegistry` is registered as a safety net to catch forgotten `.close()` calls, but GC timing is not deterministic — prefer explicit cleanup for long-lived sessions.
 
 ## API
 

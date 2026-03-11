@@ -86,8 +86,8 @@ export class CKKSParameters {
     return v;
   }
 
-  /** Free the underlying Go handle. Idempotent. */
-  free(): void {
+  /** Release the underlying Go handle. Idempotent. */
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);

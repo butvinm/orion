@@ -30,7 +30,7 @@ describe("Bootstrap parameters", () => {
       bridge.deleteHandle(result.handle);
     }
 
-    params.free();
+    params.close();
   });
 
   it("newBootstrapParams accepts minimal args (defaults for optional)", () => {
@@ -47,7 +47,7 @@ describe("Bootstrap parameters", () => {
       bridge.deleteHandle(result.handle);
     }
 
-    params.free();
+    params.close();
   });
 
   it("newBootstrapParams returns error for invalid params handle", () => {
@@ -112,9 +112,9 @@ describe("Bootstrap key generation (slow)", () => {
       bridge.deleteHandle(btpParamsResult.handle);
       bridge.deleteHandle(result.evkHID);
       bridge.deleteHandle(result.btpEvkHID);
-      sk.free();
-      kg.free();
-      params.free();
+      sk.close();
+      kg.close();
+      params.close();
     },
     120_000,
   );

@@ -33,7 +33,7 @@ export class SecretKey {
     return new SecretKey(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -68,7 +68,7 @@ export class PublicKey {
     return new PublicKey(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -104,7 +104,7 @@ export class RelinearizationKey {
     return new RelinearizationKey(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -139,7 +139,7 @@ export class GaloisKey {
     return new GaloisKey(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -186,7 +186,7 @@ export class Ciphertext {
     return new Ciphertext(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -229,7 +229,7 @@ export class Plaintext {
     return new Plaintext(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -298,7 +298,7 @@ export class KeyGenerator {
     return new GaloisKey(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -342,7 +342,7 @@ export class Encryptor {
     return new Ciphertext(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -382,7 +382,7 @@ export class Decryptor {
     return new Plaintext(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);
@@ -439,7 +439,7 @@ export class MemEvaluationKeySet {
     return MemEvaluationKeySet._fromHandle(result.handle);
   }
 
-  free(): void {
+  close(): void {
     if (this._handle !== 0) {
       registry.unregister(this);
       getBridge().deleteHandle(this._handle);

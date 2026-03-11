@@ -15,7 +15,7 @@
  *     7. If manifest.bootstrap_slots non-empty: construct ParametersLiteral,
  *        call bootstrapParamsGenEvalKeys (async, may take 5–30s)
  *     8. POST /session (no body) → session ID
- *     9. Stream keys: generate-marshal-upload-free loop (one key in memory at a time)
+ *     9. Stream keys: generate-marshal-upload-close loop (one key in memory at a time)
  *    10. POST /session/{id}/keys/finalize
  *
  *   Run Inference:
@@ -120,15 +120,15 @@ async function initializeKeys(): Promise<void> {
 
   // Free previously allocated Go handles before overwriting the module-level
   // variables. Without this, each re-initialization leaks the old handles.
-  params?.free();
+  params?.close();
   params = null;
-  sk?.free();
+  sk?.close();
   sk = null;
-  encoder?.free();
+  encoder?.close();
   encoder = null;
-  encryptor?.free();
+  encryptor?.close();
   encryptor = null;
-  decryptor?.free();
+  decryptor?.close();
   decryptor = null;
 
   const tTotal = performance.now();
@@ -218,13 +218,13 @@ async function initializeKeys(): Promise<void> {
   sessionId = sessData.session_id;
   appendLine(`Session created: ${sessionId}`);
 
-  // 7. Upload RLK if needed (generate → marshal → upload → free)
+  // 7. Upload RLK if needed (generate → marshal → upload → close)
   if (manifest.needs_rlk) {
     appendLine("Generating and uploading relinearization key...");
     const t3 = performance.now();
     const rlk = kg.genRelinKey(sk);
     const rlkBytes = rlk.marshalBinary();
-    rlk.free();
+    rlk.close();
     try {
       const resp = await fetch(`/session/${sessionId}/keys/relin`, {
         method: "POST",
@@ -247,7 +247,7 @@ async function initializeKeys(): Promise<void> {
     );
   }
 
-  // 8. Stream Galois keys: generate → marshal → upload → free (one key in memory at a time)
+  // 8. Stream Galois keys: generate → marshal → upload → close (one key in memory at a time)
   if (manifest.galois_elements.length > 0) {
     const total = manifest.galois_elements.length;
     appendLine(`Uploading ${total} Galois key(s)...`);
@@ -256,7 +256,7 @@ async function initializeKeys(): Promise<void> {
       const ge = manifest.galois_elements[i];
       const gk = kg.genGaloisKey(sk, ge);
       const gkBytes = gk.marshalBinary();
-      gk.free();
+      gk.close();
 
       try {
         const resp = await fetch(
@@ -392,8 +392,8 @@ async function initializeKeys(): Promise<void> {
   appendLine("Session finalized — evaluator ready.");
 
   // Cleanup (PK, KG — SK/encoder/encryptor/decryptor kept for inference)
-  pk.free();
-  kg.free();
+  pk.close();
+  kg.close();
 
   const total = performance.now() - tTotal;
   appendLine(`\nTotal initialization: ${formatDuration(total)}`);
@@ -442,8 +442,8 @@ async function runInference(): Promise<void> {
   const pt = encoder.encode(padded, inputLevel, defaultScale);
   const ct = encryptor.encryptNew(pt);
   const ctBytes = ct.marshalBinary();
-  pt.free();
-  ct.free();
+  pt.close();
+  ct.close();
 
   const encTime = performance.now() - tEnc;
 
@@ -483,8 +483,8 @@ async function runInference(): Promise<void> {
   const resultCt = Ciphertext.unmarshalBinary(resultBytes);
   const resultPt = decryptor.decryptNew(resultCt);
   const outputValues = encoder.decode(resultPt, maxSlots);
-  resultCt.free();
-  resultPt.free();
+  resultCt.close();
+  resultPt.close();
 
   const decTime = performance.now() - tDec;
 

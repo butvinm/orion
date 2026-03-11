@@ -10,7 +10,7 @@ describe("CKKSParameters", () => {
   it("constructor creates valid parameters", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     expect(params.handle).toBeGreaterThan(0);
-    params.free();
+    params.close();
   });
 
   it("maxSlots returns positive power of 2", () => {
@@ -18,13 +18,13 @@ describe("CKKSParameters", () => {
     const slots = params.maxSlots();
     expect(slots).toBeGreaterThan(0);
     expect(Math.log2(slots) % 1).toBe(0);
-    params.free();
+    params.close();
   });
 
   it("maxLevel returns len(logQ) - 1", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     expect(params.maxLevel()).toBe(TEST_PARAMS.logQ.length - 1);
-    params.free();
+    params.close();
   });
 
   it("defaultScale returns 2^logDefaultScale", () => {
@@ -32,14 +32,14 @@ describe("CKKSParameters", () => {
     expect(params.defaultScale()).toBe(
       Math.pow(2, TEST_PARAMS.logDefaultScale),
     );
-    params.free();
+    params.close();
   });
 
   it("galoisElement returns valid element for rotation", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     const ge = params.galoisElement(1);
     expect(ge).toBeGreaterThan(0);
-    params.free();
+    params.close();
   });
 
   it("moduliChain returns array with len(logQ) elements", () => {
@@ -47,7 +47,7 @@ describe("CKKSParameters", () => {
     const chain = params.moduliChain();
     expect(chain).toHaveLength(TEST_PARAMS.logQ.length);
     chain.forEach((q) => expect(q).toBeGreaterThan(0));
-    params.free();
+    params.close();
   });
 
   it("auxModuliChain returns array with len(logP) elements", () => {
@@ -55,7 +55,7 @@ describe("CKKSParameters", () => {
     const chain = params.auxModuliChain();
     expect(chain).toHaveLength(TEST_PARAMS.logP.length);
     chain.forEach((p) => expect(p).toBeGreaterThan(0));
-    params.free();
+    params.close();
   });
 
   it("constructor with explicit h produces equivalent parameters", () => {
@@ -71,6 +71,6 @@ describe("CKKSParameters", () => {
     expect(params.defaultScale()).toBe(
       Math.pow(2, TEST_PARAMS.logDefaultScale),
     );
-    params.free();
+    params.close();
   });
 });

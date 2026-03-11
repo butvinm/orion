@@ -29,13 +29,13 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  decryptor?.free();
-  encryptor?.free();
-  encoder?.free();
-  pk?.free();
-  sk?.free();
-  kg?.free();
-  params?.free();
+  decryptor?.close();
+  encryptor?.close();
+  encoder?.close();
+  pk?.close();
+  sk?.close();
+  kg?.close();
+  params?.close();
 });
 
 describe("Encryption roundtrip", () => {
@@ -55,9 +55,9 @@ describe("Encryption roundtrip", () => {
       expect(Math.abs(decoded[i] - input[i])).toBeLessThan(tolerance);
     }
 
-    pt.free();
-    ct.free();
-    decPt.free();
+    pt.close();
+    ct.close();
+    decPt.close();
   });
 
   it("encode -> encrypt -> decrypt -> decode preserves values (Float64Array)", () => {
@@ -75,9 +75,9 @@ describe("Encryption roundtrip", () => {
       expect(Math.abs(decoded[i] - input[i])).toBeLessThan(tolerance);
     }
 
-    pt.free();
-    ct.free();
-    decPt.free();
+    pt.close();
+    ct.close();
+    decPt.close();
   });
 
   it("encode -> encrypt -> decrypt -> decode with sin values", () => {
@@ -99,9 +99,9 @@ describe("Encryption roundtrip", () => {
       expect(Math.abs(decoded[i] - input[i])).toBeLessThan(tolerance);
     }
 
-    pt.free();
-    ct.free();
-    decPt.free();
+    pt.close();
+    ct.close();
+    decPt.close();
   });
 
   it("ciphertext level matches encoding level", () => {
@@ -112,8 +112,8 @@ describe("Encryption roundtrip", () => {
 
     expect(ct.level()).toBe(level);
 
-    pt.free();
-    ct.free();
+    pt.close();
+    ct.close();
   });
 
   it("plaintext level matches encoding level", () => {
@@ -123,6 +123,6 @@ describe("Encryption roundtrip", () => {
 
     expect(pt.level()).toBe(level);
 
-    pt.free();
+    pt.close();
   });
 });

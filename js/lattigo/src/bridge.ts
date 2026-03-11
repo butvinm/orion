@@ -18,8 +18,8 @@ export function getBridge(): WasmBridge {
 }
 
 /**
- * Shared FinalizationRegistry — catches forgotten .free() calls.
- * Each class registers its handle; .free() unregisters to avoid double-delete.
+ * Shared FinalizationRegistry — catches forgotten .close() calls.
+ * Each class registers its handle; .close() unregisters to avoid double-delete.
  */
 export const registry = new FinalizationRegistry((handleId: Handle) => {
   if (_bridge !== null) {

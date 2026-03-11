@@ -14,32 +14,32 @@ beforeAll(async () => {
 });
 
 describe("Memory cleanup", () => {
-  it("CKKSParameters.free() is idempotent (double free)", () => {
+  it("CKKSParameters.close() is idempotent (double close)", () => {
     const params = new CKKSParameters(TEST_PARAMS);
-    expect(() => params.free()).not.toThrow();
-    expect(() => params.free()).not.toThrow();
-    expect(() => params.free()).not.toThrow();
+    expect(() => params.close()).not.toThrow();
+    expect(() => params.close()).not.toThrow();
+    expect(() => params.close()).not.toThrow();
   });
 
-  it("KeyGenerator.free() is idempotent", () => {
+  it("KeyGenerator.close() is idempotent", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     const kg = new KeyGenerator(params);
-    expect(() => kg.free()).not.toThrow();
-    expect(() => kg.free()).not.toThrow();
-    params.free();
+    expect(() => kg.close()).not.toThrow();
+    expect(() => kg.close()).not.toThrow();
+    params.close();
   });
 
-  it("SecretKey.free() is idempotent", () => {
+  it("SecretKey.close() is idempotent", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     const kg = new KeyGenerator(params);
     const sk = kg.genSecretKey();
-    expect(() => sk.free()).not.toThrow();
-    expect(() => sk.free()).not.toThrow();
-    kg.free();
-    params.free();
+    expect(() => sk.close()).not.toThrow();
+    expect(() => sk.close()).not.toThrow();
+    kg.close();
+    params.close();
   });
 
-  it("all key types .free() are idempotent", () => {
+  it("all key types .close() are idempotent", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     const kg = new KeyGenerator(params);
     const sk = kg.genSecretKey();
@@ -49,29 +49,29 @@ describe("Memory cleanup", () => {
     const gk = kg.genGaloisKey(sk, ge);
 
     // Free everything twice
-    expect(() => gk.free()).not.toThrow();
-    expect(() => gk.free()).not.toThrow();
-    expect(() => rlk.free()).not.toThrow();
-    expect(() => rlk.free()).not.toThrow();
-    expect(() => pk.free()).not.toThrow();
-    expect(() => pk.free()).not.toThrow();
-    expect(() => sk.free()).not.toThrow();
-    expect(() => sk.free()).not.toThrow();
-    expect(() => kg.free()).not.toThrow();
-    expect(() => kg.free()).not.toThrow();
-    expect(() => params.free()).not.toThrow();
-    expect(() => params.free()).not.toThrow();
+    expect(() => gk.close()).not.toThrow();
+    expect(() => gk.close()).not.toThrow();
+    expect(() => rlk.close()).not.toThrow();
+    expect(() => rlk.close()).not.toThrow();
+    expect(() => pk.close()).not.toThrow();
+    expect(() => pk.close()).not.toThrow();
+    expect(() => sk.close()).not.toThrow();
+    expect(() => sk.close()).not.toThrow();
+    expect(() => kg.close()).not.toThrow();
+    expect(() => kg.close()).not.toThrow();
+    expect(() => params.close()).not.toThrow();
+    expect(() => params.close()).not.toThrow();
   });
 
-  it("Encoder.free() is idempotent", () => {
+  it("Encoder.close() is idempotent", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     const encoder = new Encoder(params);
-    expect(() => encoder.free()).not.toThrow();
-    expect(() => encoder.free()).not.toThrow();
-    params.free();
+    expect(() => encoder.close()).not.toThrow();
+    expect(() => encoder.close()).not.toThrow();
+    params.close();
   });
 
-  it("Encryptor and Decryptor .free() are idempotent", () => {
+  it("Encryptor and Decryptor .close() are idempotent", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     const kg = new KeyGenerator(params);
     const sk = kg.genSecretKey();
@@ -79,18 +79,18 @@ describe("Memory cleanup", () => {
     const encryptor = new Encryptor(params, pk);
     const decryptor = new Decryptor(params, sk);
 
-    expect(() => encryptor.free()).not.toThrow();
-    expect(() => encryptor.free()).not.toThrow();
-    expect(() => decryptor.free()).not.toThrow();
-    expect(() => decryptor.free()).not.toThrow();
+    expect(() => encryptor.close()).not.toThrow();
+    expect(() => encryptor.close()).not.toThrow();
+    expect(() => decryptor.close()).not.toThrow();
+    expect(() => decryptor.close()).not.toThrow();
 
-    sk.free();
-    pk.free();
-    kg.free();
-    params.free();
+    sk.close();
+    pk.close();
+    kg.close();
+    params.close();
   });
 
-  it("Ciphertext and Plaintext .free() are idempotent", () => {
+  it("Ciphertext and Plaintext .close() are idempotent", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     const kg = new KeyGenerator(params);
     const sk = kg.genSecretKey();
@@ -101,32 +101,32 @@ describe("Memory cleanup", () => {
     const pt = encoder.encode([1.0], params.maxLevel(), params.defaultScale());
     const ct = encryptor.encryptNew(pt);
 
-    expect(() => pt.free()).not.toThrow();
-    expect(() => pt.free()).not.toThrow();
-    expect(() => ct.free()).not.toThrow();
-    expect(() => ct.free()).not.toThrow();
+    expect(() => pt.close()).not.toThrow();
+    expect(() => pt.close()).not.toThrow();
+    expect(() => ct.close()).not.toThrow();
+    expect(() => ct.close()).not.toThrow();
 
-    encoder.free();
-    encryptor.free();
-    sk.free();
-    pk.free();
-    kg.free();
-    params.free();
+    encoder.close();
+    encryptor.close();
+    sk.close();
+    pk.close();
+    kg.close();
+    params.close();
   });
 
-  it("MemEvaluationKeySet.free() is idempotent", () => {
+  it("MemEvaluationKeySet.close() is idempotent", () => {
     const params = new CKKSParameters(TEST_PARAMS);
     const kg = new KeyGenerator(params);
     const sk = kg.genSecretKey();
     const rlk = kg.genRelinKey(sk);
     const evk = new MemEvaluationKeySet(rlk, []);
 
-    expect(() => evk.free()).not.toThrow();
-    expect(() => evk.free()).not.toThrow();
+    expect(() => evk.close()).not.toThrow();
+    expect(() => evk.close()).not.toThrow();
 
-    rlk.free();
-    sk.free();
-    kg.free();
-    params.free();
+    rlk.close();
+    sk.close();
+    kg.close();
+    params.close();
   });
 });
