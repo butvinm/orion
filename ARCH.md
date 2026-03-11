@@ -1196,7 +1196,7 @@ Build the Go bridge code to WASM target (`GOOS=js GOARCH=wasm`). The WASM binary
 - `Decryptor`: `decrypt(ciphertext)`
 - Serialization: `marshal()`/`unmarshal()` on all types
 
-TypeScript wrappers in `js/lattigo/src/` provide ergonomic API over the raw WASM exports. Memory management: Go objects tracked by the WASM runtime's finalizer or explicit `.free()` calls.
+TypeScript wrappers in `js/lattigo/src/` provide ergonomic API over the raw WASM exports. Memory management: Go objects tracked by the WASM runtime's finalizer or explicit `.close()` calls.
 
 Expected binary size: ~8 MB uncompressed, ~3 MB gzipped.
 
@@ -1209,7 +1209,7 @@ Tensor-to-slot mapping (flatten, pad, split) is trivial user code — no JS libr
 `examples/wasm-demo/`:
 
 - Go HTTP server: loads `.orion` model, exposes `/params`, `/session`, `/session/{id}/keys/relin`, `/session/{id}/keys/galois/{element}`, `/session/{id}/keys/finalize`, `/session/{id}/infer`. Keys are uploaded individually via streaming (one key at a time).
-- HTML/JS client: loads WASM, generates keys in a generate→marshal→upload→free loop (one key in browser memory at a time), encrypts input, sends to server, decrypts result
+- HTML/JS client: loads WASM, generates keys in a generate→marshal→upload→close loop (one key in browser memory at a time), encrypts input, sends to server, decrypts result
 - End-to-end demonstration: browser-side secret key never leaves the client
 
 #### Phase 4 acceptance checklist
@@ -1220,7 +1220,7 @@ Tensor-to-slot mapping (flatten, pad, split) is trivial user code — no JS libr
 - [x] JS example: keygen → encode → encrypt → decrypt → decode roundtrip works in Node.js
 - [x] Browser demo: compile MLP (Python) → serve (Go) → query (browser) → correct decrypted result
 - [x] WASM loads and initializes in < 3 seconds on modern browser
-- [x] No Go objects leaked after `.free()` calls
+- [x] No Go objects leaked after `.close()` calls
 
 ---
 
@@ -1398,7 +1398,7 @@ These can stay in `orion_compiler.core.utils` (the compiler package still depend
 
 The WASM demo assembles all Galois keys into a single `MemEvaluationKeySet`, marshals the entire blob, and uploads it in one HTTP POST. For models with many Galois elements (e.g., LeNet's 178 keys → ~1.3 GB), this creates a large single transfer and high peak memory in the browser.
 
-Change the WASM demo to upload keys individually in a generate→marshal→upload→free loop, so only one key (~7 MB for logN=14) is in browser memory at a time.
+Change the WASM demo to upload keys individually in a generate→marshal→upload→close loop, so only one key (~7 MB for logN=14) is in browser memory at a time.
 
 #### 6.1 WASM bridge: individual key marshaling
 
@@ -1419,7 +1419,7 @@ Add endpoints to the Go server (`examples/wasm-demo/server/`) for incremental ke
 
 #### 6.3 Client-side streaming
 
-Update `client.ts` to use a generate→marshal→upload→free loop:
+Update `client.ts` to use a generate→marshal→upload→close loop:
 
 ```
 for each galois_element in manifest:
@@ -1444,7 +1444,7 @@ Bootstrap evaluation keys (`btpParamsGenEvaluationKeys()`) are generated as a si
 - [x] `POST /session/{id}/keys/relin` accepts and stores RLK
 - [x] `POST /session/{id}/keys/galois/{element}` accepts and stores individual Galois keys by element (idempotent)
 - [x] `POST /session/{id}/keys/finalize` validates completeness against manifest, returns 400 with missing elements if incomplete
-- [x] Client uses generate→marshal→upload→free loop (one key in memory at a time)
+- [x] Client uses generate→marshal→upload→close loop (one key in memory at a time)
 - [x] Client shows per-key upload progress
 - [x] Pending sessions are cleaned up after 5-minute inactivity timeout
 - [x] `POST /session/{id}/infer` rejects requests on non-finalized sessions

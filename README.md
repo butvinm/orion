@@ -35,7 +35,7 @@ Browser demo in [`examples/wasm-demo/`](examples/wasm-demo/) — encrypted MNIST
 
 ## Installation
 
-**Prerequisites:** Go 1.22+, Python 3.9–3.12, C compiler, `libgmp-dev`, `libssl-dev`.
+**Prerequisites:** Go 1.22+, Python 3.11–3.12, C compiler, `libgmp-dev`, `libssl-dev`.
 
 ```bash
 # Ubuntu

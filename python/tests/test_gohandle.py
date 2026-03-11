@@ -545,12 +545,21 @@ class TestContextManager:
         _cleanup()
 
     def test_gohandle_context_manager(self):
-        """GoHandle itself supports with statement."""
+        """GoHandle itself supports with statement with a live handle."""
         params = _make_params()
-        # GoHandle context manager
+        # Use the live handle from params to test GoHandle context manager
+        handle_raw = params._handle._raw
+        assert handle_raw != 0
+        with params._handle as gh:
+            assert gh._raw == handle_raw
+        # After exiting the with block, the handle should be closed
+        assert params._handle._raw == 0
+        _cleanup()
+
+    def test_gohandle_context_manager_already_closed(self):
+        """GoHandle with block on already-closed handle does not error."""
         with GoHandle(0) as gh:
-            assert gh._raw == 0  # closed handle, but no error from __exit__
-        params.close()
+            assert gh._raw == 0
         _cleanup()
 
     def test_keygen_with_statement(self):

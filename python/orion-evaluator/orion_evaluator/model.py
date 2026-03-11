@@ -3,7 +3,7 @@
 import json
 
 from . import ffi
-from .errors import EvaluatorError
+from .errors import EvaluatorError, ModelLoadError
 
 
 class Model:
@@ -24,8 +24,15 @@ class Model:
 
     @classmethod
     def load(cls, data: bytes) -> "Model":
-        """Load a .orion v2 file from bytes."""
-        handle = ffi.load_model(data)
+        """Load a .orion v2 file from bytes.
+
+        Raises:
+            ModelLoadError: If the model data is invalid or cannot be parsed.
+        """
+        try:
+            handle = ffi.load_model(data)
+        except EvaluatorError as e:
+            raise ModelLoadError(str(e)) from e
         return cls(handle)
 
     def client_params(self) -> tuple[dict, dict, int]:

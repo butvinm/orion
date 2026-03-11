@@ -50,7 +50,6 @@ module = [
     "orion_compiler.core.level_dag",
     "orion_compiler.core.auto_bootstrap",
     "orion_compiler.core.fuser",
-    "orion_compiler.core.galois",
 ]
 disallow_untyped_defs = false
 check_untyped_defs = false

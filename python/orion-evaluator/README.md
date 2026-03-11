@@ -21,17 +21,23 @@ So we serialize to bytes as the common language between the two runtimes. This i
 ```python
 from orion_evaluator import Model, Evaluator
 
-# Load compiled model
+# Context manager support (recommended — auto-cleanup on block exit)
+with Model.load(model_bytes) as model:
+    params_dict, manifest, input_level = model.client_params()
+    with Evaluator(params_dict, keys_bytes) as evaluator:
+        result_ct_bytes = evaluator.forward(model, input_ct_bytes)
+
+# Or explicit close()
 model = Model.load(model_bytes)
-params_dict, manifest, input_level = model.client_params()
-
-# Create evaluator (keys_bytes = MemEvaluationKeySet.marshal_binary() output)
 evaluator = Evaluator(params_dict, keys_bytes)
-
-# Run inference
 result_ct_bytes = evaluator.forward(model, input_ct_bytes)
-
-# Cleanup
 evaluator.close()
 model.close()
 ```
+
+## Errors
+
+All errors raise from `orion_evaluator.errors`:
+
+- `EvaluatorError` — base class for all evaluator errors
+- `ModelLoadError(EvaluatorError)` — raised by `Model.load()` on invalid data

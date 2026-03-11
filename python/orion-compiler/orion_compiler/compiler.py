@@ -334,10 +334,16 @@ class Compiler:
                     rotation = slots // (2**j)
                     galois_elements.add(galois_element(rotation, nth_root))
 
+        boot_logp_raw = self.params.get_boot_logp() if bootstrapper_slots else None
+        if bootstrapper_slots and not boot_logp_raw:
+            raise CompilationError(
+                "boot_logp is required in CKKSParams when the model needs bootstrapping"
+            )
+
         manifest = KeyManifest(
             galois_elements=frozenset(galois_elements),
             bootstrap_slots=tuple(sorted(bootstrapper_slots)) if bootstrapper_slots else (),
-            boot_logp=tuple(self.params.get_boot_logp() or []) if bootstrapper_slots else None,
+            boot_logp=tuple(boot_logp_raw) if boot_logp_raw else None,
             btp_logn=self.ckks_params.btp_logn if bootstrapper_slots else None,
             needs_rlk=True,
         )

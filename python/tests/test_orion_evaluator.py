@@ -19,6 +19,7 @@ from lattigo.rlwe import (
     MemEvaluationKeySet,
 )
 from orion_evaluator import Evaluator, EvaluatorError, Model
+from orion_evaluator.errors import ModelLoadError
 
 # Path to pre-compiled test models
 TESTDATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "evaluator", "testdata")
@@ -99,8 +100,8 @@ class TestModelLifecycle:
         _cleanup()
 
     def test_load_invalid_data_raises(self):
-        """Model.load with invalid data raises EvaluatorError."""
-        with pytest.raises(EvaluatorError):
+        """Model.load with invalid data raises ModelLoadError (subclass of EvaluatorError)."""
+        with pytest.raises(ModelLoadError):
             Model.load(b"not a valid orion file")
         _cleanup()
 

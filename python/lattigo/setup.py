@@ -16,7 +16,7 @@ setup_kwargs = {
     "url": "None",
     "packages": packages,
     "package_data": package_data,
-    "python_requires": ">=3.9,<3.13",
+    "python_requires": ">=3.11,<3.13",
 }
 from build_bridge import *
 

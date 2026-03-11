@@ -36,7 +36,7 @@ def bsgs_index(
 
     Reimplements lintrans.BSGSIndex().
     """
-    index = {}
+    index: dict[int, list[int]] = {}
     rot_n1_set = set()
     rot_n2_set = set()
 

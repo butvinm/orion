@@ -60,12 +60,24 @@ def test_utils_logger_name():
 def test_no_print_in_library_modules():
     """Verify that library modules use logging, not print().
 
-    This is a basic check that the logger attribute exists in each module
-    that previously used print().
+    Scans source code of modules that previously used print() to ensure
+    no print() calls remain (excluding comments).
     """
+    import ast
+    import inspect
+
     from orion_compiler import compiler
     from orion_compiler.core import auto_bootstrap, level_dag, network_dag, packing, utils
 
     modules = [compiler, packing, auto_bootstrap, network_dag, level_dag, utils]
     for mod in modules:
         assert hasattr(mod, "logger"), f"{mod.__name__} missing logger attribute"
+        source = inspect.getsource(mod)
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "print"
+            ):
+                raise AssertionError(f"{mod.__name__} contains print() call at line {node.lineno}")
