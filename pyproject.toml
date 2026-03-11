@@ -41,11 +41,3 @@ ignore_missing_imports = true
 module = ["tests.*", "examples.*"]
 disallow_untyped_defs = false
 
-[[tool.mypy.overrides]]
-module = [
-    "orion_compiler.core.tracer",
-    "orion_compiler.core.packing",
-]
-# torch.fx.Node uses dynamic attributes extensively and torch buffer typing
-# produces Tensor | Module unions — these are unfixable without per-line ignores.
-ignore_errors = true

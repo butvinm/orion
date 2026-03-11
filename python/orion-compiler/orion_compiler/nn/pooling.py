@@ -39,7 +39,8 @@ class AvgPool2d(Conv2d):
 
     def update_params(self) -> None:
         kH, kW = self.kernel_size
-        self.in_channels = self.out_channels = self.groups = self.input_shape[1]  # type: ignore[index,assignment]
+        assert self.input_shape is not None
+        self.in_channels = self.out_channels = self.groups = self.input_shape[1]
         self.on_weight = torch.ones(self.out_channels, 1, kH, kW) / (kH * kW)
         self.on_bias = torch.zeros(self.out_channels)
 

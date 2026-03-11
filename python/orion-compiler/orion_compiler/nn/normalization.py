@@ -56,8 +56,8 @@ class BatchNormNd(Module):
         context: Any,
         a: torch.Tensor,
         b: torch.Tensor,
-        c: torch.Tensor,
-        d: torch.Tensor,
+        c: torch.Tensor | None,
+        d: torch.Tensor | None,
     ) -> None:
         assert self.level is not None
         level = self.level

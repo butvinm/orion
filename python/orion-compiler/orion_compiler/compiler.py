@@ -156,6 +156,7 @@ class Compiler:
             for batch in tqdm(input_data, desc="Processing input data", unit="batch", leave=True):
                 stats_tracker.propagate(batch[0].to(device))
 
+            assert user_batch_size is not None
             stats_tracker.update_batch_size(user_batch_size)
 
         elif isinstance(input_data, torch.Tensor):
@@ -206,7 +207,7 @@ class Compiler:
         # Set scheme ref on modules for backward compat with packing.py
         for module in net.modules():
             if isinstance(module, Module):
-                module.scheme = self  # type: ignore[assignment]
+                module.scheme = self
 
         # Fuse modules
         if self.config.fuse_modules:
@@ -412,13 +413,13 @@ class Compiler:
 
             shape = {}
             if hasattr(module, "fhe_input_shape") and module.fhe_input_shape is not None:
-                shape["fhe_input"] = list(module.fhe_input_shape)  # type: ignore[arg-type]
+                shape["fhe_input"] = list(module.fhe_input_shape)
             if hasattr(module, "fhe_output_shape") and module.fhe_output_shape is not None:
-                shape["fhe_output"] = list(module.fhe_output_shape)  # type: ignore[arg-type]
+                shape["fhe_output"] = list(module.fhe_output_shape)
             if hasattr(module, "input_shape") and module.input_shape is not None:
-                shape["input"] = list(module.input_shape)  # type: ignore[arg-type]
+                shape["input"] = list(module.input_shape)
             if hasattr(module, "output_shape") and module.output_shape is not None:
-                shape["output"] = list(module.output_shape)  # type: ignore[arg-type]
+                shape["output"] = list(module.output_shape)
 
             # Compute Galois elements for this LT (pure Python)
             diag_indices_per_block = {k: list(v.keys()) for k, v in module.diagonals.items()}
@@ -454,7 +455,8 @@ class Compiler:
             }
 
         elif isinstance(module, Bootstrap):
-            elements = module.fhe_input_shape.numel()  # type: ignore[operator]
+            assert module.fhe_input_shape is not None
+            elements = module.fhe_input_shape.numel()
             btp_slots = 2 ** math.ceil(math.log2(elements))
             config = {
                 "input_level": module.input_level,
@@ -467,7 +469,7 @@ class Compiler:
             }
             shape = {}
             if hasattr(module, "fhe_input_shape") and module.fhe_input_shape is not None:
-                shape["fhe_input"] = list(module.fhe_input_shape)  # type: ignore[arg-type]
+                shape["fhe_input"] = list(module.fhe_input_shape)
 
         elif isinstance(module, Quad):
             pass  # empty config, depth=1

@@ -67,10 +67,10 @@ class Chebyshev(Module):
     def fit(self, context: Any) -> None:
         if not self.within_composite:
             margin = context.margin
-            center = (self.input_min + self.input_max) / 2  # type: ignore[operator]
-            half_range = (self.input_max - self.input_min) / 2  # type: ignore[operator]
-            self.low = (center - (margin * half_range)).item()
-            self.high = (center + (margin * half_range)).item()
+            center = (self.input_min + self.input_max) / 2
+            half_range = (self.input_max - self.input_min) / 2
+            self.low = float(center - (margin * half_range))
+            self.high = float(center + (margin * half_range))
 
             nodes = np.polynomial.chebyshev.chebpts1(self.degree + 1)
             if self.low < -1 or self.high > 1:
@@ -80,8 +80,8 @@ class Chebyshev(Module):
             else:
                 evals = nodes
 
-            evals = torch.tensor(evals)
-            T = np.polynomial.Chebyshev.fit(nodes, self.fn(evals), self.degree)
+            evals_t = torch.tensor(evals)
+            T = np.polynomial.Chebyshev.fit(nodes, self.fn(evals_t), self.degree)
             self.set_coeffs(T.coef.tolist())
             self.set_depth()
 
@@ -255,7 +255,7 @@ class ReLU(Module):
         self.input_max = self.mult1.input_max
 
         margin = context.margin
-        absmax = max(abs(self.input_min), abs(self.input_max)) * margin  # type: ignore[arg-type]
+        absmax = max(abs(self.input_min), abs(self.input_max)) * margin
         if absmax > 1:
             self.postscale = math.ceil(absmax)
             self.prescale = 1 / self.postscale

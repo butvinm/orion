@@ -43,8 +43,8 @@ class Bootstrap(Module):
         margin = context.margin
         center = (self.input_min + self.input_max) / 2
         half_range = (self.input_max - self.input_min) / 2
-        self.low = (center - (margin * half_range)).item()
-        self.high = (center + (margin * half_range)).item()
+        self.low = float(center - (margin * half_range))
+        self.high = float(center + (margin * half_range))
 
         if self.high - self.low > 2:
             self.postscale = math.ceil((self.high - self.low) / 2)
@@ -53,7 +53,8 @@ class Bootstrap(Module):
         self.constant = -(self.low + self.high) / 2
 
     def compile(self, context: Any) -> None:
-        elements = self.fhe_input_shape.numel()  # type: ignore[operator]
+        assert self.fhe_input_shape is not None
+        elements = self.fhe_input_shape.numel()
         curr_slots = 2 ** math.ceil(math.log2(elements))
 
         prescale_vec = torch.zeros(curr_slots)

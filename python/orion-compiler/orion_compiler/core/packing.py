@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import logging
 import math
 import time
+from typing import Any
 
 import matplotlib.pyplot as plt
 import scipy.sparse as sp
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
 
@@ -16,7 +18,9 @@ logger = logging.getLogger(__name__)
 # -------------------#
 
 
-def pack_conv2d(conv_layer: nn.Module, last: bool):
+def pack_conv2d(
+    conv_layer: Any, last: bool
+) -> tuple[dict[tuple[int, int], dict[int, list[float]]], int]:
     slots = conv_layer.scheme.params.get_slots()
     embed_method = conv_layer.scheme.params.get_embedding_method()
 
@@ -30,7 +34,7 @@ def pack_conv2d(conv_layer: nn.Module, last: bool):
     return diagonals, output_rotations
 
 
-def construct_conv2d_toeplitz(conv_layer, weight):
+def construct_conv2d_toeplitz(conv_layer: Any, weight: torch.Tensor) -> sp.csr_matrix:
     N, on_Ci, on_Hi, on_Wi = conv_layer.fhe_input_shape
     on_Co, on_Ho, on_Wo = conv_layer.fhe_output_shape[1:]
     Ho, Wo = conv_layer.output_shape[2:]
@@ -41,7 +45,7 @@ def construct_conv2d_toeplitz(conv_layer, weight):
     oG = conv_layer.output_gap
     kW, kH = weight.shape[2:]
 
-    def compute_first_kernel_position():
+    def compute_first_kernel_position() -> torch.Tensor:
         mpx_anchors = valid_image_indices[:, :iG, :iG].reshape(-1, 1)
 
         row_idxs = torch.arange(0, kH * D * iG, D * iG).reshape(-1, 1)
@@ -51,7 +55,7 @@ def construct_conv2d_toeplitz(conv_layer, weight):
         img_pixels_touched = mpx_anchors + kernel_offsets
         return img_pixels_touched.flatten()
 
-    def compute_row_interchange_map():
+    def compute_row_interchange_map() -> torch.Tensor:
         output_indices = torch.arange(on_Ho * on_Wo).reshape(on_Ho, on_Wo)
 
         start_indices = output_indices[:oG, :oG].flatten()
@@ -108,7 +112,7 @@ def construct_conv2d_toeplitz(conv_layer, weight):
     return toeplitz
 
 
-def construct_conv2d_bias(conv_layer):
+def construct_conv2d_bias(conv_layer: Any) -> torch.Tensor:
     N, Co, Ho, Wo = conv_layer.output_shape
     on_Co, on_Ho, on_Wo = conv_layer.fhe_output_shape[1:]
 
@@ -125,7 +129,9 @@ def construct_conv2d_bias(conv_layer):
     return bias_vector
 
 
-def pack_linear(linear_layer: nn.Module, last: bool):
+def pack_linear(
+    linear_layer: Any, last: bool
+) -> tuple[dict[tuple[int, int], dict[int, list[float]]], int]:
     slots = linear_layer.scheme.params.get_slots()
     embed_method = linear_layer.scheme.params.get_embedding_method()
 
@@ -134,7 +140,7 @@ def pack_linear(linear_layer: nn.Module, last: bool):
     return diagonals, output_rotations
 
 
-def construct_linear_matrix(linear_layer):
+def construct_linear_matrix(linear_layer: Any) -> sp.csr_matrix:
     if len(linear_layer.input_shape) == 2:
         N = linear_layer.input_shape[0]
         matrix = linear_layer.on_weight
@@ -156,9 +162,10 @@ def construct_linear_matrix(linear_layer):
     return matrix_sparse
 
 
-def construct_linear_bias(linear_layer):
+def construct_linear_bias(linear_layer: Any) -> torch.Tensor:
     N = linear_layer.input_shape[0]
-    return linear_layer.on_bias.repeat(N)
+    result: torch.Tensor = linear_layer.on_bias.repeat(N)
+    return result
 
 
 # -----------------------------#
@@ -166,17 +173,18 @@ def construct_linear_bias(linear_layer):
 # -----------------------------#
 
 
-def multiplex(matrix, gap):
+def multiplex(matrix: torch.Tensor, gap: int) -> torch.Tensor:
     N, Ci, Hi, Wi = matrix.shape
     Co = math.ceil(Ci / (gap**2))
 
     # Pad the tensor to have channels divisible by gap^2
     padded = torch.zeros(N, Co * gap**2, Hi, Wi)
     padded[:, :Ci, ...] = matrix
-    return F.pixel_shuffle(padded, gap)  # multiplexed
+    result: torch.Tensor = F.pixel_shuffle(padded, gap)  # multiplexed
+    return result
 
 
-def resolve_grouped_conv(conv_layer):
+def resolve_grouped_conv(conv_layer: Any) -> torch.Tensor:
     on_weight = conv_layer.on_weight.repeat(1, conv_layer.groups, 1, 1)
 
     # Zero out input channels to support arbitrary groups
@@ -191,7 +199,8 @@ def resolve_grouped_conv(conv_layer):
             ...,
         ] = 1
 
-    return on_weight * mask
+    result: torch.Tensor = on_weight * mask
+    return result
 
 
 def diagonalize(
@@ -199,7 +208,7 @@ def diagonalize(
     num_slots: int,
     embed_method: str,
     is_last_layer: bool,
-):
+) -> tuple[dict[tuple[int, int], dict[int, list[float]]], int]:
     """
     For each (slots, slots) block of the input matrix, this function
     extracts the generalized diagonals and stores them in a dictionary.
@@ -210,14 +219,16 @@ def diagonalize(
         matrix (scipy.sparse.csr_matrix): A 4D tensor representing a weight matrix
             for a fully-connected or convolutional layer. The shape must
             conform to (num_blocks_y, num_blocks_x, slots, slots).
-        slots (int): The number of SIMD plaintext slots, dictating the
+        num_slots (int): The number of SIMD plaintext slots, dictating the
             block size.
+        embed_method (str): The embedding method to use.
+        is_last_layer (bool): Whether this is the last layer.
 
     Returns:
-        dict: A dictionary where each key is a tuple (i, j) corresponding
-              to the (i, j)th (slots, slots) block of `matrix`. The value
-              for each key is another dictionary that maps diagonal indices
-              within the block to the diagonal's tensor values.
+        A tuple of (diagonals_by_block, output_rotations) where
+        diagonals_by_block is a dictionary mapping block coordinates to
+        diagonal dictionaries, and output_rotations is the number of
+        output rotations needed.
 
     Examples:
         >>> matrix = torch.tensor([[[[ 0,  1,  2,  3],
@@ -269,7 +280,7 @@ def diagonalize(
     col_idx = torch.arange(block_height)[:, None] + torch.arange(num_slots)[None, :]
     col_idx = torch.where(col_idx >= num_slots, col_idx - num_slots, col_idx)
 
-    diagonals_by_block = {}
+    diagonals_by_block: dict[tuple[int, int], dict[int, list[float]]] = {}
     total_diagonals = 0
 
     # Process each block
@@ -291,7 +302,7 @@ def diagonalize(
             block_diagonals = block_dense[row_idx, col_idx]
 
             # Collect non-zero diagonals
-            nonzero_diagonals = {}
+            nonzero_diagonals: dict[int, list[float]] = {}
             for i in range(block_height):
                 if torch.any(block_diagonals[i]):
                     nonzero_diagonals[i] = block_diagonals[i].tolist()
@@ -317,7 +328,7 @@ def diagonalize(
     return diagonals_by_block, output_rotations
 
 
-def plot_toeplitz(matrix, save_path=""):
+def plot_toeplitz(matrix: sp.csr_matrix | Any, save_path: str = "") -> None:
     if isinstance(matrix, sp.csr_matrix):
         matrix = matrix.todense()
 
@@ -336,7 +347,9 @@ def plot_toeplitz(matrix, save_path=""):
 # ---------------------#
 
 
-def pack_bn1d(bn1d_layer):
+def pack_bn1d(
+    bn1d_layer: Any,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
     N = bn1d_layer.input_shape[0]
     on_running_mean = bn1d_layer.on_running_mean
     on_inv_running_std = 1 / torch.sqrt(bn1d_layer.on_running_var + bn1d_layer.eps)
@@ -351,7 +364,9 @@ def pack_bn1d(bn1d_layer):
     )
 
 
-def pack_bn2d(bn2d_layer):
+def pack_bn2d(
+    bn2d_layer: Any,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
     N, Ci, Hi, Wi = bn2d_layer.input_shape
     on_Ci, on_Hi, on_Wi = bn2d_layer.fhe_input_shape[1:]
 

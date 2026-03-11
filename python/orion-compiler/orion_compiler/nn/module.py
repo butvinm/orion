@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -12,6 +13,24 @@ class Module(nn.Module, ABC):
         self.level: int | None = None
         self.depth: int | None = None
         self.fused: bool = False
+
+        # Set by tracer (StatsTracker.sync_module_attributes)
+        self.input_min: float = float("inf")
+        self.input_max: float = float("-inf")
+        self.output_min: float = float("inf")
+        self.output_max: float = float("-inf")
+        self.input_shape: torch.Size | None = None
+        self.output_shape: torch.Size | None = None
+        self.fhe_input_shape: torch.Size | None = None
+        self.fhe_output_shape: torch.Size | None = None
+        self.input_gap: int = 1
+        self.output_gap: int = 1
+
+        # Set by tracer (StatsTracker.sync_module_attributes)
+        self.name: str = ""
+
+        # Set by Compiler during compilation
+        self.scheme: Any = None  # Compiler instance (avoid circular import)
 
     def _set_attribute_for_all(self, attr: str, value: object) -> None:
         for m in self.modules():
