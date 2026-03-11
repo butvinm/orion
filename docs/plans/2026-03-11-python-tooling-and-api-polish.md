@@ -122,12 +122,12 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 7: Add py.typed markers
 
-- [ ] Create `python/lattigo/lattigo/py.typed` (empty file)
-- [ ] Create `python/orion-compiler/orion_compiler/py.typed` (empty file)
-- [ ] Create `python/orion-evaluator/orion_evaluator/py.typed` (empty file)
-- [ ] Add `py.typed` to package data in each `pyproject.toml` if needed
-- [ ] Verify `mypy` resolves types from installed packages with `py.typed`
-- [ ] Run `pytest python/tests/` — must pass before next task
+- [x] Create `python/lattigo/lattigo/py.typed` (empty file)
+- [x] Create `python/orion-compiler/orion_compiler/py.typed` (empty file)
+- [x] Create `python/orion-evaluator/orion_evaluator/py.typed` (empty file)
+- [x] Add `py.typed` to package data in each `pyproject.toml` if needed
+- [x] Verify `mypy` resolves types from installed packages with `py.typed`
+- [x] Run `pytest python/tests/` — must pass before next task
 
 ### Task 8: Verify acceptance criteria
 
