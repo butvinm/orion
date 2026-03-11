@@ -363,7 +363,7 @@ class TestBootstrapIntegration:
 
         l_eff = len(compiler.params.get_logq()) - 1
         btp_solver = BootstrapSolver(net, network_dag, l_eff=l_eff, context=compiler._context)
-        input_level, num_bootstraps, bootstrapper_slots = btp_solver.solve()
+        _input_level, num_bootstraps, _bootstrapper_slots = btp_solver.solve()
 
         # With l_eff=2 and 3 depth, we should need at least 1 bootstrap
         assert num_bootstraps > 0, f"Expected bootstraps with l_eff={l_eff}, got {num_bootstraps}"

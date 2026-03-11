@@ -131,17 +131,17 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] `ruff check python/` passes with zero warnings
-- [ ] `ruff format --check python/` passes (all formatted)
-- [ ] `mypy python/lattigo/ python/orion-compiler/ python/orion-evaluator/` passes
-- [ ] All Python classes with `close()` also support `with` statement
-- [ ] No `print()` in library code (only in tests/examples)
-- [ ] All exceptions are library-specific, not generic `RuntimeError`
-- [ ] JS `close()` works, no references to `free()` remain
-- [ ] All `py.typed` markers present
-- [ ] Run full `pytest python/tests/`
-- [ ] Run `cd js/lattigo && npm test`
-- [ ] Run linter — all issues fixed
+- [x] `ruff check python/` passes with zero warnings
+- [x] `ruff format --check python/` passes (all formatted)
+- [x] `mypy python/lattigo/ python/orion-compiler/ python/orion-evaluator/` passes
+- [x] All Python classes with `close()` also support `with` statement
+- [x] No `print()` in library code (only in tests/examples)
+- [x] All exceptions are library-specific, not generic `RuntimeError`
+- [x] JS `close()` works, no references to `free()` remain
+- [x] All `py.typed` markers present
+- [x] Run full `pytest python/tests/`
+- [x] Run `cd js/lattigo && npm test`
+- [x] Run linter — all issues fixed
 
 ### Task 9: [Final] Update documentation
 

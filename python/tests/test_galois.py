@@ -103,7 +103,7 @@ class TestBsgsIndex:
         slots = 16
         n1 = 4
         # -1 & 15 = 15
-        index_map, rot_n1, rot_n2 = bsgs_index([-1], slots, n1)
+        _index_map, rot_n1, rot_n2 = bsgs_index([-1], slots, n1)
         # rot=15: n1 = (15//4)*4 = 12, n2 = 15 & 3 = 3
         assert rot_n1 == [12]
         assert rot_n2 == [3]

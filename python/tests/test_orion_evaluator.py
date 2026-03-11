@@ -112,7 +112,7 @@ class TestModelLifecycle:
 
 def _make_evaluator_from_model(model):
     """Helper: create an Evaluator from a loaded Model using lattigo keygen."""
-    params_dict, manifest, input_level = model.client_params()
+    params_dict, manifest, _input_level = model.client_params()
     params = _params_from_dict(params_dict)
 
     kg = KeyGenerator(params)
@@ -195,7 +195,7 @@ class TestBootstrapKeyParameter:
         """Evaluator(params, keys, btp_keys_bytes=None) works for non-bootstrap model."""
         data = open(MLP_ORION, "rb").read()
         model = Model.load(data)
-        params_dict, manifest, input_level = model.client_params()
+        params_dict, manifest, _input_level = model.client_params()
         params = _params_from_dict(params_dict)
 
         kg = KeyGenerator(params)
@@ -225,7 +225,7 @@ class TestBootstrapKeyParameter:
         """Evaluator(params, keys, None) works same as omitting btp_keys_bytes."""
         data = open(MLP_ORION, "rb").read()
         model = Model.load(data)
-        params_dict, manifest, input_level = model.client_params()
+        params_dict, manifest, _input_level = model.client_params()
         params = _params_from_dict(params_dict)
 
         kg = KeyGenerator(params)

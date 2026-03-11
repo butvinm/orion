@@ -98,7 +98,7 @@ class TestCompiler:
         """Compiler.fit() requires tensor or dataloader."""
         net = SimpleMLP()
         compiler = Compiler(net, MLP_PARAMS)
-        with pytest.raises(CompilationError, match="torch.Tensor or DataLoader"):
+        with pytest.raises(CompilationError, match=r"torch\.Tensor or DataLoader"):
             compiler.fit("invalid")
         del compiler
         _cleanup_backend()
