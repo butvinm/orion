@@ -5,6 +5,7 @@ Produces a CompiledModel containing raw diagonal blobs, computation
 graph (nodes + edges), polynomial coefficients, and a KeyManifest.
 """
 
+import logging
 import math
 import time
 import types
@@ -45,6 +46,8 @@ from orion_compiler.nn.module import Module
 from orion_compiler.nn.operations import Add, Bootstrap, Mult
 from orion_compiler.nn.reshape import Flatten
 from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
+
+logger = logging.getLogger(__name__)
 
 
 class Compiler:
@@ -130,7 +133,7 @@ class Compiler:
         param = next(iter(net.parameters()), None)
         device = param.device if param is not None else torch.device("cpu")
 
-        print("\n[1/5] Finding per-layer input/output ranges and shapes...", flush=True)
+        logger.info("[1/5] Finding per-layer input/output ranges and shapes...")
         if isinstance(input_data, DataLoader):
             user_batch_size = input_data.batch_size
             if user_batch_size is not None and batch_size > user_batch_size:
@@ -161,12 +164,12 @@ class Compiler:
             )
 
         # Fit polynomial activations
-        print("\n[2/5] Fitting polynomials... ", end="", flush=True)
+        logger.info("[2/5] Fitting polynomials...")
         start = time.time()
         for module in net.modules():
             if hasattr(module, "fit") and callable(module.fit):
                 module.fit(self._context)
-        print(f"done! [{time.time() - start:.3f} secs.]")
+        logger.info("Fitting polynomials done! [%.3f secs.]", time.time() - start)
 
     def compile(self) -> CompiledModel:
         """Compile the fitted network into a CompiledModel.
@@ -218,40 +221,41 @@ class Compiler:
                 break
 
         # Generate diagonals
-        print("\n[3/5] Generating matrix diagonals...", flush=True)
+        logger.info("[3/5] Generating matrix diagonals...")
         for node in topo_sort:
             module = network_dag.nodes[node]["module"]
             if isinstance(module, LinearTransform):
-                print(f"\nPacking {node}:")
+                logger.info("Packing %s:", node)
                 module.generate_diagonals(last=(node == last_linear))
 
         # Find residual connections
         network_dag.find_residuals()
 
         # Solve bootstrap placement
-        print("\n[4/5] Running bootstrap placement... ", end="", flush=True)
+        logger.info("[4/5] Running bootstrap placement...")
         start = time.time()
         l_eff = len(self.params.get_logq()) - 1
         btp_solver = BootstrapSolver(net, network_dag, l_eff=l_eff, context=self._context)
         input_level, num_bootstraps, bootstrapper_slots = btp_solver.solve()
-        print(f"done! [{time.time() - start:.3f} secs.]", flush=True)
-        print(
-            f"├── Network requires {num_bootstraps} bootstrap "
-            f"{'operation' if num_bootstraps == 1 else 'operations'}."
+        logger.info("Bootstrap placement done! [%.3f secs.]", time.time() - start)
+        logger.info(
+            "Network requires %d bootstrap %s.",
+            num_bootstraps,
+            "operation" if num_bootstraps == 1 else "operations",
         )
 
         if bootstrapper_slots:
             slots_str = ", ".join([str(int(math.log2(slot))) for slot in bootstrapper_slots])
-            print(
-                f"├── [compiler] Recorded bootstrap slots for logslots = "
-                f"{slots_str} (no key generation in compiler mode)"
+            logger.info(
+                "Recorded bootstrap slots for logslots = %s (no key generation in compiler mode)",
+                slots_str,
             )
 
         btp_placer = BootstrapPlacer(net, network_dag, self._context)
         btp_placer.place_bootstraps()
 
         # -- v2: Build graph nodes, edges, blobs (no module.compile() calls) --
-        print("\n[5/5] Building computation graph...", flush=True)
+        logger.info("[5/5] Building computation graph...")
 
         max_slots = self.params.get_slots()
         nth_root = nth_root_for_ring(self.ckks_params.logn, self.ckks_params.ring_type)

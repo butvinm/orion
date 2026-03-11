@@ -1,9 +1,12 @@
 import itertools
+import logging
 
 import matplotlib.pyplot as plt
 import networkx as nx
 
 from orion_compiler.nn.normalization import BatchNormNd
+
+logger = logging.getLogger(__name__)
 
 
 class NetworkDAG(nx.DiGraph):
@@ -161,7 +164,7 @@ class NetworkDAG(nx.DiGraph):
         try:
             pos = nx.nx_agraph.graphviz_layout(self, prog="dot")
         except Exception:
-            print("Graphviz not installed. Defaulting to worse visualization.\n")
+            logger.warning("Graphviz not installed. Defaulting to worse visualization.")
             pos = nx.kamada_kawai_layout(self)
 
         plt.figure(figsize=figsize)

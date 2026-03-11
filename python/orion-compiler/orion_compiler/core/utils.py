@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import ssl
@@ -12,6 +13,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 def get_mnist_datasets(data_dir, batch_size, test_samples=10000, seed=None):
@@ -166,7 +169,7 @@ def download_and_prepare_tinyimagenet(data_dir="./data"):
 
         try:
             # Download the dataset
-            print("Downloading Tiny-ImageNet dataset...")
+            logger.info("Downloading Tiny-ImageNet dataset...")
             try:
                 urllib.request.urlretrieve(url, zip_filename)
             except Exception as e:
@@ -177,11 +180,11 @@ def download_and_prepare_tinyimagenet(data_dir="./data"):
                 ) from e
 
             # Extract the dataset
-            print("Extracting Tiny-ImageNet dataset...")
+            logger.info("Extracting Tiny-ImageNet dataset...")
             with zipfile.ZipFile(zip_filename, "r") as zip_ref:
                 zip_ref.extractall(data_dir)
 
-            print("Organizing Tiny-ImageNet dataset...")
+            logger.info("Organizing Tiny-ImageNet dataset...")
 
             # Organize the training data
             train_dir = os.path.join(dataset_dir, "train")
@@ -222,7 +225,7 @@ def download_and_prepare_tinyimagenet(data_dir="./data"):
             os.rmdir(val_images_dir)
             os.remove(val_annotations_file)
 
-            print("Tiny-ImageNet dataset preparation complete.")
+            logger.info("Tiny-ImageNet dataset preparation complete.")
         finally:
             # Restore the original SSL context
             ssl._create_default_https_context = old_context
@@ -357,7 +360,7 @@ def train(
     Train the model on the given dataset using SGD and CosineAnnealingLR.
     """
 
-    print(f"\nTraining on device = {device}!")
+    logger.info("Training on device = %s!", device)
     device = torch.device(device)
     model.to(device)
 
@@ -373,7 +376,7 @@ def train(
 
         # Save the model if the test accuracy improves
         if save_path and test_acc > best_acc:
-            print(f"Saving model with accuracy: {test_acc:.3f}")
+            logger.info("Saving model with accuracy: %.3f", test_acc)
             best_acc = test_acc
             state = {
                 "model_state_dict": model.state_dict(),
@@ -395,7 +398,7 @@ def train_epoch(epoch, model, train_loader, criterion, optimizer, device):
     train_loss = 0
     correct = 0
     total = 0
-    print(f"\nEpoch: {epoch + 1}")
+    logger.info("Epoch: %d", epoch + 1)
     train_bar = tqdm(
         enumerate(train_loader), total=len(train_loader), desc="Training", leave=False
     )

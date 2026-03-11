@@ -1,3 +1,4 @@
+import logging
 import math
 import time
 
@@ -7,6 +8,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 # -------------------#
 #   Packing Logic   #
@@ -244,9 +247,9 @@ def diagonalize(
     matrix_height, matrix_width = matrix.shape
     num_block_rows = math.ceil(matrix_height / num_slots)
     num_block_cols = math.ceil(matrix_width / num_slots)
-    print(f"├── embed method: {embed_method}")
-    print(f"├── original matrix shape: {matrix.shape}")
-    print(f"├── # blocks (rows, cols) = {(num_block_rows, num_block_cols)}")
+    logger.debug("embed method: %s", embed_method)
+    logger.debug("original matrix shape: %s", matrix.shape)
+    logger.debug("# blocks (rows, cols) = %s", (num_block_rows, num_block_cols))
 
     if num_block_rows == 1 and embed_method == "hybrid" and not is_last_layer:
         block_height = 2 ** math.ceil(math.log2(matrix_height))
@@ -258,8 +261,8 @@ def diagonalize(
     # Inflate dimensions of the sparse matrix
     matrix.resize(num_block_rows * block_height, num_block_cols * num_slots)
 
-    print(f"├── resized matrix shape: {matrix.shape}")
-    print(f"├── # output rotations: {output_rotations}")
+    logger.debug("resized matrix shape: %s", matrix.shape)
+    logger.debug("# output rotations: %d", output_rotations)
 
     # Prepare indices for diagonal extraction
     row_idx = torch.arange(block_height).repeat(num_slots // block_height)
@@ -308,8 +311,8 @@ def diagonalize(
 
     progress_bar.close()
     elapsed_time = time.time() - start_time
-    print(f"├── time to pack (s): {elapsed_time:.2f}")
-    print(f"├── # diagonals = {total_diagonals}")
+    logger.debug("time to pack (s): %.2f", elapsed_time)
+    logger.debug("# diagonals = %d", total_diagonals)
 
     return diagonals_by_block, output_rotations
 

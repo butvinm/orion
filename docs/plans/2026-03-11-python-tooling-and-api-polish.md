@@ -84,13 +84,13 @@ Bring the three Python packages (`lattigo`, `orion-compiler`, `orion-evaluator`)
 
 ### Task 4: Replace print() with logging in orion-compiler
 
-- [ ] Add `logger = logging.getLogger(__name__)` to `compiler.py`, use `logger.info()` for progress output
-- [ ] Add logger to `core/packing.py`, replace diagnostic `print()` with `logger.debug()`
-- [ ] Add logger to `core/auto_bootstrap.py`, `core/level_dag.py`, `core/network_dag.py` — replace graphviz fallback `print()` with `logger.warning()`
-- [ ] Add logger to `utils.py` — replace download/training progress `print()` with `logger.info()` (keep `tqdm` if already used)
-- [ ] Verify no `print()` remains in library code (exclude tests, examples)
-- [ ] Write test: verify logger name matches module name
-- [ ] Run `pytest python/tests/` — must pass before next task
+- [x] Add `logger = logging.getLogger(__name__)` to `compiler.py`, use `logger.info()` for progress output
+- [x] Add logger to `core/packing.py`, replace diagnostic `print()` with `logger.debug()`
+- [x] Add logger to `core/auto_bootstrap.py`, `core/level_dag.py`, `core/network_dag.py` — replace graphviz fallback `print()` with `logger.warning()`
+- [x] Add logger to `utils.py` — replace download/training progress `print()` with `logger.info()` (keep `tqdm` if already used)
+- [x] Verify no `print()` remains in library code (exclude tests, examples)
+- [x] Write test: verify logger name matches module name
+- [x] Run `pytest python/tests/` — must pass before next task
 
 ### Task 5: Rename JS/TS `free()` to `close()`
 

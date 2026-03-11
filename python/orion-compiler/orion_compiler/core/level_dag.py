@@ -1,4 +1,5 @@
 import itertools
+import logging
 import math
 
 import matplotlib.pyplot as plt
@@ -6,6 +7,8 @@ import networkx as nx
 import torch.nn as nn
 
 from orion_compiler.nn.linear import LinearTransform
+
+logger = logging.getLogger(__name__)
 
 
 class LevelDAG(nx.DiGraph):
@@ -300,7 +303,7 @@ class LevelDAG(nx.DiGraph):
         try:
             pos = nx.nx_agraph.graphviz_layout(self, prog="dot")
         except Exception:
-            print("Graphviz not installed. Defaulting to worse visualization.")
+            logger.warning("Graphviz not installed. Defaulting to worse visualization.")
             pos = nx.kamada_kawai_layout(self)
 
         # Extract edge weights and map to specific colors

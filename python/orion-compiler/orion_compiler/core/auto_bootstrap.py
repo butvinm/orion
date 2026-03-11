@@ -1,4 +1,5 @@
 import itertools
+import logging
 import math
 
 import matplotlib.pyplot as plt
@@ -7,6 +8,8 @@ import networkx as nx
 from orion_compiler.nn.operations import Bootstrap
 
 from .level_dag import LevelDAG
+
+logger = logging.getLogger(__name__)
 
 
 class BootstrapSolver:
@@ -209,7 +212,7 @@ class BootstrapSolver:
         try:
             pos = nx.nx_agraph.graphviz_layout(shortest_graph, prog="dot")
         except Exception:
-            print("Graphviz not installed. Defaulting to worse visualization.\n")
+            logger.warning("Graphviz not installed. Defaulting to worse visualization.")
             pos = nx.kamada_kawai_layout(shortest_graph)
 
         plt.figure(figsize=figsize)
