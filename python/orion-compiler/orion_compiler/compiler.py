@@ -118,7 +118,7 @@ class Compiler:
             config=self.config,
         )
 
-    def fit(self, input_data: DataLoader | torch.Tensor, batch_size: int = 128) -> None:
+    def fit(self, input_data: DataLoader[Any] | torch.Tensor, batch_size: int = 128) -> None:
         """Run cleartext forward passes to collect per-layer statistics.
 
         Traces the model, records min/max ranges, and fits polynomial

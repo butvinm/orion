@@ -119,7 +119,7 @@ class CostProfile:
                 f"bootstrap_key_count must be non-negative, got {self.bootstrap_key_count}"
             )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, int]:
         return {
             "bootstrap_count": self.bootstrap_count,
             "galois_key_count": self.galois_key_count,
@@ -127,7 +127,7 @@ class CostProfile:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "CostProfile":
+    def from_dict(cls, d: dict[str, int]) -> "CostProfile":
         return cls(
             bootstrap_count=d["bootstrap_count"],
             galois_key_count=d["galois_key_count"],

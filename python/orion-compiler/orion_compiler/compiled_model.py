@@ -8,6 +8,7 @@ import json
 import struct
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
 
@@ -16,7 +17,7 @@ from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
 _MODEL_MAGIC = b"ORION\x00\x02\x00"
 
 
-def _pack_container(magic: bytes, metadata: dict, blobs: list[bytes]) -> bytes:
+def _pack_container(magic: bytes, metadata: dict[str, Any], blobs: list[bytes]) -> bytes:
     """Pack metadata + blobs into the standard Orion binary container.
 
     Format:
@@ -41,7 +42,7 @@ def _pack_container(magic: bytes, metadata: dict, blobs: list[bytes]) -> bytes:
     return b"".join(parts)
 
 
-def _unpack_container(data: bytes, expected_magic: bytes) -> tuple[dict, list[bytes]]:
+def _unpack_container(data: bytes, expected_magic: bytes) -> tuple[dict[str, Any], list[bytes]]:
     """Unpack a binary container, verifying magic.
 
     Returns (metadata_dict, list_of_blobs).
@@ -166,7 +167,7 @@ class KeyManifest:
         if isinstance(self.boot_logp, list):
             object.__setattr__(self, "boot_logp", tuple(self.boot_logp))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "galois_elements": sorted(self.galois_elements),
             "bootstrap_slots": list(self.bootstrap_slots),
@@ -176,7 +177,7 @@ class KeyManifest:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "KeyManifest":
+    def from_dict(cls, d: dict[str, Any]) -> "KeyManifest":
         return cls(
             galois_elements=frozenset(d["galois_elements"]),
             bootstrap_slots=tuple(d["bootstrap_slots"]),
@@ -197,12 +198,12 @@ class GraphNode:
     op: str
     level: int
     depth: int
-    shape: dict | None = None
-    config: dict = field(default_factory=dict)
-    blob_refs: dict | None = None
+    shape: dict[str, list[int]] | None = None
+    config: dict[str, Any] = field(default_factory=dict)
+    blob_refs: dict[str, int] | None = None
 
-    def to_dict(self) -> dict:
-        d: dict = {
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "name": self.name,
             "op": self.op,
             "level": self.level,
@@ -216,7 +217,7 @@ class GraphNode:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict) -> "GraphNode":
+    def from_dict(cls, d: dict[str, Any]) -> "GraphNode":
         return cls(
             name=d["name"],
             op=d["op"],
@@ -235,11 +236,11 @@ class GraphEdge:
     src: str
     dst: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         return {"src": self.src, "dst": self.dst}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "GraphEdge":
+    def from_dict(cls, d: dict[str, str]) -> "GraphEdge":
         return cls(src=d["src"], dst=d["dst"])
 
 
@@ -271,7 +272,7 @@ class Graph:
             if edge.dst not in node_names:
                 raise ValueError(f"edge dst '{edge.dst}' not found in graph nodes")
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "input": self.input,
             "output": self.output,
@@ -280,7 +281,7 @@ class Graph:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Graph":
+    def from_dict(cls, d: dict[str, Any]) -> "Graph":
         return cls(
             input=d["input"],
             output=d["output"],
