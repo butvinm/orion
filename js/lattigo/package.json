@@ -1,6 +1,6 @@
 {
   "name": "@orion/lattigo",
-  "version": "0.1.0",
+  "version": "6.2.0",
   "description": "TypeScript bindings for Lattigo CKKS via Go WASM",
   "type": "module",
   "main": "dist/index.js",
