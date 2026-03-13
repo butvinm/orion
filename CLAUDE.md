@@ -24,10 +24,8 @@ Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orio
 # Build the Python CGO shared library (required before installing Python packages)
 python tools/build_lattigo.py
 
-# Install Python packages in editable mode
-cd python/lattigo && pip install -e .
-cd python/orion-compiler && pip install -e .
-cd python/orion-evaluator && pip install -e .
+# Install all Python packages (uv workspace)
+uv sync
 
 # Run all Python tests
 pytest python/tests/
