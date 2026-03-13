@@ -7,6 +7,13 @@ name = "orion-compiler"
 version = "2.0.0"
 description = "Orion FHE compiler — traces, fits, and compiles PyTorch neural networks for encrypted inference"
 requires-python = ">=3.11,<3.13"
+license = "MIT"
+authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
+
+[project.urls]
+Homepage = "https://github.com/butvinm/orion"
+Repository = "https://github.com/butvinm/orion"
+Issues = "https://github.com/butvinm/orion/issues"
 dependencies = [
     "lattigo",
     "torch>=2.2.0",

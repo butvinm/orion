@@ -7,4 +7,11 @@ name = "lattigo"
 version = "6.2.0"
 description = "Python bindings for Lattigo CKKS primitives"
 requires-python = ">=3.11,<3.13"
+license = "MIT"
+authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/butvinm/orion"
+Repository = "https://github.com/butvinm/orion"
+Issues = "https://github.com/butvinm/orion/issues"

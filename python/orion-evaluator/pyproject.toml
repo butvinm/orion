@@ -7,4 +7,11 @@ name = "orion-evaluator"
 version = "2.0.0"
 description = "Python bindings for the Orion FHE evaluator"
 requires-python = ">=3.11,<3.13"
+license = "MIT"
+authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/butvinm/orion"
+Repository = "https://github.com/butvinm/orion"
+Issues = "https://github.com/butvinm/orion/issues"
