@@ -65,7 +65,7 @@ warn_return_any = true
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-exclude = ["build/", "dist/", "\\.egg-info/", "build_bridge\\.py"]
+exclude = ["build/", "dist/", "\\.egg-info/"]
 explicit_package_bases = true
 mypy_path = "python/lattigo:python/orion-compiler:python/orion-evaluator"
 

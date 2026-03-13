@@ -35,7 +35,7 @@ Browser demo in [`examples/wasm-demo/`](examples/wasm-demo/) — encrypted MNIST
 
 ## Installation
 
-**Prerequisites:** Go 1.22+, Python 3.11–3.12, C compiler, `libgmp-dev`, `libssl-dev`.
+**Prerequisites:** Go 1.22+, Python 3.11–3.12, C compiler, `libgmp-dev`, `libssl-dev`, [uv](https://docs.astral.sh/uv/).
 
 ```bash
 # Ubuntu
@@ -43,13 +43,11 @@ sudo apt install -y build-essential libgmp-dev libssl-dev
 
 git clone https://github.com/butvinm/orion.git && cd orion
 
-# Build the Go shared library (required before Python packages)
+# Build Go shared libraries (lattigo + evaluator bridges)
 python tools/build_lattigo.py
 
-# Install Python packages
-pip install -e python/lattigo
-pip install -e python/orion-compiler
-pip install -e python/orion-evaluator
+# Install all Python packages (uv workspace)
+uv sync
 ```
 
 ## Usage
