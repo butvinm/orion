@@ -5,16 +5,16 @@ description = "FHE framework for deep learning inference"
 requires-python = ">=3.11,<3.13"
 license = "MIT"
 authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
+dependencies = [
+    "orion-v2-lattigo",
+    "orion-v2-compiler",
+    "orion-v2-evaluator",
+]
 
 [project.urls]
 Homepage = "https://github.com/butvinm/orion"
 Repository = "https://github.com/butvinm/orion"
 Issues = "https://github.com/butvinm/orion/issues"
-dependencies = [
-    "lattigo",
-    "orion-compiler",
-    "orion-evaluator",
-]
 
 [tool.uv]
 dev-dependencies = [
@@ -32,9 +32,9 @@ members = [
 ]
 
 [tool.uv.sources]
-lattigo = { workspace = true }
-orion-compiler = { workspace = true }
-orion-evaluator = { workspace = true }
+orion-v2-lattigo = { workspace = true }
+orion-v2-compiler = { workspace = true }
+orion-v2-evaluator = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]

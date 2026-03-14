@@ -8,10 +8,10 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "lattigo",
     "orion",
-    "orion-compiler",
-    "orion-evaluator",
+    "orion-v2-compiler",
+    "orion-v2-evaluator",
+    "orion-v2-lattigo",
 ]
 
 [[package]]
@@ -209,11 +209,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/52/7d/7157f9bba6b455cfb4632ed411e199fc8b8977642c2b12082e1bd9e6d173/kiwisolver-1.5.0-pp311-pypy311_pp73-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:daae526907e262de627d8f70058a0f64acc9e2641c164c99c8f594b34a799a16", size = 77603, upload-time = "2026-03-09T13:15:50.945Z" },
     { url = "https://files.pythonhosted.org/packages/0a/dd/8050c947d435c8d4bc94e3252f4d8bb8a76cfb424f043a8680be637a57f1/kiwisolver-1.5.0-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:59cd8683f575d96df5bb48f6add94afc055012c29e28124fcae2b63661b9efb1", size = 73558, upload-time = "2026-03-09T13:15:52.112Z" },
 ]
-
-[[package]]
-name = "lattigo"
-version = "6.2.0"
-source = { editable = "python/lattigo" }
 
 [[package]]
 name = "librt"
@@ -536,9 +531,9 @@ name = "orion"
 version = "2.0.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "lattigo" },
-    { name = "orion-compiler" },
-    { name = "orion-evaluator" },
+    { name = "orion-v2-compiler" },
+    { name = "orion-v2-evaluator" },
+    { name = "orion-v2-lattigo" },
 ]
 
 [package.dev-dependencies]
@@ -551,9 +546,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "lattigo", editable = "python/lattigo" },
-    { name = "orion-compiler", editable = "python/orion-compiler" },
-    { name = "orion-evaluator", editable = "python/orion-evaluator" },
+    { name = "orion-v2-compiler", editable = "python/orion-compiler" },
+    { name = "orion-v2-evaluator", editable = "python/orion-evaluator" },
+    { name = "orion-v2-lattigo", editable = "python/lattigo" },
 ]
 
 [package.metadata.requires-dev]
@@ -565,15 +560,15 @@ dev = [
 ]
 
 [[package]]
-name = "orion-compiler"
+name = "orion-v2-compiler"
 version = "2.0.0"
 source = { editable = "python/orion-compiler" }
 dependencies = [
     { name = "certifi" },
-    { name = "lattigo" },
     { name = "matplotlib" },
     { name = "networkx" },
     { name = "numpy" },
+    { name = "orion-v2-lattigo" },
     { name = "scipy" },
     { name = "torch" },
     { name = "tqdm" },
@@ -582,19 +577,24 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "certifi" },
-    { name = "lattigo", editable = "python/lattigo" },
     { name = "matplotlib", specifier = ">=3.1.0" },
     { name = "networkx", specifier = ">=2.6" },
     { name = "numpy", specifier = ">=1.21.0" },
+    { name = "orion-v2-lattigo", editable = "python/lattigo" },
     { name = "scipy", specifier = ">=1.7.0,<=1.14.1" },
     { name = "torch", specifier = ">=2.2.0" },
     { name = "tqdm", specifier = ">=4.30.0" },
 ]
 
 [[package]]
-name = "orion-evaluator"
+name = "orion-v2-evaluator"
 version = "2.0.0"
 source = { editable = "python/orion-evaluator" }
+
+[[package]]
+name = "orion-v2-lattigo"
+version = "6.2.0"
+source = { editable = "python/lattigo" }
 
 [[package]]
 name = "packaging"

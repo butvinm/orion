@@ -3,13 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "lattigo"
+name = "orion-v2-lattigo"
 version = "6.2.0"
 description = "Python bindings for Lattigo CKKS primitives"
 requires-python = ">=3.11,<3.13"
 license = "MIT"
 authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
 dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["lattigo"]
 
 [project.urls]
 Homepage = "https://github.com/butvinm/orion"
