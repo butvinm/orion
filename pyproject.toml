@@ -1,31 +1,79 @@
-[build-system]
-requires = ["poetry-core>=1.0.2", "setuptools>=61.0"]
-build-backend = "poetry.core.masonry.api"
-
 [project]
-name = "orion-fhe"
-version = "1.0.2"
-description = "A Fully Homomorphic Encryption Framework for Deep Learning"
-authors = [
-    {name = "Austin Ebel", email = "abe5240@nyu.edu"}
-]
-readme = "README.md"
-requires-python = ">=3.9,<3.13"
+name = "orion"
+version = "2.0.0"
+description = "FHE framework for deep learning inference"
+requires-python = ">=3.11,<3.13"
+license = "MIT"
+authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
 dependencies = [
-    "PyYAML>=6.0",
-    "torch>=2.2.0",
-    "torchvision>=0.17.0",
-    "tqdm>=4.30.0",
-    "numpy>=1.21.0",
-    "scipy>=1.7.0,<=1.14.1",
-    "matplotlib>=3.1.0",
-    "h5py>=3.5.0",
-    "certifi>=2024.2.2",
+    "orion-v2-lattigo",
+    "orion-v2-compiler",
+    "orion-v2-evaluator",
 ]
 
-[tool.poetry]
-packages = [{include = "orion"}]
+[project.urls]
+Homepage = "https://github.com/butvinm/orion"
+Repository = "https://github.com/butvinm/orion"
+Issues = "https://github.com/butvinm/orion/issues"
 
-[tool.poetry.build]
-generate-setup-file = true
-script = "tools/build_lattigo.py"
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+    "mypy>=1.0",
+    "torchvision>=0.17.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "python/lattigo",
+    "python/orion-compiler",
+    "python/orion-evaluator",
+]
+
+[tool.uv.sources]
+orion-v2-lattigo = { workspace = true }
+orion-v2-compiler = { workspace = true }
+orion-v2-evaluator = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "SIM105",  # contextlib.suppress — __del__ try/except/pass is canonical for Go handle cleanup
+    "F403",    # star imports — intentional in nn/__init__.py
+    "F405",    # may be undefined from star imports — consequence of F403
+]
+
+[tool.ruff.lint.per-file-ignores]
+"python/tests/*" = ["SIM115"]  # open().read() is fine in tests
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = ["build/", "dist/", "\\.egg-info/"]
+explicit_package_bases = true
+mypy_path = "python/lattigo:python/orion-compiler:python/orion-evaluator"
+
+[[tool.mypy.overrides]]
+module = ["torch.*", "networkx.*", "tqdm.*", "scipy.*", "matplotlib.*", "torchvision.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*", "examples.*"]
+disallow_untyped_defs = false
+
