@@ -528,7 +528,7 @@ wheels = [
 
 [[package]]
 name = "orion"
-version = "2.0.1"
+version = "2.0.2"
 source = { virtual = "." }
 dependencies = [
     { name = "orion-v2-compiler" },
@@ -561,7 +561,7 @@ dev = [
 
 [[package]]
 name = "orion-v2-compiler"
-version = "2.0.1"
+version = "2.0.2"
 source = { editable = "python/orion-compiler" }
 dependencies = [
     { name = "certifi" },
@@ -588,12 +588,12 @@ requires-dist = [
 
 [[package]]
 name = "orion-v2-evaluator"
-version = "2.0.1"
+version = "2.0.2"
 source = { editable = "python/orion-evaluator" }
 
 [[package]]
 name = "orion-v2-lattigo"
-version = "6.2.1"
+version = "6.2.2"
 source = { editable = "python/lattigo" }
 
 [[package]]

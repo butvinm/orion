@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "orion-v2-compiler"
-version = "2.0.1"
+version = "2.0.2"
 description = "Orion FHE compiler — traces, fits, and compiles PyTorch neural networks for encrypted inference"
 requires-python = ">=3.11,<3.13"
 license = "MIT"
