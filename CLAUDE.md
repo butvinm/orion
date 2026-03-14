@@ -18,6 +18,14 @@ Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orio
 
 ## Build & Development
 
+### PyPI install (Linux only, no build tools needed)
+
+```bash
+pip install orion-v2-lattigo orion-v2-compiler orion-v2-evaluator
+```
+
+### From source
+
 **System prerequisites:** Go 1.22+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.11–3.12, Node.js 18+.
 
 ```bash
@@ -169,7 +177,7 @@ Each package defines its own exception hierarchy. Use these instead of generic `
 
 ## Conventions
 
-- Three separate packages: `lattigo`, `orion-compiler`, `orion-evaluator`
+- Three separate packages: `orion-v2-lattigo`, `orion-v2-compiler`, `orion-v2-evaluator` (import names: `lattigo`, `orion_compiler`, `orion_evaluator`)
 - No `Client` class — users use Lattigo primitives directly
 - Go evaluator is a subpackage of the root module (`github.com/butvinm/orion/evaluator`)
 - Tests in `python/tests/`, run with `pytest python/tests/`

@@ -6,13 +6,13 @@ The original Orion is tightly coupled: global state, implicit context, no separa
 
 ## Packages
 
-| Package                                      | Language   | Description                                                                     |
-| -------------------------------------------- | ---------- | ------------------------------------------------------------------------------- |
-| [`lattigo`](python/lattigo/)                 | Python     | Bindings for Lattigo CKKS primitives (keygen, encrypt, decrypt, encode)         |
-| [`orion-compiler`](python/orion-compiler/)   | Python     | Traces PyTorch models and compiles them for encrypted inference (fit → compile) |
-| [`orion-evaluator`](python/orion-evaluator/) | Python     | Bindings for the Go evaluator — runs inference on ciphertexts                   |
-| [`evaluator`](evaluator/)                    | Go         | Core FHE evaluator: loads compiled models, executes the computation graph       |
-| [`js/lattigo`](js/lattigo/)                  | TypeScript | Lattigo CKKS via Go→WASM, runs in browser                                       |
+| Package                                                                                                | Language   | Description                                                                     |
+| ------------------------------------------------------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------- |
+| [`orion-v2-lattigo`](python/lattigo/) ([PyPI](https://pypi.org/project/orion-v2-lattigo/))             | Python     | Bindings for Lattigo CKKS primitives (keygen, encrypt, decrypt, encode)         |
+| [`orion-v2-compiler`](python/orion-compiler/) ([PyPI](https://pypi.org/project/orion-v2-compiler/))    | Python     | Traces PyTorch models and compiles them for encrypted inference (fit → compile) |
+| [`orion-v2-evaluator`](python/orion-evaluator/) ([PyPI](https://pypi.org/project/orion-v2-evaluator/)) | Python     | Bindings for the Go evaluator — runs inference on ciphertexts                   |
+| [`evaluator`](evaluator/)                                                                              | Go         | Core FHE evaluator: loads compiled models, executes the computation graph       |
+| [`js/lattigo`](js/lattigo/)                                                                            | TypeScript | Lattigo CKKS via Go→WASM, runs in browser                                       |
 
 The compiler produces a `.orion` file containing the computation graph and model weights. The client uses `lattigo` directly for key generation and encryption. The evaluator loads the compiled model and evaluation keys, then runs `forward()` on ciphertexts.
 
@@ -34,6 +34,16 @@ python examples/models/run.py resnet --cleartext-only
 Browser demo in [`examples/wasm-demo/`](examples/wasm-demo/) — encrypted MNIST inference where the secret key never leaves the browser.
 
 ## Installation
+
+### From PyPI (Linux only)
+
+```bash
+pip install orion-v2-lattigo orion-v2-compiler orion-v2-evaluator
+```
+
+Requires Python 3.11–3.12. Wheels include prebuilt CGO shared libraries for Linux x86_64.
+
+### From source
 
 **Prerequisites:** Go 1.22+, Python 3.11–3.12, C compiler, `libgmp-dev`, `libssl-dev`, [uv](https://docs.astral.sh/uv/).
 
