@@ -9,6 +9,7 @@ description = "Orion FHE compiler — traces, fits, and compiles PyTorch neural 
 requires-python = ">=3.11,<3.13"
 license = "MIT"
 authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
+readme = "README.md"
 dependencies = [
     "orion-v2-lattigo",
     "torch>=2.2.0",
