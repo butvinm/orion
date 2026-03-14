@@ -1,0 +1,32 @@
+{
+  "name": "orion-v2-lattigo",
+  "version": "6.2.0",
+  "description": "TypeScript bindings for Lattigo CKKS via Go WASM",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/",
+    "wasm/"
+  ],
+  "scripts": {
+    "build:wasm": "bash bridge/build.sh",
+    "build:ts": "esbuild src/index.ts --bundle --platform=neutral --format=esm --external:fs --external:path --external:url --outfile=dist/index.js && tsc --emitDeclarationOnly",
+    "build": "npm run build:wasm && npm run build:ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/ tests/*.test.ts tests/helpers.ts tests/setup.ts",
+    "test:go-wasm": "cd bridge && GOOS=js GOARCH=wasm go test -v . -exec ./go_wasm_test_exec.sh",
+    "test": "npm run test:go-wasm && node --experimental-vm-modules node_modules/.bin/vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.3.3",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "esbuild": "^0.25.0",
+    "eslint": "^10.0.2",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
+  }
+}

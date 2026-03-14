@@ -2,6 +2,7 @@
 
 *.DS_Store
 *data/
+!evaluator/testdata/
 
 # Byte-compiled / optimized / DLL files
 *__pycache__/
@@ -206,3 +207,6 @@ go.work.sum
 
 # env file
 .env
+
+# ralphex progress logs
+.ralphex/progress/
