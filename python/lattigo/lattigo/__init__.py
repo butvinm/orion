@@ -10,3 +10,5 @@ from . import ckks, rlwe
 from .errors import FFIError, HandleClosedError, LatticeError
 
 __all__ = ["FFIError", "HandleClosedError", "LatticeError", "ckks", "rlwe"]
+
+__version__ = "6.2.2"

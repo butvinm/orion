@@ -1,6 +1,6 @@
 """GoHandle — RAII wrapper for cgo.Handle values.
 
-Standalone module with no dependency on the old orionclient FFI.
+Standalone module — loads the orionclient shared library at first use.
 Library loading is deferred to first use.
 """
 

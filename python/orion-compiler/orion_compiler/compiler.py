@@ -72,7 +72,7 @@ class Compiler:
         self.ckks_params = params
         self.config = config or CompilerConfig()
 
-        # Build legacy NewParameters from v2 dataclasses
+        # Build NewParameters from v2 dataclasses
         self.params = NewParameters.from_ckks_params(params, self.config)
 
         # Initialize Go backend (no keys)
