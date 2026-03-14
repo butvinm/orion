@@ -15,3 +15,5 @@ from .evaluator import Evaluator
 from .model import Model
 
 __all__ = ["Evaluator", "EvaluatorError", "Model", "ModelLoadError"]
+
+__version__ = "2.0.2"
