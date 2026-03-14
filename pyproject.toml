@@ -1,6 +1,6 @@
 [project]
 name = "orion"
-version = "2.0.1"
+version = "2.0.2"
 description = "FHE framework for deep learning inference"
 requires-python = ">=3.11,<3.13"
 license = "MIT"
