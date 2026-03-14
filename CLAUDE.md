@@ -8,15 +8,21 @@ An opinionated fork of [baahl-nyu/orion](https://github.com/baahl-nyu/orion), a 
 
 Orion takes PyTorch neural networks, analyzes them, and produces artifacts that enable encrypted inference using the CKKS scheme. The core pipeline is: **fit** (collect value range statistics) → **compile** (assign FHE levels, place bootstraps, pack data) → **encrypt & infer** (run on ciphertexts).
 
-See `ARCH.md` for the full target architecture, compiled model format specification, evaluator API design, repo structure, and design rationale.
-
 ## Repository Structure
 
-Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). Model examples under `examples/models/` (`{mlp,lenet,lola,alexnet,vgg,resnet}.py`) with unified `run.py` and `train.py`. See `ARCH.md § Repo Structure` for the full directory tree.
+Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). Model examples under `examples/models/` (`{mlp,lenet,lola,alexnet,vgg,resnet}.py`) with unified `run.py` and `train.py`.
 
 **Dependency graph:** `lattigo` ← `orion-compiler` (+ torch, networkx). `orion-evaluator` is independent. `js/lattigo` depends only on Lattigo (no Orion-specific code).
 
 ## Build & Development
+
+### PyPI install (Linux only, no build tools needed)
+
+```bash
+pip install orion-v2-lattigo orion-v2-compiler orion-v2-evaluator
+```
+
+### From source
 
 **System prerequisites:** Go 1.22+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.11–3.12, Node.js 18+.
 
@@ -66,7 +72,7 @@ mypy python/lattigo/ python/orion-compiler/ python/orion-evaluator/
 
 ## Design Principles
 
-Orion provides **compilation**, **encoding**, and **evaluation** — never constrain the user's access to Lattigo primitives. No `Client` class, no `orion-client` package. Compiled model stores raw float64 data, not Lattigo artifacts. No backward compatibility with legacy code. See `ARCH.md § Components → No orion-client package` for full rationale.
+Orion provides **compilation**, **encoding**, and **evaluation** — never constrain the user's access to Lattigo primitives. No `Client` class, no `orion-client` package. Compiled model stores raw float64 data, not Lattigo artifacts. No backward compatibility with legacy code.
 
 ## End-to-end Usage
 
@@ -169,7 +175,7 @@ Each package defines its own exception hierarchy. Use these instead of generic `
 
 ## Conventions
 
-- Three separate packages: `lattigo`, `orion-compiler`, `orion-evaluator`
+- Three separate packages: `orion-v2-lattigo`, `orion-v2-compiler`, `orion-v2-evaluator` (import names: `lattigo`, `orion_compiler`, `orion_evaluator`)
 - No `Client` class — users use Lattigo primitives directly
 - Go evaluator is a subpackage of the root module (`github.com/butvinm/orion/evaluator`)
 - Tests in `python/tests/`, run with `pytest python/tests/`
