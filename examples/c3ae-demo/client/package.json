@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "copy-wasm": "mkdir -p wasm && cp ../../../js/lattigo/wasm/lattigo.wasm wasm/ && cp ../../../js/lattigo/wasm/wasm_exec.js wasm/",
-    "build:ts": "esbuild client.ts --bundle --platform=browser --format=esm --external:fs --external:path --external:url --outfile=client.js",
+    "build:ts": "esbuild client.ts --bundle --platform=browser --format=esm --outfile=client.js",
     "build": "npm run copy-wasm && npm run build:ts",
     "typecheck": "tsc --noEmit"
   },

@@ -2,15 +2,7 @@
 
 Issues encountered while building the C3AE demo as a library consumer.
 
-## 1. esbuild browser bundling broken — `url` not externalized
-
-`js/lattigo/dist/index.js` contains `await import("url")` (Node.js built-in). Browser bundling fails unless `--external:url` is added to esbuild.
-
-The existing `wasm-demo/client/package.json` also lacks this flag — broken on current main.
-
-**Fix:** Either externalize `url` in the package's own build, or document the required esbuild flag.
-
-## 2. Compiler holds all diagonals in memory — OOMs on real models
+## 1. Compiler holds all diagonals in memory — OOMs on real models
 
 The v2 compiler stores all weight diagonals in memory to produce the `.orion` binary. For C3AE (a small CNN with ~31K params), this uses **103 GB peak RSS** during compilation. The 64 GB VPS was OOM-killed.
 
@@ -22,7 +14,7 @@ The old Orion streamed diagonals to HDF5 on disk. The v2 format requires them al
 
 **Fix:** Stream diagonals to disk during compilation instead of accumulating in memory, or support chunked `.orion` format.
 
-## 3. Go evaluator deserializes all diagonals into memory — 23x blowup
+## 2. Go evaluator deserializes all diagonals into memory — 23x blowup
 
 Loading a 5.5 GB `.orion` file into the Go evaluator allocates **125 GB of Go heap**. The 23x memory blowup comes from deserializing packed float64 diagonal data into Lattigo's internal ring polynomial structures.
 
@@ -39,3 +31,4 @@ Loading a 5.5 GB `.orion` file into the Go evaluator allocates **125 GB of Go he
 - ~~`params_dict` naming mismatch~~ — Fixed: `CKKSParams` now uses `log_default_scale`, `Parameters.from_dict()` added.
 - ~~TypeScript `.close()` missing from declarations~~ — Fixed: `.d.ts` now includes `close(): void` on all handle-owning classes.
 - ~~No `Parameters.from_dict()` convenience~~ — Fixed: `Parameters.from_dict(params_dict)` added.
+- ~~esbuild browser bundling broken (`url`/`fs`/`path` not externalized)~~ — Fixed: loader uses computed dynamic import for `fs` in Node.js branch, invisible to bundlers. No `--external` flags needed.
