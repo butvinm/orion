@@ -47,10 +47,6 @@ class Parameters:
         obj._handle = handle
         return obj
 
-    @property
-    def _h(self) -> GoHandle:
-        return self._handle
-
     def max_slots(self) -> int:
         """Maximum number of plaintext slots."""
         return ffi.ckks_params_max_slots(self._handle)
@@ -95,7 +91,7 @@ class Encoder:
     """CKKS encoder. Wraps Lattigo's ckks.Encoder."""
 
     def __init__(self, params: Parameters):
-        self._handle = ffi.new_encoder(params._h)
+        self._handle = ffi.new_encoder(params._handle)
         self._params = params
 
     @classmethod
@@ -112,7 +108,7 @@ class Encoder:
         Returns an rlwe.Plaintext object (from lattigo.rlwe module).
         Import it lazily to avoid circular imports.
         """
-        from . import rlwe as _rlwe
+        from . import rlwe as _rlwe  # noqa: PLC0415 — lazy import for circular dep
 
         pt_h = ffi.encoder_encode(self._handle, values, level, scale)
         return _rlwe.Plaintext(pt_h)

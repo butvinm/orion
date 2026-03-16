@@ -208,7 +208,7 @@ class KeyGenerator:
     """Wraps Lattigo's rlwe.KeyGenerator."""
 
     def __init__(self, params: Parameters):
-        self._handle = ffi.new_key_generator(params._h)
+        self._handle = ffi.new_key_generator(params._handle)
 
     @classmethod
     def _from_handle(cls, handle: GoHandle) -> KeyGenerator:
@@ -254,7 +254,7 @@ class Encryptor:
     """Wraps Lattigo's rlwe.Encryptor (public-key encryption)."""
 
     def __init__(self, params: Parameters, pk: PublicKey):
-        self._handle = ffi.new_encryptor(params._h, pk._handle)
+        self._handle = ffi.new_encryptor(params._handle, pk._handle)
 
     @classmethod
     def _from_handle(cls, handle: GoHandle) -> Encryptor:
@@ -287,7 +287,7 @@ class Decryptor:
     """Wraps Lattigo's rlwe.Decryptor."""
 
     def __init__(self, params: Parameters, sk: SecretKey):
-        self._handle = ffi.new_decryptor(params._h, sk._handle)
+        self._handle = ffi.new_decryptor(params._handle, sk._handle)
 
     @classmethod
     def _from_handle(cls, handle: GoHandle) -> Decryptor:
@@ -417,7 +417,7 @@ class BootstrapParams:
         log_slots: int = 0,
     ):
         self._handle = ffi.new_bootstrap_params(
-            params._h, logn=logn, logp=logp, h=h, log_slots=log_slots,
+            params._handle, logn=logn, logp=logp, h=h, log_slots=log_slots,
         )
 
     def gen_eval_keys(
