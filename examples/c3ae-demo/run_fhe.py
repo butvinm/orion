@@ -10,18 +10,15 @@ Usage:
 """
 
 import argparse
-import os
 import resource
 import time
-import tracemalloc
+from pathlib import Path
 
 import numpy as np
 import torch
-from pathlib import Path
+from model import C3AE
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset, random_split
-
-from model import C3AE
 
 AGE_MAX = 100
 
@@ -67,13 +64,18 @@ def main():
     parser.add_argument("--data-dir", type=str, default="./data/UTKFace")
     args = parser.parse_args()
 
-    from orion_compiler import Compiler, CKKSParams
-    from orion_evaluator import Model, Evaluator
-    from lattigo.ckks import Parameters, Encoder
+    from lattigo.ckks import Encoder, Parameters
     from lattigo.rlwe import (
-        KeyGenerator, Encryptor, Decryptor, MemEvaluationKeySet,
+        BootstrapParams,
+        Decryptor,
+        Encryptor,
+        KeyGenerator,
+        MemEvaluationKeySet,
+    )
+    from lattigo.rlwe import (
         Ciphertext as RLWECiphertext,
     )
+    from orion_evaluator import Evaluator, Model
 
     measurements = {}
 
@@ -178,23 +180,17 @@ def main():
     btp_keys_bytes = None
     if bootstrap_slots:
         print(f"Generating bootstrap keys (slots: {bootstrap_slots})...")
-        from lattigo.ffi import (
-            new_bootstrap_params,
-            bootstrap_params_gen_eval_keys,
-            bootstrap_eval_keys_marshal,
-        )
         boot_logp = manifest.get("boot_logp", [61] * 8)
         btp_logn = manifest.get("btp_logn", params_dict.get("logn", 14))
         min_slots = min(bootstrap_slots)
         log_slots = int(np.log2(min_slots))
-        btp_params_h = new_bootstrap_params(
-            params._h, logn=btp_logn, logp=boot_logp, h=192, log_slots=log_slots,
-        )
-        _evk_h, btp_evk_h = bootstrap_params_gen_eval_keys(btp_params_h, sk._handle)
-        btp_keys_bytes = bootstrap_eval_keys_marshal(btp_evk_h)
-        _evk_h.close()
-        btp_evk_h.close()
-        btp_params_h.close()
+        with BootstrapParams(
+            params, logn=btp_logn, logp=boot_logp, h=192, log_slots=log_slots,
+        ) as btp:
+            _evk, btp_keys = btp.gen_eval_keys(sk)
+            btp_keys_bytes = btp_keys.marshal_binary()
+            _evk.close()
+            btp_keys.close()
         print(f"Bootstrap keys: {len(btp_keys_bytes):,} bytes")
 
     keygen_time = time.time() - t0
@@ -202,7 +198,8 @@ def main():
     print(f"Keygen: {keygen_time:.2f}s")
     print(f"Eval keys: {len(keys_bytes):,} bytes ({len(keys_bytes) / (1024**3):.2f} GB)")
     if btp_keys_bytes:
-        print(f"Bootstrap keys: {len(btp_keys_bytes):,} bytes ({len(btp_keys_bytes) / (1024**3):.2f} GB)")
+        btp_gb = len(btp_keys_bytes) / (1024**3)
+        print(f"Bootstrap keys: {len(btp_keys_bytes):,} bytes ({btp_gb:.2f} GB)")
     print(f"RSS delta: {rss_after - rss_before:.1f} MB")
     measurements["keygen"] = {
         "time": keygen_time, "eval_keys_bytes": len(keys_bytes),
@@ -281,21 +278,26 @@ def main():
 
     print(f"\n--- Cleartext (full test set, {len(test_set)} samples) ---")
     m = measurements["cleartext"]
-    print(f"  FPR: {m['fpr'] * 100:.1f}%, FNR: {m['fnr'] * 100:.1f}%, Accuracy: {m['accuracy'] * 100:.1f}%")
+    fpr_pct = m['fpr'] * 100
+    fnr_pct = m['fnr'] * 100
+    acc_pct = m['accuracy'] * 100
+    print(f"  FPR: {fpr_pct:.1f}%, FNR: {fnr_pct:.1f}%, Accuracy: {acc_pct:.1f}%")
 
-    print(f"\n--- Compilation ---")
+    print("\n--- Compilation ---")
     m = measurements["compilation"]
     print(f"  Fit time:     {m['fit_time']:.2f}s")
     print(f"  Compile time: {m['compile_time']:.2f}s")
     print(f"  Model size:   {m['model_bytes']:,} bytes")
     print(f"  Peak Python memory: {m['peak_mem_mb']:.1f} MB")
 
-    print(f"\n--- Key Generation ---")
+    print("\n--- Key Generation ---")
     m = measurements["keygen"]
     print(f"  Time:         {m['time']:.2f}s")
-    print(f"  Eval keys:    {m['eval_keys_bytes']:,} bytes ({m['eval_keys_bytes'] / (1024**3):.2f} GB)")
+    evk_gb = m['eval_keys_bytes'] / (1024**3)
+    print(f"  Eval keys:    {m['eval_keys_bytes']:,} bytes ({evk_gb:.2f} GB)")
     if m["btp_keys_bytes"]:
-        print(f"  BTP keys:     {m['btp_keys_bytes']:,} bytes ({m['btp_keys_bytes'] / (1024**3):.2f} GB)")
+        btp_gb = m['btp_keys_bytes'] / (1024**3)
+        print(f"  BTP keys:     {m['btp_keys_bytes']:,} bytes ({btp_gb:.2f} GB)")
     print(f"  RSS delta:    {m['rss_delta_mb']:.1f} MB")
 
     print(f"\n--- FHE Inference ({len(samples)} samples) ---")
