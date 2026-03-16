@@ -389,12 +389,18 @@ class Compiler:
         blob_refs: dict[str, int] | None = None
 
         if isinstance(module, LinearTransform):
+            # Save diagonal indices for Galois computation before packing
+            diag_indices_per_block = {k: list(v.keys()) for k, v in module.diagonals.items()}
+
             # Raw diagonals -> blobs (no Go calls)
             blob_refs = {}
             for (row, col), diag_dict in module.diagonals.items():
                 blob_data = pack_raw_diagonals(diag_dict, max_slots)
                 blob_refs[f"diag_{row}_{col}"] = len(blobs)
                 blobs.append(blob_data)
+
+            # Free diagonal data after packing to reduce memory
+            module.diagonals.clear()
 
             # Raw bias -> blob (different constructors for Linear vs Conv2d)
             if isinstance(module, Conv2d):
@@ -420,8 +426,7 @@ class Compiler:
             if hasattr(module, "output_shape") and module.output_shape is not None:
                 shape["output"] = list(module.output_shape)
 
-            # Compute Galois elements for this LT (pure Python)
-            diag_indices_per_block = {k: list(v.keys()) for k, v in module.diagonals.items()}
+            # Compute Galois elements using saved indices (diagonals already freed)
             lt_galois = compute_galois_elements_for_linear_transform(
                 diag_indices_per_block,
                 slots,

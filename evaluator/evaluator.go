@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"fmt"
+	"math"
 	"math/bits"
 	"sort"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/polynomial"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
+	"github.com/baahl-nyu/lattigo/v6/ring"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils"
 )
@@ -194,29 +196,60 @@ func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error
 
 // evalLinearTransform evaluates a linear transform node: multi-block LT accumulation,
 // rescale, bias addition, and optional output rotations.
+//
+// Diagonals are parsed from raw blobs and CKKS-encoded on demand for each block,
+// then discarded after evaluation. This avoids the ~23x memory blowup from
+// pre-encoding all diagonals at model load time.
 func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
 	cfg, ok := model.ltConfigs[node.Name]
 	if !ok {
 		return nil, fmt.Errorf("no config found for linear_transform node %q", node.Name)
 	}
 
-	// Look up pre-encoded LTs for this node.
-	nodeTransforms, ok := model.transforms[node.Name]
-	if !ok || len(nodeTransforms) == 0 {
-		return nil, fmt.Errorf("no linear transforms found for node %q", node.Name)
-	}
+	maxSlots := model.params.MaxSlots()
 
-	// Evaluate each LT block and accumulate.
-	// Sort refs for deterministic accumulation order (Go map iteration is random).
-	refs := make([]string, 0, len(nodeTransforms))
-	for ref := range nodeTransforms {
-		refs = append(refs, ref)
+	// Collect diagonal blob refs (exclude "bias"), sort for deterministic order.
+	refs := make([]string, 0, len(node.BlobRefs))
+	for ref := range node.BlobRefs {
+		if ref != "bias" {
+			refs = append(refs, ref)
+		}
+	}
+	if len(refs) == 0 {
+		return nil, fmt.Errorf("no diagonal blob refs found for node %q", node.Name)
 	}
 	sort.Strings(refs)
 
 	var result *rlwe.Ciphertext
 	for _, ref := range refs {
-		lt := nodeTransforms[ref]
+		blobIdx := node.BlobRefs[ref]
+		if blobIdx < 0 || blobIdx >= len(model.rawBlobs) {
+			return nil, fmt.Errorf("blob ref %q index %d out of range (have %d blobs)", ref, blobIdx, len(model.rawBlobs))
+		}
+
+		// Parse raw float64 diagonals from blob.
+		diagMap, err := ParseDiagonalBlob(model.rawBlobs[blobIdx], maxSlots)
+		if err != nil {
+			return nil, fmt.Errorf("parsing diagonal blob %q: %w", ref, err)
+		}
+
+		// CKKS-encode diagonals into a LinearTransformation.
+		diagonals := lintrans.Diagonals[float64](diagMap)
+		ltparams := lintrans.Parameters{
+			DiagonalsIndexList:        diagonals.DiagonalsIndexList(),
+			LevelQ:                    node.Level,
+			LevelP:                    model.params.MaxLevelP(),
+			Scale:                     rlwe.NewScale(model.params.Q()[node.Level]),
+			LogDimensions:             ring.Dimensions{Rows: 0, Cols: model.params.LogMaxSlots()},
+			LogBabyStepGiantStepRatio: int(math.Log2(cfg.BSGSRatio)),
+		}
+
+		lt := lintrans.NewTransformation(model.params, ltparams)
+		if err := lintrans.Encode(e.encoder, diagonals, lt); err != nil {
+			return nil, fmt.Errorf("encoding linear transform %q: %w", ref, err)
+		}
+
+		// Evaluate this block. diagMap and lt are discarded after this iteration.
 		partial, err := e.linEval.EvaluateNew(ct, lt)
 		if err != nil {
 			return nil, fmt.Errorf("evaluating LT block %q: %w", ref, err)
@@ -247,7 +280,6 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphe
 
 	// Apply output rotations (hybrid embedding fold-down).
 	if cfg.OutputRotations > 0 {
-		maxSlots := model.params.MaxSlots()
 		for i := 0; i < cfg.OutputRotations; i++ {
 			rotation := maxSlots / (1 << (i + 1))
 			rotated, err := e.eval.RotateNew(result, rotation)

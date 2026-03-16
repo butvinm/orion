@@ -22,14 +22,30 @@ func TestLoadModelMLP(t *testing.T) {
 	assert.Equal(t, "flatten", model.graph.Input)
 	assert.Equal(t, "fc2", model.graph.Output)
 
-	// Verify 2 linear transforms (fc1 and fc2).
-	assert.Equal(t, 2, len(model.transforms))
-	assert.Contains(t, model.transforms, "fc1")
-	assert.Contains(t, model.transforms, "fc2")
+	// Verify 2 linear transform configs (fc1 and fc2).
+	assert.Equal(t, 2, len(model.ltConfigs))
+	assert.Contains(t, model.ltConfigs, "fc1")
+	assert.Contains(t, model.ltConfigs, "fc2")
 
-	// Each LT should have at least one diagonal ref.
-	assert.Greater(t, len(model.transforms["fc1"]), 0)
-	assert.Greater(t, len(model.transforms["fc2"]), 0)
+	// Verify raw blobs are stored (diagonals are NOT pre-encoded).
+	assert.Greater(t, len(model.rawBlobs), 0)
+
+	// Verify diagonal blob refs point to valid raw blobs.
+	for _, node := range model.graph.Nodes {
+		if node.Op == "linear_transform" {
+			for ref, blobIdx := range node.BlobRefs {
+				if ref == "bias" {
+					continue
+				}
+				assert.Less(t, blobIdx, len(model.rawBlobs), "blob ref %q index out of range", ref)
+				// Verify the blob is parseable.
+				maxSlots := model.params.MaxSlots()
+				diagMap, err := ParseDiagonalBlob(model.rawBlobs[blobIdx], maxSlots)
+				assert.NoError(t, err, "parsing diagonal blob %q", ref)
+				assert.Greater(t, len(diagMap), 0, "diagonal blob %q should have diagonals", ref)
+			}
+		}
+	}
 
 	// Verify 2 biases (fc1 and fc2).
 	assert.Equal(t, 2, len(model.biases))
@@ -56,8 +72,8 @@ func TestLoadModelSigmoid(t *testing.T) {
 	// The polynomial should have non-zero degree.
 	assert.Greater(t, poly.Degree(), 0, "polynomial should have non-zero degree")
 
-	// Verify 2 LTs still present.
-	assert.Equal(t, 2, len(model.transforms))
+	// Verify 2 LT configs still present (diagonals not pre-encoded).
+	assert.Equal(t, 2, len(model.ltConfigs))
 
 	// Verify 2 biases.
 	assert.Equal(t, 2, len(model.biases))

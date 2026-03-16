@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils"
@@ -139,7 +138,7 @@ func buildSyntheticBootstrapModel(t *testing.T, ckksParams ckks.Parameters, p or
 		clientParam: p,
 		params:      ckksParams,
 		graph:       graph,
-		transforms:  make(map[string]map[string]lintrans.LinearTransformation),
+		rawBlobs:    nil,
 		biases:      make(map[string]*rlwe.Plaintext),
 		polys:       make(map[string]bignum.Polynomial),
 		ltConfigs:   make(map[string]*LinearTransformConfig),

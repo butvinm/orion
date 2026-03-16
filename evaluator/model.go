@@ -2,33 +2,34 @@ package evaluator
 
 import (
 	"fmt"
-	"math"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/lattigo/v6/ring"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
 
 	orion "github.com/butvinm/orion"
 )
 
-// Model holds a parsed and CKKS-encoded compiled model.
+// Model holds a parsed compiled model with raw blob data for lazy LT encoding.
 // It is immutable after LoadModel() and safe to share across goroutines.
+// Linear transform diagonals are NOT pre-encoded — the Evaluator encodes them
+// on demand during Forward() to avoid the ~23x memory blowup from CKKS encoding.
 type Model struct {
 	header      *CompiledHeader
 	clientParam orion.Params // cached for ClientParams()
 	params      ckks.Parameters
 	graph       *Graph
-	transforms  map[string]map[string]lintrans.LinearTransformation // node -> ref -> LT
-	biases      map[string]*rlwe.Plaintext                          // node -> bias
-	polys       map[string]bignum.Polynomial                        // node -> polynomial
-	ltConfigs   map[string]*LinearTransformConfig                   // node -> parsed LT config
-	polyConfigs map[string]*PolynomialConfig                        // node -> parsed poly config
+	rawBlobs    [][]byte                         // raw blob data (sub-slices of input, no copy)
+	biases      map[string]*rlwe.Plaintext       // node -> bias (small, pre-encoded)
+	polys       map[string]bignum.Polynomial     // node -> polynomial
+	ltConfigs   map[string]*LinearTransformConfig // node -> parsed LT config
+	polyConfigs map[string]*PolynomialConfig      // node -> parsed poly config
 }
 
-// LoadModel parses a .orion v2 file and CKKS-encodes diagonals, biases,
-// and polynomials at load time. The returned Model is immutable.
+// LoadModel parses a .orion v2 file, stores raw blob data, and CKKS-encodes
+// only biases and polynomials at load time. Linear transform diagonals are
+// kept as raw blobs and encoded on demand during Forward() to avoid the ~23x
+// memory blowup from CKKS encoding. The returned Model is immutable.
 func LoadModel(data []byte) (*Model, error) {
 	// 1. Parse container.
 	header, blobs, err := ParseContainer(data)
@@ -59,18 +60,20 @@ func LoadModel(data []byte) (*Model, error) {
 		clientParam: p,
 		params:      ckksParams,
 		graph:       graph,
-		transforms:  make(map[string]map[string]lintrans.LinearTransformation),
+		rawBlobs:    blobs,
 		biases:      make(map[string]*rlwe.Plaintext),
 		polys:       make(map[string]bignum.Polynomial),
 		ltConfigs:   make(map[string]*LinearTransformConfig),
 		polyConfigs: make(map[string]*PolynomialConfig),
 	}
 
-	// 5-6. Process each node based on op type.
+	// Process each node: parse configs, encode biases (small), load polynomials.
+	// Linear transform diagonals are NOT encoded here — they are encoded on
+	// demand during Forward() to avoid ~23x memory blowup from CKKS encoding.
 	for _, node := range graph.Nodes {
 		switch node.Op {
 		case "linear_transform":
-			if err := m.loadLinearTransform(node, blobs, ckksParams, enc, maxSlots); err != nil {
+			if err := m.loadLinearTransformMetadata(node, blobs, ckksParams, enc, maxSlots); err != nil {
 				return nil, fmt.Errorf("loading linear_transform %q: %w", node.Name, err)
 			}
 		case "polynomial":
@@ -87,14 +90,13 @@ func LoadModel(data []byte) (*Model, error) {
 	return m, nil
 }
 
-// loadLinearTransform encodes diagonals and bias for a linear_transform node.
-func (m *Model) loadLinearTransform(node *Node, blobs [][]byte, ckksParams ckks.Parameters, enc *ckks.Encoder, maxSlots int) error {
+// loadLinearTransformMetadata parses config and encodes bias for a linear_transform node.
+// Diagonal encoding is deferred to Forward() time to avoid ~23x memory blowup.
+func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksParams ckks.Parameters, enc *ckks.Encoder, maxSlots int) error {
 	cfg, err := parseLinearTransformConfig(node.ConfigRaw)
 	if err != nil {
 		return fmt.Errorf("parsing config: %w", err)
 	}
-
-	nodeTransforms := make(map[string]lintrans.LinearTransformation)
 
 	// Validate node level is within the moduli chain.
 	if node.Level < 0 || node.Level > ckksParams.MaxLevel() {
@@ -106,44 +108,19 @@ func (m *Model) loadLinearTransform(node *Node, blobs [][]byte, ckksParams ckks.
 		return fmt.Errorf("bsgs_ratio must be positive, got %f", cfg.BSGSRatio)
 	}
 
+	// Validate blob refs point to valid indices (but don't parse/encode diagonals).
 	for ref, blobIdx := range node.BlobRefs {
 		if ref == "bias" {
-			continue // handled separately below
+			continue
 		}
-
 		if blobIdx < 0 || blobIdx >= len(blobs) {
 			return fmt.Errorf("blob ref %q index %d out of range (have %d blobs)", ref, blobIdx, len(blobs))
 		}
-
-		diagMap, err := ParseDiagonalBlob(blobs[blobIdx], maxSlots)
-		if err != nil {
-			return fmt.Errorf("parsing diagonal blob %q: %w", ref, err)
-		}
-
-		// Build Lattigo diagonals (cast — both are map[int][]float64).
-		diagonals := lintrans.Diagonals[float64](diagMap)
-
-		ltparams := lintrans.Parameters{
-			DiagonalsIndexList:        diagonals.DiagonalsIndexList(),
-			LevelQ:                    node.Level,
-			LevelP:                    ckksParams.MaxLevelP(),
-			Scale:                     rlwe.NewScale(ckksParams.Q()[node.Level]),
-			LogDimensions:             ring.Dimensions{Rows: 0, Cols: ckksParams.LogMaxSlots()},
-			LogBabyStepGiantStepRatio: int(math.Log2(cfg.BSGSRatio)),
-		}
-
-		lt := lintrans.NewTransformation(ckksParams, ltparams)
-		if err := lintrans.Encode(enc, diagonals, lt); err != nil {
-			return fmt.Errorf("encoding linear transform %q: %w", ref, err)
-		}
-
-		nodeTransforms[ref] = lt
 	}
 
-	m.transforms[node.Name] = nodeTransforms
 	m.ltConfigs[node.Name] = cfg
 
-	// Encode bias if present.
+	// Encode bias if present (biases are small).
 	if biasIdx, ok := node.BlobRefs["bias"]; ok {
 		if biasIdx < 0 || biasIdx >= len(blobs) {
 			return fmt.Errorf("bias blob index %d out of range (have %d blobs)", biasIdx, len(blobs))

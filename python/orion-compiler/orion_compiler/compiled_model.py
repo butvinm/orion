@@ -5,6 +5,7 @@ The binary format uses a magic header, JSON metadata, and length-prefixed blobs.
 """
 
 import json
+import os
 import struct
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -306,8 +307,8 @@ class CompiledModel:
     graph: Graph
     blobs: list[bytes]  # binary blobs indexed by node blob_refs
 
-    def to_bytes(self) -> bytes:
-        metadata = {
+    def _build_metadata(self) -> dict[str, Any]:
+        return {
             "version": 2,
             "params": {
                 "logn": self.params.logn,
@@ -330,7 +331,26 @@ class CompiledModel:
             "graph": self.graph.to_dict(),
             "blob_count": len(self.blobs),
         }
-        return _pack_container(_MODEL_MAGIC, metadata, self.blobs)
+
+    def to_bytes(self) -> bytes:
+        return _pack_container(_MODEL_MAGIC, self._build_metadata(), self.blobs)
+
+    def to_file(self, path: str | os.PathLike[str]) -> None:
+        """Write the compiled model to a file, streaming blobs one at a time.
+
+        Unlike to_bytes(), this avoids creating a single large bytes object,
+        reducing peak memory by the size of the .orion file.
+        """
+        metadata = self._build_metadata()
+        meta_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
+        with open(path, "wb") as f:
+            f.write(_MODEL_MAGIC)
+            f.write(struct.pack("<I", len(meta_bytes)))
+            f.write(meta_bytes)
+            f.write(struct.pack("<I", len(self.blobs)))
+            for blob in self.blobs:
+                f.write(struct.pack("<Q", len(blob)))
+                f.write(blob)
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "CompiledModel":
