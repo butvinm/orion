@@ -141,29 +141,31 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 ### Compilation
 
-| Metric              | Value                            |
-| ------------------- | -------------------------------- |
-| Fit time            | 0.05s                            |
-| Compile time        | 27.7 min                         |
-| Model size (.orion) | **5.5 GB** (5,828,835,332 bytes) |
-| Total diagonals     | 46,304+                          |
-| Peak RSS            | **103 GB**                       |
-| Input level         | 5                                |
-| Galois elements     | 334                              |
-| Bootstrap slots     | (4096, 8192)                     |
-| Graph               | 18 nodes, 17 edges               |
+| Metric              | Value                                        |
+| ------------------- | -------------------------------------------- |
+| Fit time            | 0.05s                                        |
+| Compile time        | 42.7 min                                     |
+| Model size (.orion) | **5.5 GB** (5,828,943,684 bytes)             |
+| Peak RSS            | **65 GB** (with deferred diagonal streaming) |
+| Input level         | 5                                            |
+| Galois elements     | 334                                          |
+| Bootstrap slots     | (4096, 8192)                                 |
+| Graph               | 18 nodes, 17 edges                           |
 
-### Model Loading (Go Evaluator)
+### Evaluator Setup (Deferred Diagonal Loading)
 
-| Metric             | Value                                     |
-| ------------------ | ----------------------------------------- |
-| File read time     | 3.3s                                      |
-| Model load time    | **8 min 48s**                             |
-| Go heap after load | **125 GB** (from 5.5 GB file, 23x blowup) |
+| Metric          | Value                                           |
+| --------------- | ----------------------------------------------- |
+| Model load time | 14s                                             |
+| Key generation  | 52s (334 Galois + bootstrap)                    |
+| Eval keys size  | 4.25 GB                                         |
+| Bootstrap keys  | 1.22 GB                                         |
+| Evaluator init  | 12s                                             |
+| Total RSS       | **7.1 GB** (deferred diagonals — no 23x blowup) |
 
 ### FHE Inference
 
-**Not completed** — model loading (125 GB) + keygen + eval keys exceeds 128 GB. Requires 256+ GB RAM. See [Memory Blocker](#memory-blocker).
+**Not completed** — multi-CT input packing (12,288 values > 8,192 slots) requires recompilation with updated compiler. Compilation OOMs on 128 GB VPS with updated compiler. In progress.
 
 ### Cleartext Baseline (for reference)
 
@@ -175,23 +177,21 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 ### Comparison with Previous Results (Old Orion)
 
-| Metric                | Old Orion                  | Orion v2                      |
-| --------------------- | -------------------------- | ----------------------------- |
-| Compilation memory    | ~10 GB (streams to HDF5)   | **103 GB** (all in-memory)    |
-| Model artifact        | ~8 GB (diags.h5 + keys.h5) | **5.5 GB** (.orion binary)    |
-| Evaluator load memory | ~10 GB (lazy from HDF5)    | **125 GB** (all deserialized) |
-| FHE inference         | 31.8s per sample           | Not reached                   |
-| Accuracy              | 93.9%                      | 94.2% (same weights)          |
-| FPR                   | 18.9%                      | 15.9% (same weights)          |
-| Total server memory   | 10.19 GB                   | 125+ GB                       |
+| Metric                | Old Orion                  | Orion v2 (with deferred loading) |
+| --------------------- | -------------------------- | -------------------------------- |
+| Compilation memory    | ~10 GB (streams to HDF5)   | **65 GB** (streaming blobs)      |
+| Model artifact        | ~8 GB (diags.h5 + keys.h5) | **5.5 GB** (.orion binary)       |
+| Evaluator load memory | ~10 GB (lazy from HDF5)    | **7.1 GB** (deferred diagonals)  |
+| FHE inference         | 31.8s per sample           | In progress                      |
+| Accuracy              | 93.9%                      | 94.2% (same weights)             |
+| FPR                   | 18.9%                      | 15.9% (same weights)             |
+| Total server memory   | 10.19 GB                   | ~7.1 GB (excl. inference)        |
 
-## Memory Blocker
+## Bugs Found and Fixed
 
-Orion v2 cannot run FHE inference on C3AE with less than ~256 GB RAM. The bottleneck is the Go evaluator's model loading:
+1. **`ctypes.string_at` 32-bit truncation** — marshaling >4 GB key sets returned only `size & 0xFFFFFFFF` bytes, causing UnmarshalBinary to run out of data and stack-overflow. Fixed by replacing `ctypes.string_at` with `ctypes.memmove` into a pre-allocated `bytearray`.
 
-1. **Compilation** (Python): The compiler stores all 46,304 weight diagonals in memory to produce the `.orion` binary. Peak RSS: 103 GB. Old Orion streamed to HDF5.
-
-2. **Model loading** (Go): `evaluator.LoadModel()` deserializes all diagonals from raw float64 into Lattigo's NTT-encoded ring polynomials (CRT form across multiple moduli + BSGS expansion). This causes a **23x memory blowup**: 5.5 GB file → 125 GB Go heap. Old Orion loaded diagonals on-demand from HDF5.
+2. **Compilation memory** — reduced from 103 GB to 65 GB by streaming diagonal blobs to disk during compilation and freeing Python diagonal dicts immediately after packing.
 
 3. **Keygen + inference**: Additional 3-10 GB for evaluation keys, bootstrap keys, and ciphertexts. Combined with model loading, this exceeds 128 GB.
 
