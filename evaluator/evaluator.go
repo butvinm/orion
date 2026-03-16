@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
-	"sort"
 
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/lintrans"
@@ -59,81 +58,86 @@ func (e *Evaluator) Close() {
 }
 
 // Forward runs FHE inference on the model's computation graph.
-// The input ciphertext must contain already-padded slot values.
-func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
+// inputs is a list of ciphertexts (one per input CT slot).
+// For single-CT models, pass a single-element slice.
+func (e *Evaluator) Forward(model *Model, inputs []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
 	if e.eval == nil {
 		return nil, fmt.Errorf("evaluator is closed")
 	}
 	if model == nil {
 		return nil, fmt.Errorf("model is nil")
 	}
-	if input == nil {
-		return nil, fmt.Errorf("input ciphertext is nil")
+	if len(inputs) == 0 {
+		return nil, fmt.Errorf("input ciphertext list is empty")
+	}
+	for i, ct := range inputs {
+		if ct == nil {
+			return nil, fmt.Errorf("input ciphertext[%d] is nil", i)
+		}
 	}
 
-	results := make(map[string]*rlwe.Ciphertext)
+	results := make(map[string][]*rlwe.Ciphertext)
 
-	// Make the raw input available under a virtual key so the graph's input
-	// node can consume it like any other node.
+	// Make the raw inputs available under a virtual key.
 	const virtualInput = "__input__"
-	results[virtualInput] = input
+	results[virtualInput] = inputs
 
 	// Walk the graph in topological order.
 	for _, name := range model.graph.Order {
 		node := model.graph.Nodes[name]
-		inputs := model.graph.Inputs[name]
+		predNames := model.graph.Inputs[name]
 
 		// The graph's input node has no predecessors in the edge list;
-		// wire it to the raw input ciphertext.
-		if name == model.graph.Input && len(inputs) == 0 {
-			inputs = []string{virtualInput}
+		// wire it to the raw input ciphertexts.
+		if name == model.graph.Input && len(predNames) == 0 {
+			predNames = []string{virtualInput}
 		}
 
 		var err error
-		var result *rlwe.Ciphertext
+		var result []*rlwe.Ciphertext
 
 		switch node.Op {
 		case "flatten":
-			if len(inputs) != 1 {
-				return nil, fmt.Errorf("flatten %q: expected 1 input, got %d", name, len(inputs))
+			if len(predNames) != 1 {
+				return nil, fmt.Errorf("flatten %q: expected 1 input, got %d", name, len(predNames))
 			}
-			result, err = e.evalFlatten(results[inputs[0]])
+			result, err = e.evalFlattenMulti(results[predNames[0]])
 
 		case "quad":
-			if len(inputs) != 1 {
-				return nil, fmt.Errorf("quad %q: expected 1 input, got %d", name, len(inputs))
+			if len(predNames) != 1 {
+				return nil, fmt.Errorf("quad %q: expected 1 input, got %d", name, len(predNames))
 			}
-			result, err = e.evalQuad(results[inputs[0]])
+			result, err = e.evalQuadMulti(results[predNames[0]])
 
 		case "add":
-			if len(inputs) != 2 {
-				return nil, fmt.Errorf("add %q: expected 2 inputs, got %d", name, len(inputs))
+			if len(predNames) != 2 {
+				return nil, fmt.Errorf("add %q: expected 2 inputs, got %d", name, len(predNames))
 			}
-			result, err = e.evalAdd(results[inputs[0]], results[inputs[1]])
+			result, err = e.evalAddMulti(results[predNames[0]], results[predNames[1]])
 
 		case "mult":
-			if len(inputs) != 2 {
-				return nil, fmt.Errorf("mult %q: expected 2 inputs, got %d", name, len(inputs))
+			if len(predNames) != 2 {
+				return nil, fmt.Errorf("mult %q: expected 2 inputs, got %d", name, len(predNames))
 			}
-			result, err = e.evalMult(results[inputs[0]], results[inputs[1]])
+			result, err = e.evalMultMulti(results[predNames[0]], results[predNames[1]])
 
 		case "linear_transform":
-			if len(inputs) != 1 {
-				return nil, fmt.Errorf("linear_transform %q: expected 1 input, got %d", name, len(inputs))
+			if len(predNames) != 1 {
+				return nil, fmt.Errorf("linear_transform %q: expected 1 input, got %d", name, len(predNames))
 			}
-			result, err = e.evalLinearTransform(model, node, results[inputs[0]])
+			result, err = e.evalLinearTransform(model, node, results[predNames[0]])
 
 		case "polynomial":
-			if len(inputs) != 1 {
-				return nil, fmt.Errorf("polynomial %q: expected 1 input, got %d", name, len(inputs))
+			if len(predNames) != 1 {
+				return nil, fmt.Errorf("polynomial %q: expected 1 input, got %d", name, len(predNames))
 			}
-			result, err = e.evalPolynomial(model, node, results[inputs[0]])
+			result, err = e.evalPolynomialMulti(model, node, results[predNames[0]])
 
 		case "bootstrap":
-			if len(inputs) != 1 {
-				return nil, fmt.Errorf("bootstrap %q: expected 1 input, got %d", name, len(inputs))
+			if len(predNames) != 1 {
+				return nil, fmt.Errorf("bootstrap %q: expected 1 input, got %d", name, len(predNames))
 			}
-			result, err = e.evalBootstrap(model, node, results[inputs[0]])
+			result, err = e.evalBootstrapMulti(model, node, results[predNames[0]])
 
 		default:
 			return nil, fmt.Errorf("unknown op %q for node %q", node.Op, name)
@@ -153,12 +157,31 @@ func (e *Evaluator) Forward(model *Model, input *rlwe.Ciphertext) (*rlwe.Ciphert
 	return out, nil
 }
 
-// evalFlatten is a no-op — the input ciphertext already contains the flattened data.
-// Returns a copy so the caller owns the result exclusively. This prevents
-// pointer aliasing when the same ciphertext feeds multiple downstream nodes
-// (e.g., residual connections with fan-out).
+// evalFlattenMulti copies each CT in the list.
+func (e *Evaluator) evalFlattenMulti(cts []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
+	out := make([]*rlwe.Ciphertext, len(cts))
+	for i, ct := range cts {
+		out[i] = ct.CopyNew()
+	}
+	return out, nil
+}
+
+// evalFlatten is kept for direct unit tests on single CTs.
 func (e *Evaluator) evalFlatten(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
 	return ct.CopyNew(), nil
+}
+
+// evalQuadMulti computes ct^2 for each CT in the list.
+func (e *Evaluator) evalQuadMulti(cts []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
+	out := make([]*rlwe.Ciphertext, len(cts))
+	for i, ct := range cts {
+		var err error
+		out[i], err = e.evalQuad(ct)
+		if err != nil {
+			return nil, fmt.Errorf("ct[%d]: %w", i, err)
+		}
+	}
+	return out, nil
 }
 
 // evalQuad computes ct^2 via MulRelin + Rescale.
@@ -173,6 +196,22 @@ func (e *Evaluator) evalQuad(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
 	return result, nil
 }
 
+// evalAddMulti adds two CT lists element-wise.
+func (e *Evaluator) evalAddMulti(cts0, cts1 []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
+	if len(cts0) != len(cts1) {
+		return nil, fmt.Errorf("add CT count mismatch: %d vs %d", len(cts0), len(cts1))
+	}
+	out := make([]*rlwe.Ciphertext, len(cts0))
+	for i := range cts0 {
+		var err error
+		out[i], err = e.evalAdd(cts0[i], cts1[i])
+		if err != nil {
+			return nil, fmt.Errorf("ct[%d]: %w", i, err)
+		}
+	}
+	return out, nil
+}
+
 // evalAdd adds two ciphertexts element-wise.
 func (e *Evaluator) evalAdd(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
 	result, err := e.eval.AddNew(ct0, ct1)
@@ -180,6 +219,22 @@ func (e *Evaluator) evalAdd(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
 		return nil, fmt.Errorf("Add: %w", err)
 	}
 	return result, nil
+}
+
+// evalMultMulti multiplies two CT lists element-wise.
+func (e *Evaluator) evalMultMulti(cts0, cts1 []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
+	if len(cts0) != len(cts1) {
+		return nil, fmt.Errorf("mult CT count mismatch: %d vs %d", len(cts0), len(cts1))
+	}
+	out := make([]*rlwe.Ciphertext, len(cts0))
+	for i := range cts0 {
+		var err error
+		out[i], err = e.evalMult(cts0[i], cts1[i])
+		if err != nil {
+			return nil, fmt.Errorf("ct[%d]: %w", i, err)
+		}
+	}
+	return out, nil
 }
 
 // evalMult multiplies two ciphertexts with relinearization and rescaling.
@@ -194,106 +249,126 @@ func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error
 	return result, nil
 }
 
-// evalLinearTransform evaluates a linear transform node: multi-block LT accumulation,
-// rescale, bias addition, and optional output rotations.
+// evalLinearTransform evaluates a linear transform node with blocked matrix-vector multiply.
+// For multi-CT inputs, uses EvaluateManyNew to share BSGS rotations across row blocks.
 //
 // Diagonals are parsed from raw blobs and CKKS-encoded on demand for each block,
 // then discarded after evaluation. This avoids the ~23x memory blowup from
 // pre-encoding all diagonals at model load time.
-func (e *Evaluator) evalLinearTransform(model *Model, node *Node, ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
+func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
 	cfg, ok := model.ltConfigs[node.Name]
 	if !ok {
 		return nil, fmt.Errorf("no config found for linear_transform node %q", node.Name)
 	}
 
 	maxSlots := model.params.MaxSlots()
+	numInputCTs := cfg.NumInputCTs
+	numOutputCTs := cfg.NumOutputCTs
 
-	// Collect diagonal blob refs (exclude "bias"), sort for deterministic order.
-	refs := make([]string, 0, len(node.BlobRefs))
-	for ref := range node.BlobRefs {
-		if ref != "bias" {
-			refs = append(refs, ref)
-		}
+	if len(inputs) != numInputCTs {
+		return nil, fmt.Errorf("linear_transform %q: expected %d input CTs, got %d", node.Name, numInputCTs, len(inputs))
 	}
-	if len(refs) == 0 {
-		return nil, fmt.Errorf("no diagonal blob refs found for node %q", node.Name)
-	}
-	sort.Strings(refs)
 
-	var result *rlwe.Ciphertext
-	for _, ref := range refs {
-		blobIdx := node.BlobRefs[ref]
-		if blobIdx < 0 || blobIdx >= len(model.rawBlobs) {
-			return nil, fmt.Errorf("blob ref %q index %d out of range (have %d blobs)", ref, blobIdx, len(model.rawBlobs))
-		}
+	outputs := make([]*rlwe.Ciphertext, numOutputCTs)
 
-		// Parse raw float64 diagonals from blob.
-		diagMap, err := ParseDiagonalBlob(model.rawBlobs[blobIdx], maxSlots)
-		if err != nil {
-			return nil, fmt.Errorf("parsing diagonal blob %q: %w", ref, err)
-		}
+	for col := 0; col < numInputCTs; col++ {
+		// Gather all row LTs for this column, encode on demand.
+		rowLTs := make([]lintrans.LinearTransformation, numOutputCTs)
+		for row := 0; row < numOutputCTs; row++ {
+			ref := fmt.Sprintf("diag_%d_%d", row, col)
+			blobIdx, ok := node.BlobRefs[ref]
+			if !ok {
+				return nil, fmt.Errorf("missing blob ref %q for node %q", ref, node.Name)
+			}
+			if blobIdx < 0 || blobIdx >= len(model.rawBlobs) {
+				return nil, fmt.Errorf("blob ref %q index %d out of range (have %d blobs)", ref, blobIdx, len(model.rawBlobs))
+			}
 
-		// CKKS-encode diagonals into a LinearTransformation.
-		diagonals := lintrans.Diagonals[float64](diagMap)
-		ltparams := lintrans.Parameters{
-			DiagonalsIndexList:        diagonals.DiagonalsIndexList(),
-			LevelQ:                    node.Level,
-			LevelP:                    model.params.MaxLevelP(),
-			Scale:                     rlwe.NewScale(model.params.Q()[node.Level]),
-			LogDimensions:             ring.Dimensions{Rows: 0, Cols: model.params.LogMaxSlots()},
-			LogBabyStepGiantStepRatio: int(math.Log2(cfg.BSGSRatio)),
-		}
-
-		lt := lintrans.NewTransformation(model.params, ltparams)
-		if err := lintrans.Encode(e.encoder, diagonals, lt); err != nil {
-			return nil, fmt.Errorf("encoding linear transform %q: %w", ref, err)
-		}
-
-		// Evaluate this block. diagMap and lt are discarded after this iteration.
-		partial, err := e.linEval.EvaluateNew(ct, lt)
-		if err != nil {
-			return nil, fmt.Errorf("evaluating LT block %q: %w", ref, err)
-		}
-		if result == nil {
-			result = partial
-		} else {
-			result, err = e.eval.AddNew(result, partial)
+			diagMap, err := ParseDiagonalBlob(model.rawBlobs[blobIdx], maxSlots)
 			if err != nil {
-				return nil, fmt.Errorf("accumulating LT block %q: %w", ref, err)
+				return nil, fmt.Errorf("parsing diagonal blob %q: %w", ref, err)
+			}
+
+			diagonals := lintrans.Diagonals[float64](diagMap)
+			ltparams := lintrans.Parameters{
+				DiagonalsIndexList:        diagonals.DiagonalsIndexList(),
+				LevelQ:                    node.Level,
+				LevelP:                    model.params.MaxLevelP(),
+				Scale:                     rlwe.NewScale(model.params.Q()[node.Level]),
+				LogDimensions:             ring.Dimensions{Rows: 0, Cols: model.params.LogMaxSlots()},
+				LogBabyStepGiantStepRatio: int(math.Log2(cfg.BSGSRatio)),
+			}
+
+			lt := lintrans.NewTransformation(model.params, ltparams)
+			if err := lintrans.Encode(e.encoder, diagonals, lt); err != nil {
+				return nil, fmt.Errorf("encoding linear transform %q: %w", ref, err)
+			}
+			rowLTs[row] = lt
+		}
+
+		// EvaluateManyNew shares BSGS rotations across all row blocks for this input CT.
+		partials, err := e.linEval.EvaluateManyNew(inputs[col], rowLTs)
+		if err != nil {
+			return nil, fmt.Errorf("evaluating LT column %d for node %q: %w", col, node.Name, err)
+		}
+
+		// Accumulate partials into outputs.
+		for row := 0; row < numOutputCTs; row++ {
+			if outputs[row] == nil {
+				outputs[row] = partials[row]
+			} else {
+				outputs[row], err = e.eval.AddNew(outputs[row], partials[row])
+				if err != nil {
+					return nil, fmt.Errorf("accumulating LT block (%d,%d): %w", row, col, err)
+				}
 			}
 		}
 	}
 
-	// Rescale after LT evaluation.
-	if err := e.eval.Rescale(result, result); err != nil {
-		return nil, fmt.Errorf("rescale after LT: %w", err)
+	// Rescale + bias + output rotations per output CT.
+	biases := model.biases[node.Name]
+	for row := 0; row < numOutputCTs; row++ {
+		if err := e.eval.Rescale(outputs[row], outputs[row]); err != nil {
+			return nil, fmt.Errorf("rescale after LT (row %d): %w", row, err)
+		}
+
+		if biases != nil && row < len(biases) && biases[row] != nil {
+			var err error
+			outputs[row], err = e.eval.AddNew(outputs[row], biases[row])
+			if err != nil {
+				return nil, fmt.Errorf("adding bias (row %d): %w", row, err)
+			}
+		}
+
+		if cfg.OutputRotations > 0 {
+			for i := 0; i < cfg.OutputRotations; i++ {
+				rotation := maxSlots / (1 << (i + 1))
+				rotated, err := e.eval.RotateNew(outputs[row], rotation)
+				if err != nil {
+					return nil, fmt.Errorf("output rotation step %d (rot=%d, row %d): %w", i, rotation, row, err)
+				}
+				outputs[row], err = e.eval.AddNew(outputs[row], rotated)
+				if err != nil {
+					return nil, fmt.Errorf("accumulating output rotation step %d (row %d): %w", i, row, err)
+				}
+			}
+		}
 	}
 
-	// Add bias if present.
-	if bias, ok := model.biases[node.Name]; ok {
+	return outputs, nil
+}
+
+// evalPolynomialMulti evaluates a polynomial on each CT in the list.
+func (e *Evaluator) evalPolynomialMulti(model *Model, node *Node, cts []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
+	out := make([]*rlwe.Ciphertext, len(cts))
+	for i, ct := range cts {
 		var err error
-		result, err = e.eval.AddNew(result, bias)
+		out[i], err = e.evalPolynomial(model, node, ct)
 		if err != nil {
-			return nil, fmt.Errorf("adding bias: %w", err)
+			return nil, fmt.Errorf("ct[%d]: %w", i, err)
 		}
 	}
-
-	// Apply output rotations (hybrid embedding fold-down).
-	if cfg.OutputRotations > 0 {
-		for i := 0; i < cfg.OutputRotations; i++ {
-			rotation := maxSlots / (1 << (i + 1))
-			rotated, err := e.eval.RotateNew(result, rotation)
-			if err != nil {
-				return nil, fmt.Errorf("output rotation step %d (rot=%d): %w", i, rotation, err)
-			}
-			result, err = e.eval.AddNew(result, rotated)
-			if err != nil {
-				return nil, fmt.Errorf("accumulating output rotation step %d: %w", i, err)
-			}
-		}
-	}
-
-	return result, nil
+	return out, nil
 }
 
 // evalPolynomial evaluates a polynomial node: optional prescale/constant, polynomial evaluation,
@@ -412,6 +487,19 @@ func copyIntSlice(s []int) []int {
 	return out
 }
 
+// evalBootstrapMulti bootstraps each CT in the list.
+func (e *Evaluator) evalBootstrapMulti(model *Model, node *Node, cts []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
+	out := make([]*rlwe.Ciphertext, len(cts))
+	for i, ct := range cts {
+		var err error
+		out[i], err = e.evalBootstrap(model, node, ct)
+		if err != nil {
+			return nil, fmt.Errorf("ct[%d]: %w", i, err)
+		}
+	}
+	return out, nil
+}
+
 // evalBootstrap implements the bootstrap operation:
 //  1. Parse BootstrapConfig
 //  2. Constant shift (center values around 0)
@@ -444,12 +532,6 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 	}
 
 	// Step 3: Prescale — map values to [-1, 1] and zero inactive slots.
-	// The prescale plaintext has cfg.Prescale in active slots and 0.0 in inactive
-	// slots. Even when prescale==1, the multiply is necessary to zero inactive
-	// slots for clean sparse bootstrapping (matching the reference implementation
-	// which unconditionally multiplies by prescale_ptxt).
-	// This consumes 1 level. The compiler guarantees input_level >= 1
-	// (level_dag.py:238-240 rejects bootstrap placement at level 0).
 	if work.Level() < 1 {
 		return nil, fmt.Errorf("bootstrap requires input level >= 1 for prescale, got level %d", work.Level())
 	}
@@ -498,7 +580,6 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 	work.LogDimensions.Cols = e.params.LogMaxSlots()
 
 	// Step 7: Range-mapping postscale — integer multiply (no rescale needed).
-	// Postscale must be a positive integer (Python compiler uses math.ceil(absmax)).
 	rangePostscale := int(cfg.Postscale)
 	if cfg.Postscale != float64(rangePostscale) || rangePostscale < 1 {
 		return nil, fmt.Errorf("bootstrap postscale must be a positive integer, got %f", cfg.Postscale)

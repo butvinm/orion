@@ -124,7 +124,8 @@ def compile_and_run(net, config, test_input, cleartext):
 
     # Forward
     print("Running FHE inference...")
-    result_bytes = evaluator.forward(model, ct_bytes)
+    result_bytes_list = evaluator.forward(model, [ct_bytes])
+    result_bytes = result_bytes_list[0]
 
     # Decrypt
     result_ct = RLWECiphertext.unmarshal_binary(result_bytes)

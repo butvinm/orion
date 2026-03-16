@@ -169,7 +169,7 @@ class TestEvaluatorLifecycle:
         evaluator.close()
 
         with pytest.raises(EvaluatorError, match="closed"):
-            evaluator.forward(model, b"dummy")
+            evaluator.forward(model, [b"dummy"])
 
         sk.close()
         kg.close()
@@ -275,7 +275,10 @@ class TestBootstrapKeyParameter:
         ct = encryptor.encrypt_new(pt)
         ct_bytes = ct.marshal_binary()
 
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        assert isinstance(result_bytes_list, list)
+        assert len(result_bytes_list) == 1
+        result_bytes = result_bytes_list[0]
         assert isinstance(result_bytes, bytes)
         assert len(result_bytes) > 0
 
@@ -359,7 +362,10 @@ class TestE2EForward:
         ct_bytes = ct.marshal_binary()
 
         # Forward pass
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        assert isinstance(result_bytes_list, list)
+        assert len(result_bytes_list) == 1
+        result_bytes = result_bytes_list[0]
         assert isinstance(result_bytes, bytes)
         assert len(result_bytes) > 0
 
@@ -472,7 +478,8 @@ class TestE2EForward:
         ct = encryptor.encrypt_new(pt)
         ct_bytes = ct.marshal_binary()
 
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        result_bytes = result_bytes_list[0]
 
         # Decrypt
         from lattigo.rlwe import Ciphertext as RLWECiphertext
@@ -585,7 +592,8 @@ class TestE2EForward:
         ct = encryptor.encrypt_new(pt)
         ct_bytes = ct.marshal_binary()
 
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        result_bytes = result_bytes_list[0]
 
         # Decrypt
         from lattigo.rlwe import Ciphertext as RLWECiphertext

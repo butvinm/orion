@@ -7,7 +7,7 @@ Usage::
     model = Model.load(open("model.orion", "rb").read())
     params, manifest, input_level = model.client_params()
     evaluator = Evaluator(params, keys_bytes)
-    result_bytes = evaluator.forward(model, ciphertext_bytes)
+    result_bytes_list = evaluator.forward(model, [ciphertext_bytes])
 """
 
 from .errors import EvaluatorError, ModelLoadError

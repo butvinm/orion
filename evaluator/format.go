@@ -87,6 +87,8 @@ type HeaderEdge struct {
 type LinearTransformConfig struct {
 	BSGSRatio       float64 `json:"bsgs_ratio"`
 	OutputRotations int     `json:"output_rotations"`
+	NumInputCTs     int     `json:"num_input_cts"`
+	NumOutputCTs    int     `json:"num_output_cts"`
 }
 
 // PolynomialConfig holds parsed config for polynomial nodes.

@@ -139,7 +139,7 @@ func buildSyntheticBootstrapModel(t *testing.T, ckksParams ckks.Parameters, p or
 		params:      ckksParams,
 		graph:       graph,
 		rawBlobs:    nil,
-		biases:      make(map[string]*rlwe.Plaintext),
+		biases:      make(map[string][]*rlwe.Plaintext),
 		polys:       make(map[string]bignum.Polynomial),
 		ltConfigs:   make(map[string]*LinearTransformConfig),
 		polyConfigs: make(map[string]*PolynomialConfig),
@@ -194,8 +194,10 @@ func TestEvalBootstrap(t *testing.T) {
 			ct := encryptVector(t, ctx, input, inputLevel)
 			require.Equal(t, inputLevel, ct.Level())
 
-			result, err := eval.Forward(model, ct)
+			results, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 			require.NoError(t, err)
+			require.Len(t, results, 1)
+			result := results[0]
 
 			assert.Greater(t, result.Level(), inputLevel,
 				"bootstrap should refresh level: got %d, want > %d", result.Level(), inputLevel)
@@ -264,7 +266,7 @@ func TestEvalBootstrapRejectsLevel0(t *testing.T) {
 	}
 	ct := encryptVector(t, ctx, input, inputLevel)
 
-	_, err = eval.Forward(model, ct)
+	_, err = eval.Forward(model, []*rlwe.Ciphertext{ct})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "input level >= 1")
 }
@@ -338,8 +340,10 @@ func TestForwardWithBootstrap(t *testing.T) {
 	}
 	ct := encryptVector(t, ctx, padded, inputLevel)
 
-	result, err := eval.Forward(model, ct)
+	results, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 	require.NoError(t, err, "Forward failed")
+	require.Len(t, results, 1)
+	result := results[0]
 
 	decoded := decryptVector(t, ctx, result)
 	expected := loadJSONFloats(t, expectedPath)
@@ -433,8 +437,10 @@ func TestBootstrapMaxErrorDistribution(t *testing.T) {
 		ct := ckks.NewCiphertext(ckksParams, 1, inputLevel)
 		require.NoError(t, encryptor.Encrypt(pt, ct))
 
-		result, err := eval.Forward(model, ct)
+		results, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 		require.NoError(t, err)
+		require.Len(t, results, 1)
+		result := results[0]
 
 		ptOut := ckks.NewPlaintext(ckksParams, result.Level())
 		decryptor.Decrypt(result, ptOut)

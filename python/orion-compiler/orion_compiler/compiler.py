@@ -374,8 +374,8 @@ class Compiler:
             if graph_node is not None:
                 graph_nodes.append(graph_node)
             # Count bias blobs emitted in _build_graph_node
-            if graph_node and graph_node.blob_refs and "bias" in graph_node.blob_refs:
-                blob_count += 1
+            if graph_node and graph_node.blob_refs:
+                blob_count += sum(1 for k in graph_node.blob_refs if k.startswith("bias_"))
 
         # Extract edges, filtering out fork/join auxiliary nodes
         graph_edges = self._extract_edges(network_dag)
@@ -502,17 +502,36 @@ class Compiler:
             blob_refs = dict(module._early_blob_refs)
             diag_indices_per_block = module._diag_indices_per_block
 
-            # Raw bias -> blob (different constructors for Linear vs Conv2d)
+            # Block dimensions from diagonalize: (row, col) keys
+            block_keys = list(diag_indices_per_block.keys())
+            num_block_rows = max(r for r, c in block_keys) + 1 if block_keys else 1
+            num_block_cols = max(c for r, c in block_keys) + 1 if block_keys else 1
+
+            # Raw bias -> blob(s). One bias blob per output CT row.
             if isinstance(module, Conv2d):
                 bias_vec = packing.construct_conv2d_bias(module)
             else:
                 bias_vec = packing.construct_linear_bias(module)
-            bias_data = pack_raw_bias(bias_vec.tolist(), max_slots)
-            blob_refs["bias"] = emit_blob(bias_data)
+            bias_flat = bias_vec.tolist()
+
+            if num_block_rows == 1:
+                # Single output CT — pad to max_slots
+                padded_bias = bias_flat + [0.0] * (max_slots - len(bias_flat))
+                blob_refs["bias_0"] = emit_blob(pack_raw_bias(padded_bias[:max_slots], max_slots))
+            else:
+                for row in range(num_block_rows):
+                    start = row * max_slots
+                    end = start + max_slots
+                    segment = bias_flat[start:end]
+                    if len(segment) < max_slots:
+                        segment = segment + [0.0] * (max_slots - len(segment))
+                    blob_refs[f"bias_{row}"] = emit_blob(pack_raw_bias(segment, max_slots))
 
             config = {
                 "bsgs_ratio": module.bsgs_ratio,
                 "output_rotations": module.output_rotations,
+                "num_input_cts": num_block_cols,
+                "num_output_cts": num_block_rows,
             }
 
             shape = {}

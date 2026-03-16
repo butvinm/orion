@@ -20,7 +20,7 @@ type Model struct {
 	params      ckks.Parameters
 	graph       *Graph
 	rawBlobs    [][]byte                         // raw blob data (sub-slices of input, no copy)
-	biases      map[string]*rlwe.Plaintext       // node -> bias (small, pre-encoded)
+	biases      map[string][]*rlwe.Plaintext     // node -> per-output-CT biases
 	polys       map[string]bignum.Polynomial     // node -> polynomial
 	ltConfigs   map[string]*LinearTransformConfig // node -> parsed LT config
 	polyConfigs map[string]*PolynomialConfig      // node -> parsed poly config
@@ -61,7 +61,7 @@ func LoadModel(data []byte) (*Model, error) {
 		params:      ckksParams,
 		graph:       graph,
 		rawBlobs:    blobs,
-		biases:      make(map[string]*rlwe.Plaintext),
+		biases:      make(map[string][]*rlwe.Plaintext),
 		polys:       make(map[string]bignum.Polynomial),
 		ltConfigs:   make(map[string]*LinearTransformConfig),
 		polyConfigs: make(map[string]*PolynomialConfig),
@@ -108,9 +108,17 @@ func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksPara
 		return fmt.Errorf("bsgs_ratio must be positive, got %f", cfg.BSGSRatio)
 	}
 
+	// Validate NumInputCTs/NumOutputCTs are positive.
+	if cfg.NumInputCTs <= 0 {
+		cfg.NumInputCTs = 1
+	}
+	if cfg.NumOutputCTs <= 0 {
+		cfg.NumOutputCTs = 1
+	}
+
 	// Validate blob refs point to valid indices (but don't parse/encode diagonals).
 	for ref, blobIdx := range node.BlobRefs {
-		if ref == "bias" {
+		if ref == "bias" || len(ref) > 5 && ref[:5] == "bias_" {
 			continue
 		}
 		if blobIdx < 0 || blobIdx >= len(blobs) {
@@ -120,29 +128,44 @@ func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksPara
 
 	m.ltConfigs[node.Name] = cfg
 
-	// Encode bias if present (biases are small).
-	if biasIdx, ok := node.BlobRefs["bias"]; ok {
+	// Encode per-row biases (biases are small).
+	biasLevel := node.Level - node.Depth
+	if biasLevel < 0 {
+		return fmt.Errorf("bias level %d is negative (node level=%d, depth=%d)", biasLevel, node.Level, node.Depth)
+	}
+
+	var biasPts []*rlwe.Plaintext
+	for row := 0; row < cfg.NumOutputCTs; row++ {
+		ref := fmt.Sprintf("bias_%d", row)
+		biasIdx, ok := node.BlobRefs[ref]
+		if !ok {
+			continue
+		}
 		if biasIdx < 0 || biasIdx >= len(blobs) {
-			return fmt.Errorf("bias blob index %d out of range (have %d blobs)", biasIdx, len(blobs))
+			return fmt.Errorf("bias blob %q index %d out of range (have %d blobs)", ref, biasIdx, len(blobs))
 		}
 
 		biasVec, err := ParseBiasBlob(blobs[biasIdx], maxSlots)
 		if err != nil {
-			return fmt.Errorf("parsing bias blob: %w", err)
+			return fmt.Errorf("parsing bias blob %q: %w", ref, err)
 		}
 
-		biasLevel := node.Level - node.Depth
-		if biasLevel < 0 {
-			return fmt.Errorf("bias level %d is negative (node level=%d, depth=%d)", biasLevel, node.Level, node.Depth)
-		}
 		pt := ckks.NewPlaintext(ckksParams, biasLevel)
 		pt.Scale = rlwe.NewScale(ckksParams.DefaultScale())
 
 		if err := enc.Encode(biasVec, pt); err != nil {
-			return fmt.Errorf("encoding bias: %w", err)
+			return fmt.Errorf("encoding bias %q: %w", ref, err)
 		}
 
-		m.biases[node.Name] = pt
+		// Grow slice if needed
+		for len(biasPts) <= row {
+			biasPts = append(biasPts, nil)
+		}
+		biasPts[row] = pt
+	}
+
+	if len(biasPts) > 0 {
+		m.biases[node.Name] = biasPts
 	}
 
 	return nil

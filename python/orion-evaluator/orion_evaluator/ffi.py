@@ -7,6 +7,7 @@ No Orion-specific types cross the FFI boundary.
 import ctypes
 import os
 import platform
+import struct
 import threading
 from typing import Any
 
@@ -93,7 +94,8 @@ def _setup_prototypes(lib: ctypes.CDLL) -> None:
         _uintptr,  # eval handle
         _uintptr,  # model handle
         ctypes.c_void_p,
-        ctypes.c_ulong,  # ct data
+        ctypes.c_ulong,  # ct data (length-prefixed)
+        ctypes.c_int,  # numCTs
         ctypes.POINTER(ctypes.c_ulong),  # out len
         _errout,
     ]
@@ -220,18 +222,42 @@ def new_evaluator(params_json: str, keys_bytes: bytes, btp_keys_bytes: bytes | N
     return int(h)
 
 
-def evaluator_forward(eval_handle: int, model_handle: int, ct_bytes: bytes) -> bytes:
-    """Run forward pass. Accepts/returns Lattigo ciphertext binary bytes."""
+def _pack_ct_list(ct_bytes_list: list[bytes]) -> bytes:
+    """Pack a list of CT byte blobs into length-prefixed format."""
+    parts = []
+    for ct_bytes in ct_bytes_list:
+        parts.append(struct.pack("<Q", len(ct_bytes)))
+        parts.append(ct_bytes)
+    return b"".join(parts)
+
+
+def _unpack_ct_list(data: bytes) -> list[bytes]:
+    """Unpack length-prefixed CT byte blobs."""
+    result = []
+    offset = 0
+    while offset < len(data):
+        ct_len = struct.unpack_from("<Q", data, offset)[0]
+        offset += 8
+        result.append(data[offset : offset + ct_len])
+        offset += ct_len
+    return result
+
+
+def evaluator_forward(eval_handle: int, model_handle: int, ct_bytes_list: list[bytes]) -> list[bytes]:
+    """Run forward pass. Accepts/returns lists of Lattigo ciphertext binary bytes."""
     lib = _lib_call()
     err = _make_errout()
     out_len = ctypes.c_ulong(0)
-    ptr, length = _bytes_ptr(ct_bytes)
+
+    packed = _pack_ct_list(ct_bytes_list)
+    ptr, length = _bytes_ptr(packed)
 
     result_ptr = lib.EvalForward(
         _uintptr(eval_handle),
         _uintptr(model_handle),
         ptr,
         length,
+        ctypes.c_int(len(ct_bytes_list)),
         ctypes.byref(out_len),
         ctypes.byref(err),
     )
@@ -241,7 +267,7 @@ def evaluator_forward(eval_handle: int, model_handle: int, ct_bytes: bytes) -> b
     buf = bytearray(n)
     ctypes.memmove((ctypes.c_char * n).from_buffer(buf), result_ptr, n)
     lib.FreeCArray(result_ptr)
-    return bytes(buf)
+    return _unpack_ct_list(bytes(buf))
 
 
 def evaluator_close(eval_handle: int) -> None:

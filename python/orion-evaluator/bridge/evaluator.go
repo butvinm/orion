@@ -9,6 +9,7 @@ package main
 import "C"
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"runtime/cgo"
 
@@ -128,39 +129,68 @@ func EvalNewEvaluator(paramsJSON *C.char, keysData *C.char, keysDataLen C.ulong,
 	return C.uintptr_t(cgo.NewHandle(eval))
 }
 
-// EvalForward runs the Forward pass. Accepts rlwe.Ciphertext.MarshalBinary bytes,
-// returns rlwe.Ciphertext.MarshalBinary bytes.
+// EvalForward runs the Forward pass with multiple input/output CTs.
+// ctData is a length-prefixed concatenation of marshalled CTs:
+//
+//	[uint64 len1][ct1 bytes][uint64 len2][ct2 bytes]...
+//
+// numCTs specifies how many CTs are in the buffer.
+// Returns the same format for output CTs.
 //
 //export EvalForward
-func EvalForward(evalH C.uintptr_t, modelH C.uintptr_t, ctData *C.char, ctDataLen C.ulong, outLen *C.ulong, errOut **C.char) *C.char {
+func EvalForward(evalH C.uintptr_t, modelH C.uintptr_t, ctData *C.char, ctDataLen C.ulong, numCTs C.int, outLen *C.ulong, errOut **C.char) *C.char {
 	defer catchPanic(errOut)
 
 	eval := cgo.Handle(evalH).Value().(*evaluator.Evaluator)
 	model := cgo.Handle(modelH).Value().(*evaluator.Model)
 
-	// Unmarshal input ciphertext.
+	// Parse length-prefixed CT blobs.
 	goCtData := cBytesToGoSlice(ctData, ctDataLen)
-	ct := new(rlwe.Ciphertext)
-	if err := ct.UnmarshalBinary(goCtData); err != nil {
-		setErr(errOut, "unmarshalling input ciphertext: "+err.Error())
-		return nil
+	n := int(numCTs)
+	inputs := make([]*rlwe.Ciphertext, n)
+	offset := 0
+	for i := 0; i < n; i++ {
+		if offset+8 > len(goCtData) {
+			setErr(errOut, "CT data too short for length prefix")
+			return nil
+		}
+		ctLen := int(binary.LittleEndian.Uint64(goCtData[offset : offset+8]))
+		offset += 8
+		if offset+ctLen > len(goCtData) {
+			setErr(errOut, "CT data too short for CT body")
+			return nil
+		}
+		ct := new(rlwe.Ciphertext)
+		if err := ct.UnmarshalBinary(goCtData[offset : offset+ctLen]); err != nil {
+			setErr(errOut, "unmarshalling input ciphertext: "+err.Error())
+			return nil
+		}
+		inputs[i] = ct
+		offset += ctLen
 	}
 
 	// Run Forward.
-	result, err := eval.Forward(model, ct)
+	results, err := eval.Forward(model, inputs)
 	if err != nil {
 		setErr(errOut, "forward: "+err.Error())
 		return nil
 	}
 
-	// Marshal output ciphertext.
-	outData, err := result.MarshalBinary()
-	if err != nil {
-		setErr(errOut, "marshalling output ciphertext: "+err.Error())
-		return nil
+	// Marshal output CTs in length-prefixed format.
+	var outBuf []byte
+	for _, ct := range results {
+		data, err := ct.MarshalBinary()
+		if err != nil {
+			setErr(errOut, "marshalling output ciphertext: "+err.Error())
+			return nil
+		}
+		lenBuf := make([]byte, 8)
+		binary.LittleEndian.PutUint64(lenBuf, uint64(len(data)))
+		outBuf = append(outBuf, lenBuf...)
+		outBuf = append(outBuf, data...)
 	}
 
-	ptr, length := goSliceToCBytes(outData)
+	ptr, length := goSliceToCBytes(outBuf)
 	*outLen = length
 	return ptr
 }
@@ -173,4 +203,3 @@ func EvalClose(evalH C.uintptr_t) {
 	eval := cgo.Handle(evalH).Value().(*evaluator.Evaluator)
 	eval.Close()
 }
-

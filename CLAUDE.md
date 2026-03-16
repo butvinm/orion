@@ -122,11 +122,11 @@ ct_bytes = ct.marshal_binary()
 # 5. Server — Go evaluator via orion-evaluator
 keys_bytes = evk.marshal_binary()  # MemEvaluationKeySet
 evaluator = Evaluator(params_dict, keys_bytes)
-result_bytes = evaluator.forward(model, ct_bytes)
+result_bytes_list = evaluator.forward(model, [ct_bytes])  # list in, list out
 
 # 6. Client — decrypt
 from lattigo.rlwe import Ciphertext as RLWECiphertext
-result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
+result_ct = RLWECiphertext.unmarshal_binary(result_bytes_list[0])
 decryptor = Decryptor(params, sk)
 result_pt = decryptor.decrypt_new(result_ct)
 output = encoder.decode(result_pt, params.max_slots())
@@ -143,7 +143,7 @@ output = encoder.decode(result_pt, params.max_slots())
 - `orion_compiler.nn` — FHE-compatible layers (cleartext-only forward)
 - `orion_compiler.core` — Compilation algorithms (tracer, packing, level assignment, auto-bootstrap, galois)
 - `orion_evaluator.Model` — `load()`, `client_params()`, `close()`
-- `orion_evaluator.Evaluator` — `__init__(params, keys_bytes, btp_keys_bytes=None)`, `forward(model, ct_bytes) → bytes`, `close()`
+- `orion_evaluator.Evaluator` — `__init__(params, keys_bytes, btp_keys_bytes=None)`, `forward(model, ct_bytes_list) → list[bytes]`, `close()`
 
 ### Go evaluator (`evaluator/`)
 
