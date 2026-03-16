@@ -15,10 +15,11 @@ import torch
 from orion_compiler import Compiler, CKKSParams
 from model import C3AE
 
-# CKKS parameters matching the reference C3AE experiment.
-# LogN=14 with bootstrap for the deep network (6 Quad activations).
+# CKKS parameters for C3AE.
+# LogN=15 so 64x64x3=12288 input fits in one CT (16384 slots).
+# Bootstrap for the deep network (6 Quad activations).
 PARAMS = CKKSParams(
-    logn=14,
+    logn=15,
     logq=[55, 40, 40, 40, 40, 40, 40, 40, 40, 40],
     logp=[61, 61, 61],
     log_default_scale=40,
