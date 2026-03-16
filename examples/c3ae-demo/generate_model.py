@@ -6,6 +6,7 @@ Usage:
 """
 
 import argparse
+import os
 import time
 import tracemalloc
 
@@ -56,22 +57,14 @@ def main():
 
     print("Compiling...")
     t0 = time.time()
-    compiled = compiler.compile()
+    compiler.compile_to_file(args.output)
     compile_time = time.time() - t0
     compile_mem = tracemalloc.get_traced_memory()[1] / (1024 * 1024)
     tracemalloc.stop()
     print(f"Compile: {compile_time:.2f}s, peak memory: {compile_mem:.1f} MB")
 
-    model_bytes = compiled.to_bytes()
-    with open(args.output, "wb") as f:
-        f.write(model_bytes)
-
-    print(f"\nModel written to {args.output} ({len(model_bytes):,} bytes)")
-    print(f"Input level: {compiled.input_level}")
-    print(f"Galois elements: {len(compiled.manifest.galois_elements)}")
-    print(f"Needs RLK: {compiled.manifest.needs_rlk}")
-    print(f"Bootstrap slots: {compiled.manifest.bootstrap_slots}")
-    print(f"Graph: {len(compiled.graph.nodes)} nodes, {len(compiled.graph.edges)} edges")
+    file_size = os.path.getsize(args.output)
+    print(f"\nModel written to {args.output} ({file_size:,} bytes)")
 
 
 if __name__ == "__main__":

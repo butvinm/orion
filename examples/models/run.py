@@ -10,6 +10,7 @@ import argparse
 import importlib
 import os
 import sys
+import tempfile
 import torch
 
 from orion_compiler import Compiler, CKKSParams
@@ -57,17 +58,19 @@ def compile_and_run(net, config, test_input, cleartext):
         Ciphertext as RLWECiphertext,
     )
 
-    # Compile
+    # Compile directly to file
     print("Compiling model...")
     ckks_params = CKKSParams(**config["ckks_params"])
     compiler = Compiler(net, ckks_params)
     compiler.fit(test_input)
-    compiled = compiler.compile()
-    model_bytes = compiled.to_bytes()
-    print(f"Compiled model size: {len(model_bytes)} bytes")
+    model_path = tempfile.mktemp(suffix=".orion")
+    compiler.compile_to_file(model_path)
+    print(f"Compiled model size: {os.path.getsize(model_path)} bytes")
 
     # Load in evaluator
-    model = Model.load(model_bytes)
+    with open(model_path, "rb") as f:
+        model = Model.load(f.read())
+    os.unlink(model_path)
     params_dict, manifest, input_level = model.client_params()
 
     # Keygen
