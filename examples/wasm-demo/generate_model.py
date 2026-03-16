@@ -8,6 +8,7 @@ Compiles a SimpleMLP (784 -> 32 -> 10) with random weights.
 Accuracy doesn't matter — this validates the end-to-end pipeline.
 """
 
+import os
 import sys
 import torch
 
@@ -48,19 +49,9 @@ def main():
     net = SimpleMLP()
     compiler = Compiler(net, PARAMS)
     compiler.fit(torch.randn(32, 1, 28, 28))
-    compiled = compiler.compile()
+    compiler.compile_to_file(output_path)
 
-    model_bytes = compiled.to_bytes()
-    with open(output_path, "wb") as f:
-        f.write(model_bytes)
-
-    print(f"Model written to {output_path} ({len(model_bytes)} bytes)")
-    print(f"Input level: {compiled.input_level}")
-    print(f"Galois elements: {len(compiled.manifest.galois_elements)}")
-    print(f"Needs RLK: {compiled.manifest.needs_rlk}")
-    print(f"Bootstrap slots: {compiled.manifest.bootstrap_slots}")
-    print(f"Graph nodes: {len(compiled.graph.nodes)}")
-    print(f"Graph edges: {len(compiled.graph.edges)}")
+    print(f"Model written to {output_path} ({os.path.getsize(output_path)} bytes)")
 
 
 if __name__ == "__main__":

@@ -169,17 +169,14 @@ def generate_fixture(name, net_cls, params, config=None):
     net = net_cls()
     net.eval()
 
-    # Compile
+    # Compile directly to file
     compiler = orion_compiler.Compiler(net, params, config=config)
     compiler.fit(torch.randn(1, 1, 28, 28))
-    compiled = compiler.compile()
     fused = config.fuse_modules if config else True
 
-    # Write compiled model
     outdir = os.path.dirname(__file__)
     orion_path = os.path.join(outdir, f"{name}.orion")
-    with open(orion_path, "wb") as f:
-        f.write(compiled.to_bytes())
+    compiler.compile_to_file(orion_path)
     print(f"  wrote {orion_path} ({os.path.getsize(orion_path)} bytes)")
 
     # Generate input (deterministic)
