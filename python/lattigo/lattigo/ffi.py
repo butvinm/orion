@@ -534,9 +534,12 @@ def _marshal(func_name: str, h: GoHandle) -> bytes:
     fn = getattr(lib, func_name)
     ptr = fn(_uintptr(h.raw), ctypes.byref(out_len), ctypes.byref(err))
     _check_err(err)
-    data = ctypes.string_at(ptr, out_len.value)
+    n = out_len.value
+    # ctypes.string_at truncates size to 32 bits; use memmove for large data.
+    buf = bytearray(n)
+    ctypes.memmove((ctypes.c_char * n).from_buffer(buf), ptr, n)
     lib.FreeCArray(ptr)
-    return data
+    return bytes(buf)
 
 
 def _unmarshal(func_name: str, data: bytes, tag: str) -> GoHandle:

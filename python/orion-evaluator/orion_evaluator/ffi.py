@@ -237,9 +237,11 @@ def evaluator_forward(eval_handle: int, model_handle: int, ct_bytes: bytes) -> b
     )
     _check_err(err)
 
-    result = ctypes.string_at(result_ptr, out_len.value)
+    n = out_len.value
+    buf = bytearray(n)
+    ctypes.memmove((ctypes.c_char * n).from_buffer(buf), result_ptr, n)
     lib.FreeCArray(result_ptr)
-    return result
+    return bytes(buf)
 
 
 def evaluator_close(eval_handle: int) -> None:
