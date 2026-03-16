@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from tqdm import tqdm
 
 from orion_compiler.compiled_model import (
+    BlobStore,
     CompiledModel,
     Graph,
     GraphEdge,
@@ -223,13 +224,31 @@ class Compiler:
                 last_linear = node
                 break
 
-        # Generate diagonals
+        # Generate diagonals — pack each module immediately and free float data.
+        # Only one module's raw diagonals are in memory at a time.
         logger.info("[3/5] Generating matrix diagonals...")
+        max_slots = self.params.get_slots()
+        blobs = BlobStore()
+
         for node in topo_sort:
             module = network_dag.nodes[node]["module"]
             if isinstance(module, LinearTransform):
                 logger.info("Packing %s:", node)
                 module.generate_diagonals(last=(node == last_linear))
+
+                # Pack diagonals into blob store immediately
+                module._early_blob_refs: dict[str, int] = {}
+                module._diag_indices_per_block: dict[tuple[int, int], list[int]] = {}
+                for (row, col), diag_dict in module.diagonals.items():
+                    blob_data = pack_raw_diagonals(diag_dict, max_slots)
+                    module._early_blob_refs[f"diag_{row}_{col}"] = blobs.append(blob_data)
+                    module._diag_indices_per_block[(row, col)] = list(diag_dict.keys())
+
+                # Replace diagonals with skeleton preserving len() for
+                # bootstrap solver's latency estimation (only reads len(diags))
+                module.diagonals = {
+                    k: dict.fromkeys(v.keys()) for k, v in module.diagonals.items()
+                }
 
         # Find residual connections
         network_dag.find_residuals()
@@ -260,11 +279,9 @@ class Compiler:
         # -- v2: Build graph nodes, edges, blobs (no module.compile() calls) --
         logger.info("[5/5] Building computation graph...")
 
-        max_slots = self.params.get_slots()
         nth_root = nth_root_for_ring(self.ckks_params.logn, self.ckks_params.ring_type)
         slots = max_slots
 
-        blobs: list[bytes] = []
         graph_nodes: list[GraphNode] = []
         galois_elements: set[int] = set()
 
@@ -370,7 +387,7 @@ class Compiler:
         self,
         node_name: str,
         module: Module,
-        blobs: list[bytes],
+        blobs: BlobStore,
         max_slots: int,
         slots: int,
         nth_root: int,
@@ -389,18 +406,10 @@ class Compiler:
         blob_refs: dict[str, int] | None = None
 
         if isinstance(module, LinearTransform):
-            # Save diagonal indices for Galois computation before packing
-            diag_indices_per_block = {k: list(v.keys()) for k, v in module.diagonals.items()}
-
-            # Raw diagonals -> blobs (no Go calls)
-            blob_refs = {}
-            for (row, col), diag_dict in module.diagonals.items():
-                blob_data = pack_raw_diagonals(diag_dict, max_slots)
-                blob_refs[f"diag_{row}_{col}"] = len(blobs)
-                blobs.append(blob_data)
-
-            # Free diagonal data after packing to reduce memory
-            module.diagonals.clear()
+            # Diagonals were already packed during step [3/5].
+            # Use pre-saved blob refs and diagonal indices.
+            blob_refs = dict(module._early_blob_refs)
+            diag_indices_per_block = module._diag_indices_per_block
 
             # Raw bias -> blob (different constructors for Linear vs Conv2d)
             if isinstance(module, Conv2d):
@@ -408,8 +417,7 @@ class Compiler:
             else:
                 bias_vec = packing.construct_linear_bias(module)
             bias_data = pack_raw_bias(bias_vec.tolist(), max_slots)
-            blob_refs["bias"] = len(blobs)
-            blobs.append(bias_data)
+            blob_refs["bias"] = blobs.append(bias_data)
 
             config = {
                 "bsgs_ratio": module.bsgs_ratio,

@@ -7,11 +7,54 @@ The binary format uses a magic header, JSON metadata, and length-prefixed blobs.
 import json
 import os
 import struct
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
+
+
+class BlobStore:
+    """Write-once blob storage backed by a temporary file.
+
+    Blobs are written to disk as they're appended, keeping memory usage
+    proportional to one blob at a time. Implements __len__ and __getitem__
+    so it can be used anywhere list[bytes] is expected for reading.
+    """
+
+    def __init__(self) -> None:
+        self._file = tempfile.TemporaryFile()
+        self._entries: list[tuple[int, int]] = []  # (offset, length)
+
+    def append(self, data: bytes) -> int:
+        """Append a blob, return its index."""
+        offset = self._file.tell()
+        self._file.write(data)
+        idx = len(self._entries)
+        self._entries.append((offset, len(data)))
+        return idx
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def __getitem__(self, idx: int) -> bytes:
+        offset, length = self._entries[idx]
+        self._file.seek(offset)
+        return self._file.read(length)
+
+    def __iter__(self):
+        for i in range(len(self._entries)):
+            yield self[i]
+
+    def close(self) -> None:
+        self._file.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
 # -- Binary format helpers --
 
@@ -305,7 +348,7 @@ class CompiledModel:
     input_level: int
     cost: CostProfile
     graph: Graph
-    blobs: list[bytes]  # binary blobs indexed by node blob_refs
+    blobs: list[bytes] | BlobStore  # binary blobs indexed by node blob_refs
 
     def _build_metadata(self) -> dict[str, Any]:
         return {
