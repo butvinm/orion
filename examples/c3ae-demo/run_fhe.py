@@ -227,19 +227,25 @@ def main():
             clear_prob = torch.sigmoid(net(sample["image"])).item()
         cleartext_outputs.append(clear_prob)
 
-        # Encrypt
+        # Encrypt — split into chunks of max_slots
         t0 = time.time()
         flat = sample["image"].flatten().double().tolist()
-        padded = flat + [0.0] * (max_slots - len(flat))
-        pt = encoder.encode(padded, input_level, scale)
-        ct = encryptor.encrypt_new(pt)
-        ct_bytes = ct.marshal_binary()
+        ct_bytes_list = []
+        for chunk_start in range(0, len(flat), max_slots):
+            chunk = flat[chunk_start:chunk_start + max_slots]
+            padded = chunk + [0.0] * (max_slots - len(chunk))
+            pt = encoder.encode(padded, input_level, scale)
+            ct = encryptor.encrypt_new(pt)
+            ct_bytes_list.append(ct.marshal_binary())
+            ct.close()
+            pt.close()
         enc_time = time.time() - t0
         enc_times.append(enc_time)
 
         # FHE forward
         t0 = time.time()
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, ct_bytes_list)
+        result_bytes = result_bytes_list[0]
         inf_time = time.time() - t0
         fhe_times.append(inf_time)
 
