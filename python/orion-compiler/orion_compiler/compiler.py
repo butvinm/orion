@@ -7,16 +7,20 @@ graph (nodes + edges), polynomial coefficients, and a KeyManifest.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
+import os
+import struct
 import time
-from typing import Any
+from typing import IO, Any
 
 import torch
 from torch.utils.data import DataLoader, RandomSampler
 from tqdm import tqdm
 
 from orion_compiler.compiled_model import (
+    _MODEL_MAGIC,
     BlobStore,
     CompiledModel,
     Graph,
@@ -180,8 +184,75 @@ class Compiler:
 
         Returns a CompiledModel containing all artifacts needed by
         Client (for key generation) and Evaluator (for inference).
+        Blobs are stored in a file-backed BlobStore; use to_file() to
+        write the .orion file without loading all blobs into memory.
 
         This method has ZERO Go/Lattigo dependency — only fit() needs Go.
+        """
+        blob_store = BlobStore()
+        metadata, blob_count = self._compile_core(
+            lambda data: blob_store.append(data)
+        )
+        return CompiledModel(
+            params=self.ckks_params,
+            config=self.config,
+            manifest=KeyManifest.from_dict(metadata["manifest"]),
+            input_level=metadata["input_level"],
+            cost=CostProfile.from_dict(metadata["cost"]),
+            graph=Graph.from_dict(metadata["graph"]),
+            blobs=blob_store,
+        )
+
+    # Maximum metadata JSON size. Padded with spaces for seek-back writes.
+    # Real metadata is typically 3-50 KB (galois elements + graph nodes).
+    _RESERVED_META_SIZE = 1 << 17  # 128 KB
+
+    def compile_to_file(self, path: str | os.PathLike[str]) -> None:
+        """Compile and write the .orion file directly — no intermediate storage.
+
+        Diagonal blobs are written to the output file as they're generated.
+        Only one module's diagonals are in memory at a time.
+        """
+        with open(path, "wb") as f:
+            # Reserve space: magic(8) + meta_len(4) + metadata(reserved) + blob_count(4)
+            f.write(_MODEL_MAGIC)
+            f.write(struct.pack("<I", self._RESERVED_META_SIZE))
+            f.write(b"\x00" * self._RESERVED_META_SIZE)
+            blob_count_pos = f.tell()
+            f.write(struct.pack("<I", 0))  # placeholder
+
+            def write_blob(data: bytes) -> int:
+                idx = write_blob.count
+                f.write(struct.pack("<Q", len(data)))
+                f.write(data)
+                write_blob.count += 1
+                return idx
+
+            write_blob.count = 0
+
+            metadata, blob_count = self._compile_core(write_blob)
+
+            # Seek back and write actual metadata + blob count
+            meta_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
+            if len(meta_bytes) > self._RESERVED_META_SIZE:
+                raise CompilationError(
+                    f"Metadata JSON ({len(meta_bytes)} bytes) exceeds reserved space "
+                    f"({self._RESERVED_META_SIZE} bytes)"
+                )
+            padded = meta_bytes + b" " * (self._RESERVED_META_SIZE - len(meta_bytes))
+            f.seek(12)  # after magic(8) + meta_len(4)
+            f.write(padded)
+            f.seek(blob_count_pos)
+            f.write(struct.pack("<I", blob_count))
+
+    def _compile_core(
+        self,
+        emit_blob: ...,
+    ) -> tuple[dict[str, Any], int]:
+        """Shared compilation logic.
+
+        emit_blob(data: bytes) -> int: called for each blob, must return its index.
+        Returns (metadata_dict, blob_count).
         """
         if self._traced is None:
             raise CompilationError(
@@ -228,7 +299,7 @@ class Compiler:
         # Only one module's raw diagonals are in memory at a time.
         logger.info("[3/5] Generating matrix diagonals...")
         max_slots = self.params.get_slots()
-        blobs = BlobStore()
+        blob_count = 0
 
         for node in topo_sort:
             module = network_dag.nodes[node]["module"]
@@ -236,13 +307,14 @@ class Compiler:
                 logger.info("Packing %s:", node)
                 module.generate_diagonals(last=(node == last_linear))
 
-                # Pack diagonals into blob store immediately
+                # Pack diagonals and emit immediately
                 module._early_blob_refs: dict[str, int] = {}
                 module._diag_indices_per_block: dict[tuple[int, int], list[int]] = {}
                 for (row, col), diag_dict in module.diagonals.items():
                     blob_data = pack_raw_diagonals(diag_dict, max_slots)
-                    module._early_blob_refs[f"diag_{row}_{col}"] = blobs.append(blob_data)
+                    module._early_blob_refs[f"diag_{row}_{col}"] = emit_blob(blob_data)
                     module._diag_indices_per_block[(row, col)] = list(diag_dict.keys())
+                    blob_count += 1
 
                 # Replace diagonals with skeleton preserving len() for
                 # bootstrap solver's latency estimation (only reads len(diags))
@@ -297,10 +369,13 @@ class Compiler:
                 continue
 
             graph_node = self._build_graph_node(
-                node, module, blobs, max_slots, slots, nth_root, galois_elements
+                node, module, emit_blob, max_slots, slots, nth_root, galois_elements
             )
             if graph_node is not None:
                 graph_nodes.append(graph_node)
+            # Count bias blobs emitted in _build_graph_node
+            if graph_node and graph_node.blob_refs and "bias" in graph_node.blob_refs:
+                blob_count += 1
 
         # Extract edges, filtering out fork/join auxiliary nodes
         graph_edges = self._extract_edges(network_dag)
@@ -371,23 +446,39 @@ class Compiler:
             bootstrap_key_count=len(manifest.bootstrap_slots),
         )
 
-        compiled = CompiledModel(
-            params=self.ckks_params,
-            config=self.config,
-            manifest=manifest,
-            input_level=input_level,
-            cost=cost,
-            graph=graph,
-            blobs=blobs,
-        )
+        metadata = {
+            "version": 2,
+            "params": {
+                "logn": self.ckks_params.logn,
+                "logq": list(self.ckks_params.logq),
+                "logp": list(self.ckks_params.logp),
+                "log_default_scale": self.ckks_params.log_default_scale,
+                "h": self.ckks_params.h,
+                "ring_type": self.ckks_params.ring_type,
+                "boot_logp": (
+                    list(self.ckks_params.boot_logp) if self.ckks_params.boot_logp else None
+                ),
+                "btp_logn": self.ckks_params.btp_logn,
+            },
+            "config": {
+                "margin": self.config.margin,
+                "embedding_method": self.config.embedding_method,
+                "fuse_modules": self.config.fuse_modules,
+            },
+            "manifest": manifest.to_dict(),
+            "input_level": input_level,
+            "cost": cost.to_dict(),
+            "graph": graph.to_dict(),
+            "blob_count": blob_count,
+        }
 
-        return compiled
+        return metadata, blob_count
 
     def _build_graph_node(
         self,
         node_name: str,
         module: Module,
-        blobs: BlobStore,
+        emit_blob: ...,
         max_slots: int,
         slots: int,
         nth_root: int,
@@ -417,7 +508,7 @@ class Compiler:
             else:
                 bias_vec = packing.construct_linear_bias(module)
             bias_data = pack_raw_bias(bias_vec.tolist(), max_slots)
-            blob_refs["bias"] = blobs.append(bias_data)
+            blob_refs["bias"] = emit_blob(bias_data)
 
             config = {
                 "bsgs_ratio": module.bsgs_ratio,
