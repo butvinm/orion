@@ -23,13 +23,13 @@ import (
 
 // bootstrapTestParams returns CKKS params suitable for bootstrap testing at logn=14.
 // These match the plan's spec: logn=14, logq=[55,40,40,40], logp=[61,61],
-// logscale=40, boot_logp=[61x6], ring_type=standard, h=192.
+// log_default_scale=40, boot_logp=[61x6], ring_type=standard, h=192.
 func bootstrapTestParams() orion.Params {
 	return orion.Params{
 		LogN:     14,
 		LogQ:     []int{55, 40, 40, 40},
 		LogP:     []int{61, 61},
-		LogScale: 40,
+		LogDefaultScale: 40,
 		H:        192,
 		RingType: "standard",
 		BootLogP: []int{61, 61, 61, 61, 61, 61},
@@ -98,7 +98,7 @@ func buildSyntheticBootstrapModel(t *testing.T, ckksParams ckks.Parameters, p or
 			LogN:     p.LogN,
 			LogQ:     p.LogQ,
 			LogP:     p.LogP,
-			LogScale: p.LogScale,
+			LogDefaultScale: p.LogDefaultScale,
 			H:        p.H,
 			RingType: p.RingType,
 			BootLogP: p.BootLogP,

@@ -38,7 +38,7 @@ class Model:
     def client_params(self) -> tuple[dict, dict, int]:
         """Return (params_dict, manifest_dict, input_level) for client key generation.
 
-        params_dict has keys: logn, logq, logp, logscale, h, ring_type, boot_logp
+        params_dict has keys: logn, logq, logp, log_default_scale, h, ring_type, boot_logp
         manifest_dict has keys: galois_elements, bootstrap_slots, boot_logp, needs_rlk
         """
         if not self._handle:

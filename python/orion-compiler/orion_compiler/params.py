@@ -23,7 +23,7 @@ class CKKSParams:
     logn: int
     logq: tuple[int, ...]
     logp: tuple[int, ...]
-    logscale: int
+    log_default_scale: int
     h: int = 192
     ring_type: Literal["conjugate_invariant", "standard"] = "conjugate_invariant"
     boot_logp: tuple[int, ...] | None = None
@@ -83,7 +83,7 @@ class CKKSParams:
             "logn": self.logn,
             "logq": list(self.logq),
             "logp": list(self.logp),
-            "logscale": self.logscale,
+            "log_default_scale": self.log_default_scale,
             "h": self.h,
             "ring_type": self.ring_type,
         }

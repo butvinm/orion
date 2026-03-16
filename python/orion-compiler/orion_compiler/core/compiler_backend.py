@@ -31,7 +31,7 @@ class CKKSParameters:
     logn: int
     logq: list[int]
     logp: list[int]
-    logscale: int | None = field(default=None)
+    log_default_scale: int | None = field(default=None)
     h: int = 192
     ringtype: str = "standard"
     boot_logp: list[int] | None = field(default=None)
@@ -49,7 +49,7 @@ class CKKSParameters:
                 f"Invalid ringtype: {self.ringtype}. Only 'Standard' or "
                 f"'ConjugateInvariant' ring types are supported."
             )
-        self.logscale = self.logscale or self.logq[-1]
+        self.log_default_scale = self.log_default_scale or self.logq[-1]
         self.boot_logp = self.boot_logp or self.logp
         self.logslots = self.logn - 1 if self.ringtype.lower() == "standard" else self.logn
 
@@ -99,12 +99,12 @@ class NewParameters:
         return self.ckks_params.logp
 
     def get_logscale(self) -> int:
-        assert self.ckks_params.logscale is not None
-        return self.ckks_params.logscale
+        assert self.ckks_params.log_default_scale is not None
+        return self.ckks_params.log_default_scale
 
     def get_default_scale(self) -> int:
-        assert self.ckks_params.logscale is not None
-        return 1 << self.ckks_params.logscale
+        assert self.ckks_params.log_default_scale is not None
+        return 1 << self.ckks_params.log_default_scale
 
     def get_hamming_weight(self) -> int:
         return self.ckks_params.h
@@ -145,7 +145,7 @@ class NewParameters:
                 "LogN": ckks_params.logn,
                 "LogQ": list(ckks_params.logq),
                 "LogP": list(ckks_params.logp),
-                "LogScale": ckks_params.logscale,
+                "log_default_scale": ckks_params.log_default_scale,
                 "H": ckks_params.h,
                 "RingType": legacy_ring_type,
             },
@@ -198,7 +198,7 @@ class CompilerBackend:
             logn=p.logn,
             logq=list(p.logq),
             logp=list(p.logp),
-            log_default_scale=p.logscale or p.logq[-1],
+            log_default_scale=p.log_default_scale or p.logq[-1],
             h=p.h,
             ring_type=ring_type,
             log_nth_root=log_nth_root,

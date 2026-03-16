@@ -161,11 +161,7 @@ def main():
     rss_before = get_rss_mb()
     t0 = time.time()
 
-    pd = dict(params_dict)
-    if "logscale" in pd:
-        pd["log_default_scale"] = pd.pop("logscale")
-    pd.setdefault("ring_type", "standard")
-    params = Parameters(**pd)
+    params = Parameters.from_dict(params_dict)
     kg = KeyGenerator(params)
     sk = kg.gen_secret_key()
     pk = kg.gen_public_key(sk)

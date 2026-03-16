@@ -25,14 +25,14 @@ type CompiledHeader struct {
 
 // HeaderParams mirrors Python's CKKSParams.
 type HeaderParams struct {
-	LogN     int    `json:"logn"`
-	LogQ     []int  `json:"logq"`
-	LogP     []int  `json:"logp"`
-	LogScale int    `json:"logscale"`
-	H        int    `json:"h"`
-	RingType string `json:"ring_type"`
-	BootLogP []int  `json:"boot_logp"`
-	BtpLogN  int    `json:"btp_logn,omitempty"`
+	LogN            int    `json:"logn"`
+	LogQ            []int  `json:"logq"`
+	LogP            []int  `json:"logp"`
+	LogDefaultScale int    `json:"log_default_scale"`
+	H               int    `json:"h"`
+	RingType        string `json:"ring_type"`
+	BootLogP        []int  `json:"boot_logp"`
+	BtpLogN         int    `json:"btp_logn,omitempty"`
 }
 
 // HeaderConfig mirrors Python's CompilerConfig.

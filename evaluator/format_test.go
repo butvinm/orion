@@ -25,7 +25,7 @@ func TestParseContainerMLP(t *testing.T) {
 	assert.Equal(t, 13, header.Params.LogN)
 	assert.Equal(t, []int{29, 26, 26, 26, 26, 26}, header.Params.LogQ)
 	assert.Equal(t, []int{29, 29}, header.Params.LogP)
-	assert.Equal(t, 26, header.Params.LogScale)
+	assert.Equal(t, 26, header.Params.LogDefaultScale)
 	assert.Equal(t, 8192, header.Params.H)
 	assert.Equal(t, "conjugate_invariant", header.Params.RingType)
 

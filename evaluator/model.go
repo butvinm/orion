@@ -223,7 +223,7 @@ func headerToParams(header *CompiledHeader) orion.Params {
 		LogN:     header.Params.LogN,
 		LogQ:     header.Params.LogQ,
 		LogP:     header.Params.LogP,
-		LogScale: header.Params.LogScale,
+		LogDefaultScale: header.Params.LogDefaultScale,
 		H:        header.Params.H,
 		RingType: header.Params.RingType,
 		BootLogP: header.Params.BootLogP,

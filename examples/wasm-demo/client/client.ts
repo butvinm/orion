@@ -43,7 +43,7 @@ interface OrionParams {
   logn: number;
   logq: number[];
   logp: number[];
-  logscale: number;
+  log_default_scale: number;
   h: number;
   ring_type: string;
   boot_logp?: number[];
@@ -176,7 +176,7 @@ async function initializeKeys(): Promise<void> {
     logN: ckksData.logn,
     logQ: ckksData.logq,
     logP: ckksData.logp,
-    logDefaultScale: ckksData.logscale,
+    logDefaultScale: ckksData.log_default_scale,
     ringType: ckksData.ring_type as "standard" | "conjugate_invariant",
     h: ckksData.h,
     logNthRoot,

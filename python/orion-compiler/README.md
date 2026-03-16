@@ -24,7 +24,7 @@ class MLP(on.Module):
         return self.fc2(x)
 
 net = MLP()
-compiler = Compiler(net, CKKSParams(logn=14, logq=[55, 40, 40, 40], logp=[61, 61], logscale=40))
+compiler = Compiler(net, CKKSParams(logn=14, logq=[55, 40, 40, 40], logp=[61, 61], log_default_scale=40))
 compiler.fit(dataloader)
 compiled = compiler.compile()
 model_bytes = compiled.to_bytes()

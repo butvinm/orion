@@ -77,6 +77,25 @@ class SigmoidMLP(on.Module):
         return self.fc2(x)
 
 
+class ConvNet(on.Module):
+    """Conv2d(1,4,5) -> Quad -> Flatten -> Linear(N,10)
+
+    Input: 1x28x28. Conv output: 4x24x24=2304. After flatten: 2304.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = on.Conv2d(1, 4, kernel_size=5)
+        self.act1 = on.Quad()
+        self.flatten = on.Flatten()
+        self.fc1 = on.Linear(4 * 24 * 24, 10)
+
+    def forward(self, x):
+        x = self.act1(self.conv1(x))
+        x = self.flatten(x)
+        return self.fc1(x)
+
+
 def eval_chebyshev_torch(x, coeffs):
     """Evaluate Chebyshev polynomial: sum(c_k * T_k(x)) element-wise."""
     coeffs_t = [torch.tensor(c, dtype=x.dtype) for c in coeffs]
@@ -110,20 +129,27 @@ def compute_expected_fhe(net, input_tensor, fused=True):
     import torch.nn.functional as F
 
     with torch.no_grad():
-        x = input_tensor.flatten()
+        x = input_tensor
 
         for name, module in net.named_children():
             if isinstance(module, on.Flatten):
-                pass  # already flattened
+                x = x.flatten()
+            elif isinstance(module, on.Conv2d):
+                x = F.conv2d(
+                    x.unsqueeze(0) if x.dim() == 3 else x,
+                    module.on_weight, module.on_bias,
+                    stride=module.stride, padding=module.padding,
+                    dilation=module.dilation, groups=module.groups,
+                )
+                if x.dim() == 4 and x.shape[0] == 1:
+                    x = x.squeeze(0)
             elif isinstance(module, on.Linear):
-                # Use on_weight/on_bias (fused if fuser ran, same as original otherwise)
                 x = F.linear(x, module.on_weight, module.on_bias)
             elif isinstance(module, on.Quad):
                 x = x * x
             elif hasattr(module, 'coeffs') and module.coeffs is not None:
                 # Chebyshev activation (Sigmoid, SiLU, GELU, etc.)
                 if not fused:
-                    # When not fused, apply prescale then constant before polynomial
                     prescale = getattr(module, 'prescale', 1)
                     constant = getattr(module, 'constant', 0)
                     if prescale != 1:
@@ -189,7 +215,7 @@ def main():
         logn=13,
         logq=[29, 26, 26, 26, 26, 26],
         logp=[29, 29],
-        logscale=26,
+        log_default_scale=26,
         h=8192,
         ring_type="conjugate_invariant",
     )
@@ -199,7 +225,7 @@ def main():
         logn=13,
         logq=[29, 26, 26, 26, 26, 26, 26, 26],
         logp=[29, 29],
-        logscale=26,
+        log_default_scale=26,
         h=8192,
         ring_type="conjugate_invariant",
     )
@@ -216,7 +242,7 @@ def main():
         logn=13,
         logq=[29, 26, 26, 26, 26, 26, 26, 26, 26],
         logp=[29, 29],
-        logscale=26,
+        log_default_scale=26,
         h=8192,
         ring_type="conjugate_invariant",
     )
@@ -225,13 +251,26 @@ def main():
     print("Generating SigmoidMLP unfused fixture...")
     generate_fixture("sigmoid_unfused", SigmoidMLP, sigmoid_unfused_params, config=unfused_config)
 
+    # ConvNet: same params as SimpleMLP but more levels for conv
+    conv_params = orion_compiler.CKKSParams(
+        logn=13,
+        logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
+        logp=[29, 29],
+        log_default_scale=26,
+        h=8192,
+        ring_type="conjugate_invariant",
+    )
+
+    print("Generating ConvNet fixture...")
+    generate_fixture("conv2d", ConvNet, conv_params)
+
     # DeepMLP with bootstrap: logn=14, short logq chain forces 1 bootstrap.
     # Uses standard ring (required for bootstrap) and h=192.
     bootstrap_params = orion_compiler.CKKSParams(
         logn=14,
         logq=[55, 40, 40, 40],
         logp=[61, 61],
-        logscale=40,
+        log_default_scale=40,
         h=192,
         ring_type="standard",
         boot_logp=[61, 61, 61, 61, 61, 61],

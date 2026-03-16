@@ -33,16 +33,8 @@ def _cleanup():
 
 
 def _params_from_dict(params_dict: dict) -> Parameters:
-    """Convert a client_params() dict to a Parameters object.
-
-    client_params() returns 'logscale' but the new Parameters constructor
-    expects 'log_default_scale'. Also ensures ring_type has a default.
-    """
-    d = dict(params_dict)
-    if "logscale" in d:
-        d["log_default_scale"] = d.pop("logscale")
-    d.setdefault("ring_type", "conjugate_invariant")
-    return Parameters(**d)
+    """Convert a client_params() dict to a Parameters object."""
+    return Parameters.from_dict(params_dict)
 
 
 # -----------------------------------------------------------------------
@@ -69,7 +61,7 @@ class TestModelLifecycle:
         assert "logn" in params
         assert "logq" in params
         assert "logp" in params
-        assert "logscale" in params
+        assert "log_default_scale" in params
 
         assert isinstance(manifest, dict)
         assert "galois_elements" in manifest
@@ -439,7 +431,7 @@ class TestE2EForward:
             logn=13,
             logq=[29, 26, 26, 26, 26, 26],
             logp=[29, 29],
-            logscale=26,
+            log_default_scale=26,
             h=8192,
             ring_type="conjugate_invariant",
         )
@@ -552,7 +544,7 @@ class TestE2EForward:
             logn=13,
             logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
             logp=[29, 29],
-            logscale=26,
+            log_default_scale=26,
             h=8192,
             ring_type="conjugate_invariant",
         )

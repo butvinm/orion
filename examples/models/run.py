@@ -71,12 +71,7 @@ def compile_and_run(net, config, test_input, cleartext):
     params_dict, manifest, input_level = model.client_params()
 
     # Keygen
-    # Translate params_dict to new constructor (logscale → log_default_scale)
-    pd = dict(params_dict)
-    if "logscale" in pd:
-        pd["log_default_scale"] = pd.pop("logscale")
-    pd.setdefault("ring_type", "conjugate_invariant")
-    params = Parameters(**pd)
+    params = Parameters.from_dict(params_dict)
     kg = KeyGenerator(params)
     sk = kg.gen_secret_key()
     pk = kg.gen_public_key(sk)

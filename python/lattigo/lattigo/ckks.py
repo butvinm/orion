@@ -40,6 +40,18 @@ class Parameters:
             log_nth_root,
         )
 
+    # Keys accepted by __init__ (used by from_dict to filter extras).
+    _KNOWN_KEYS = frozenset({"logn", "logq", "logp", "log_default_scale", "ring_type", "h", "log_nth_root"})
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Parameters:
+        """Create Parameters from a dict (e.g. from Model.client_params()).
+
+        Filters out keys not accepted by __init__ (like boot_logp, btp_logn).
+        """
+        filtered = {k: v for k, v in d.items() if k in cls._KNOWN_KEYS}
+        return cls(**filtered)
+
     @classmethod
     def _from_handle(cls, handle: GoHandle) -> Parameters:
         """Wrap an existing Go handle (internal use)."""
@@ -56,7 +68,7 @@ class Parameters:
         return ffi.ckks_params_max_level(self._handle)
 
     def default_scale(self) -> int:
-        """Default scale as uint64 (2^logscale)."""
+        """Default scale as uint64 (2^log_default_scale)."""
         return ffi.ckks_params_default_scale(self._handle)
 
     def galois_element(self, rotation: int) -> int:
