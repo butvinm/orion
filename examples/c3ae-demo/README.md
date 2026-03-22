@@ -115,13 +115,13 @@ Browser (WASM)                    Go Server
 
 | Parameter | Value                                    |
 | --------- | ---------------------------------------- |
-| LogN      | 14 (ring dim = 16,384)                   |
+| LogN      | 15 (ring dim = 32,768)                   |
 | LogQ      | [55, 40, 40, 40, 40, 40, 40, 40, 40, 40] |
 | LogP      | [61, 61, 61]                             |
 | LogScale  | 40                                       |
 | H         | 192                                      |
 | Ring type | Standard (bootstrap-compatible)          |
-| Bootstrap | LogP=[61]x8, slots=(4096, 8192)          |
+| Bootstrap | LogP=[61]x8                              |
 
 ## Measurements
 
@@ -141,33 +141,35 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 ### Compilation
 
-| Metric              | Value                                        |
-| ------------------- | -------------------------------------------- |
-| Fit time            | 0.05s                                        |
-| Compile time        | 42.7 min                                     |
-| Model size (.orion) | **5.5 GB** (5,828,943,684 bytes)             |
-| Peak RSS            | **65 GB** (with deferred diagonal streaming) |
-| Input level         | 5                                            |
-| Galois elements     | 334                                          |
-| Bootstrap slots     | (4096, 8192)                                 |
-| Graph               | 18 nodes, 17 edges                           |
+| Metric              | Value                          |
+| ------------------- | ------------------------------ |
+| Fit time            | 0.02s                          |
+| Compile time        | **2.6 min**                    |
+| Model size (.orion) | **878 MB** (877,947,228 bytes) |
+| Peak RSS            | **13 GB**                      |
 
-### Evaluator Setup (Deferred Diagonal Loading)
+### Evaluator Setup
 
-| Metric          | Value                                           |
-| --------------- | ----------------------------------------------- |
-| Model load time | 14s                                             |
-| Key generation  | 52s (334 Galois + bootstrap)                    |
-| Eval keys size  | 4.25 GB                                         |
-| Bootstrap keys  | 1.22 GB                                         |
-| Evaluator init  | 12s                                             |
-| Total RSS       | **7.1 GB** (deferred diagonals — no 23x blowup) |
+| Metric          | Value                        |
+| --------------- | ---------------------------- |
+| Model load time | 2.4s                         |
+| Key generation  | 58s (334 Galois + bootstrap) |
+| Eval keys size  | 4.67 GB                      |
+| Bootstrap keys  | 2.13 GB                      |
+| Evaluator init  | 12s                          |
+| RSS delta       | 21.6 GB                      |
 
 ### FHE Inference
 
-**Not completed** — multi-CT input packing (12,288 values > 8,192 slots) requires recompilation with updated compiler. Compilation OOMs on 128 GB VPS with updated compiler. In progress.
+| Metric               | Value               |
+| -------------------- | ------------------- |
+| Encryption time      | 0.063s              |
+| **Inference time**   | **110s per sample** |
+| Decryption time      | 0.008s              |
+| **MAE vs cleartext** | **0.000000**        |
+| Peak RSS             | 67 GB               |
 
-### Cleartext Baseline (for reference)
+### Cleartext Baseline
 
 | Metric   | Value                                |
 | -------- | ------------------------------------ |
@@ -177,24 +179,24 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 ### Comparison with Previous Results (Old Orion)
 
-| Metric                | Old Orion                  | Orion v2 (with deferred loading) |
-| --------------------- | -------------------------- | -------------------------------- |
-| Compilation memory    | ~10 GB (streams to HDF5)   | **65 GB** (streaming blobs)      |
-| Model artifact        | ~8 GB (diags.h5 + keys.h5) | **5.5 GB** (.orion binary)       |
-| Evaluator load memory | ~10 GB (lazy from HDF5)    | **7.1 GB** (deferred diagonals)  |
-| FHE inference         | 31.8s per sample           | In progress                      |
-| Accuracy              | 93.9%                      | 94.2% (same weights)             |
-| FPR                   | 18.9%                      | 15.9% (same weights)             |
-| Total server memory   | 10.19 GB                   | ~7.1 GB (excl. inference)        |
+| Metric             | Old Orion        | Orion v2                 |
+| ------------------ | ---------------- | ------------------------ |
+| Compilation time   | ~2 min           | **2.6 min**              |
+| Compilation memory | ~10 GB           | **13 GB**                |
+| Model artifact     | ~8 GB (HDF5)     | **878 MB** (.orion)      |
+| FHE inference      | 31.8s per sample | **110s per sample**      |
+| Accuracy           | 93.9%            | **94.2%** (same weights) |
+| FPR                | 18.9%            | **15.9%** (same weights) |
+| Peak server memory | 10.19 GB         | **67 GB**                |
+
+Note: Orion v2 inference is slower (110s vs 32s) because LogN=15 (needed to fit 64x64x3 input in one CT) doubles the ring dimension vs old Orion's LogN=14. The old experiment used a different packing strategy that fit the input at LogN=14.
 
 ## Bugs Found and Fixed
 
-1. **`ctypes.string_at` 32-bit truncation** — marshaling >4 GB key sets returned only `size & 0xFFFFFFFF` bytes, causing UnmarshalBinary to run out of data and stack-overflow. Fixed by replacing `ctypes.string_at` with `ctypes.memmove` into a pre-allocated `bytearray`.
+1. **`ctypes.string_at` 32-bit truncation** — marshaling >4 GB key sets silently truncated to `size & 0xFFFFFFFF` bytes. Fixed with `ctypes.memmove`.
 
-2. **Compilation memory** — reduced from 103 GB to 65 GB by streaming diagonal blobs to disk during compilation and freeing Python diagonal dicts immediately after packing.
+2. **Compilation batch size** — `fit(batch_size=10)` caused N^2 memory blowup via `kron(eye(N), matrix)` in packing. With `batch_size=1`: 13 GB peak (was 65 GB).
 
-3. **Keygen + inference**: Additional 3-10 GB for evaluation keys, bootstrap keys, and ciphertexts. Combined with model loading, this exceeds 128 GB.
+3. **Sparse diagonal extraction** — replaced `.todense()` with direct COO sparse extraction. -44% to -69% memory.
 
-The old Orion experiment ran the full pipeline on ~10 GB because it used lazy HDF5 I/O. Orion v2's `.orion` binary format requires all data in memory simultaneously.
-
-See [ISSUES.md](./ISSUES.md) for the full list of library issues encountered.
+4. **Bootstrap slot cap** — bootstrap node slots exceeded max_slots for LogN=15. Capped at `min(2^ceil(log2(elements)), max_slots)`.

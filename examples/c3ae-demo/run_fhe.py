@@ -285,12 +285,13 @@ def main():
     acc_pct = m['accuracy'] * 100
     print(f"  FPR: {fpr_pct:.1f}%, FNR: {fnr_pct:.1f}%, Accuracy: {acc_pct:.1f}%")
 
-    print("\n--- Compilation ---")
-    m = measurements["compilation"]
-    print(f"  Fit time:     {m['fit_time']:.2f}s")
-    print(f"  Compile time: {m['compile_time']:.2f}s")
-    print(f"  Model size:   {m['model_bytes']:,} bytes")
-    print(f"  Peak Python memory: {m['peak_mem_mb']:.1f} MB")
+    if "compilation" in measurements:
+        print("\n--- Compilation ---")
+        m = measurements["compilation"]
+        print(f"  Fit time:     {m['fit_time']:.2f}s")
+        print(f"  Compile time: {m['compile_time']:.2f}s")
+        print(f"  Model size:   {m['model_bytes']:,} bytes")
+        print(f"  Peak Python memory: {m['peak_mem_mb']:.1f} MB")
 
     print("\n--- Key Generation ---")
     m = measurements["keygen"]
