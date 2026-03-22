@@ -50,7 +50,7 @@ def main():
     print("Fitting...")
     t0 = time.time()
     torch.manual_seed(42)
-    fit_input = torch.randn(10, 3, 64, 64)
+    fit_input = torch.randn(1, 3, 64, 64)
     compiler.fit(fit_input)
     fit_time = time.time() - t0
     fit_mem = tracemalloc.get_traced_memory()[1] / (1024 * 1024)
