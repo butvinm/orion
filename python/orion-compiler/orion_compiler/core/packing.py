@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from orion_compiler.nn.normalization import BatchNorm1d, BatchNorm2d
 
 import matplotlib.pyplot as plt
+import numpy as np
 import scipy.sparse as sp
 import torch
 import torch.nn.functional as F
@@ -215,6 +216,58 @@ def resolve_grouped_conv(conv_layer: Conv2d) -> torch.Tensor:
     return result
 
 
+def _extract_diagonals_sparse(
+    block_sparse: sp.spmatrix,
+    block_height: int,
+    num_slots: int,
+    reps: int,
+) -> dict[int, list[float]]:
+    """Extract cyclic diagonals directly from sparse block. O(nnz) memory.
+
+    For a block of shape (block_height, num_slots), cyclic diagonal ``d`` at
+    position ``j`` is defined as ``block[j % block_height, (d + j) % num_slots]``.
+    Each non-zero at ``(r, c)`` maps to exactly one diagonal:
+    ``d = (c - r) % block_height``, at position
+    ``j = r + ((c - r) // block_height % reps) * block_height``.
+    """
+    coo = block_sparse.tocoo()
+    if coo.nnz == 0:
+        return {}
+
+    rows = coo.row.astype(np.int64)
+    cols = coo.col.astype(np.int64)
+    data = coo.data.astype(np.float64)
+
+    # Each non-zero (r, c, v) maps to exactly one (diag_index, position).
+    diff = cols - rows
+    diag_indices = diff % block_height
+    if reps == 1:
+        positions = rows
+    else:
+        k = (diff // block_height) % reps
+        positions = rows + k * block_height
+
+    # Sort by diagonal index so we can split into groups efficiently
+    order = np.argsort(diag_indices, kind="mergesort")
+    sorted_diags = diag_indices[order]
+    sorted_pos = positions[order]
+    sorted_vals = data[order]
+
+    # Find unique diagonals and split points
+    unique_diags, first_idx = np.unique(sorted_diags, return_index=True)
+    split_points = first_idx[1:]
+
+    result: dict[int, list[float]] = {}
+    groups = np.split(np.arange(len(order)), split_points)
+    for d, group in zip(unique_diags, groups):
+        diag_vec = np.zeros(num_slots, dtype=np.float64)
+        diag_vec[sorted_pos[group]] = sorted_vals[group]
+        if np.any(diag_vec != 0):
+            result[int(d)] = diag_vec.tolist()
+
+    return result
+
+
 def diagonalize(
     matrix: sp.csr_matrix,
     num_slots: int,
@@ -287,10 +340,7 @@ def diagonalize(
     logger.debug("resized matrix shape: %s", matrix.shape)
     logger.debug("# output rotations: %d", output_rotations)
 
-    # Prepare indices for diagonal extraction
-    row_idx = torch.arange(block_height).repeat(num_slots // block_height)
-    col_idx = torch.arange(block_height)[:, None] + torch.arange(num_slots)[None, :]
-    col_idx = torch.where(col_idx >= num_slots, col_idx - num_slots, col_idx)
+    reps = max(1, num_slots // block_height)
 
     diagonals_by_block: dict[tuple[int, int], dict[int, list[float]]] = {}
     total_diagonals = 0
@@ -310,14 +360,10 @@ def diagonalize(
                 row_start : row_start + block_height,
                 col_start : col_start + num_slots,
             ]
-            block_dense = torch.tensor(block_sparse.todense(), dtype=torch.float32)
-            block_diagonals = block_dense[row_idx, col_idx]
 
-            # Collect non-zero diagonals
-            nonzero_diagonals: dict[int, list[float]] = {}
-            for i in range(block_height):
-                if torch.any(block_diagonals[i]):
-                    nonzero_diagonals[i] = block_diagonals[i].tolist()
+            nonzero_diagonals = _extract_diagonals_sparse(
+                block_sparse, block_height, num_slots, reps,
+            )
 
             total_diagonals += len(nonzero_diagonals)
             diagonals_by_block[(block_row, block_col)] = nonzero_diagonals or {
