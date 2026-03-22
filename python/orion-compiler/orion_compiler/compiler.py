@@ -570,7 +570,7 @@ class Compiler:
         elif isinstance(module, Bootstrap):
             assert module.fhe_input_shape is not None
             elements = module.fhe_input_shape.numel()
-            btp_slots = 2 ** math.ceil(math.log2(elements))
+            btp_slots = min(2 ** math.ceil(math.log2(elements)), max_slots)
             config = {
                 "input_level": module.input_level,
                 "input_min": float(module.input_min),
