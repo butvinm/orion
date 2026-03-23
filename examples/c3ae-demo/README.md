@@ -10,7 +10,7 @@ Based on the C3AE (Compact yet Comprehensive Age Estimation) architecture adapte
 - Python 3.11+ with a venv containing `orion-compiler`, `orion-evaluator`, and `lattigo`
 - Node.js 18+
 - UTKFace dataset (for training)
-- **128+ GB RAM for compilation, 256+ GB RAM for full FHE inference** (see [Memory Blocker](#memory-blocker))
+- ~67 GB RAM for full FHE inference (13 GB for compilation alone)
 
 ## Quick Start
 
@@ -26,8 +26,6 @@ python train.py --data-dir ./data/UTKFace --epochs 60 --output weights.pth
 ```
 
 ### 2. Compile to .orion format
-
-**Requires 128+ GB RAM.** Compilation holds all weight diagonals in memory.
 
 ```bash
 python generate_model.py --weights weights.pth --output model.orion
@@ -49,8 +47,6 @@ npm run build
 ```
 
 ### 5. Run the server
-
-**Requires 256+ GB RAM.** Loading the 5.5 GB `.orion` model allocates 125 GB of Go heap.
 
 ```bash
 cd examples/c3ae-demo/server
@@ -190,13 +186,3 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 | Peak server memory | 10.19 GB         | **67 GB**                |
 
 Note: Orion v2 inference is slower (110s vs 32s) because LogN=15 (needed to fit 64x64x3 input in one CT) doubles the ring dimension vs old Orion's LogN=14. The old experiment used a different packing strategy that fit the input at LogN=14.
-
-## Bugs Found and Fixed
-
-1. **`ctypes.string_at` 32-bit truncation** — marshaling >4 GB key sets silently truncated to `size & 0xFFFFFFFF` bytes. Fixed with `ctypes.memmove`.
-
-2. **Compilation batch size** — `fit(batch_size=10)` caused N^2 memory blowup via `kron(eye(N), matrix)` in packing. With `batch_size=1`: 13 GB peak (was 65 GB).
-
-3. **Sparse diagonal extraction** — replaced `.todense()` with direct COO sparse extraction. -44% to -69% memory.
-
-4. **Bootstrap slot cap** — bootstrap node slots exceeded max_slots for LogN=15. Capped at `min(2^ceil(log2(elements)), max_slots)`.
