@@ -514,19 +514,23 @@ class Compiler:
                 bias_vec = packing.construct_linear_bias(module)
             bias_flat = bias_vec.tolist()
 
-            # Single CT: one bias covering all slots.
-            padded_bias = bias_flat + [0.0] * (max_slots - len(bias_flat))
-            blob_refs["bias_0"] = emit_blob(pack_raw_bias(padded_bias[:max_slots], max_slots))
+            if num_block_rows == 1:
+                padded_bias = bias_flat + [0.0] * (max_slots - len(bias_flat))
+                blob_refs["bias_0"] = emit_blob(pack_raw_bias(padded_bias[:max_slots], max_slots))
+            else:
+                for row in range(num_block_rows):
+                    start = row * max_slots
+                    end = start + max_slots
+                    segment = bias_flat[start:end]
+                    if len(segment) < max_slots:
+                        segment = segment + [0.0] * (max_slots - len(segment))
+                    blob_refs[f"bias_{row}"] = emit_blob(pack_raw_bias(segment, max_slots))
 
-            # CT counts: ceil(elements / max_slots). Currently only single-CT is
-            # supported, so these should be 1 when input fits in max_slots.
-            in_elements = module.fhe_input_shape.numel() if hasattr(module, "fhe_input_shape") and module.fhe_input_shape is not None else max_slots
-            out_elements = module.fhe_output_shape.numel() if hasattr(module, "fhe_output_shape") and module.fhe_output_shape is not None else max_slots
             config = {
                 "bsgs_ratio": module.bsgs_ratio,
                 "output_rotations": module.output_rotations,
-                "num_input_cts": math.ceil(in_elements / max_slots),
-                "num_output_cts": math.ceil(out_elements / max_slots),
+                "num_input_cts": num_block_cols,
+                "num_output_cts": num_block_rows,
             }
 
             shape = {}

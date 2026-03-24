@@ -16,10 +16,10 @@ from orion_compiler import Compiler, CKKSParams
 from model import C3AE
 
 # CKKS parameters for C3AE.
-# LogN=15 so 64x64x3=12288 input fits in one CT (16384 slots).
+# LogN=14 with multi-CT packing (12288 values split across 2 CTs of 8192 slots).
 # Bootstrap for the deep network (6 Quad activations).
 PARAMS = CKKSParams(
-    logn=15,
+    logn=14,
     logq=[55, 40, 40, 40, 40, 40, 40, 40, 40, 40],
     logp=[61, 61, 61],
     log_default_scale=40,
