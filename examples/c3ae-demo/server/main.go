@@ -46,9 +46,15 @@ type session struct {
 	state        sessionState
 	lastActivity time.Time
 
+	// Main evaluation keys
 	rlk        *rlwe.RelinearizationKey
 	galoisKeys map[uint64]*rlwe.GaloisKey
-	btpKeys    *bootstrapping.EvaluationKeys
+
+	// Bootstrap keys (streamed individually)
+	btpKeys       *bootstrapping.EvaluationKeys // set if uploaded as monolithic blob
+	btpRLK        *rlwe.RelinearizationKey
+	btpGaloisKeys map[uint64]*rlwe.GaloisKey
+	btpSwitchKeys map[string]*rlwe.EvaluationKey // "EvkN1ToN2", "EvkDenseToSparse", etc.
 
 	eval *evaluator.Evaluator
 }
@@ -130,9 +136,11 @@ func (s *Server) HandleSession(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	s.sessions[id] = &session{
-		state:        sessionPending,
-		lastActivity: time.Now(),
-		galoisKeys:   make(map[uint64]*rlwe.GaloisKey),
+		state:         sessionPending,
+		lastActivity:  time.Now(),
+		galoisKeys:    make(map[uint64]*rlwe.GaloisKey),
+		btpGaloisKeys: make(map[uint64]*rlwe.GaloisKey),
+		btpSwitchKeys: make(map[string]*rlwe.EvaluationKey),
 	}
 	s.mu.Unlock()
 
@@ -295,6 +303,125 @@ func (s *Server) HandleBootstrapKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// HandleBootstrapRelinKey uploads the bootstrap relinearization key.
+func (s *Server) HandleBootstrapRelinKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := s.getSession(w, r)
+	if !ok {
+		return
+	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	if sess.state == sessionReady {
+		http.Error(w, "session already finalized", http.StatusConflict)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxSingleKeyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
+		return
+	}
+	if len(body) == 0 {
+		http.Error(w, "empty body", http.StatusBadRequest)
+		return
+	}
+	rlk := &rlwe.RelinearizationKey{}
+	if err := rlk.UnmarshalBinary(body); err != nil {
+		http.Error(w, fmt.Sprintf("unmarshaling bootstrap RLK: %v", err), http.StatusBadRequest)
+		return
+	}
+	sess.btpRLK = rlk
+	sess.lastActivity = time.Now()
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleBootstrapGaloisKey uploads an individual bootstrap Galois key.
+func (s *Server) HandleBootstrapGaloisKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := s.getSession(w, r)
+	if !ok {
+		return
+	}
+	elementStr := r.PathValue("element")
+	element, err := strconv.ParseUint(elementStr, 10, 64)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("invalid element %q", elementStr), http.StatusBadRequest)
+		return
+	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	if sess.state == sessionReady {
+		http.Error(w, "session already finalized", http.StatusConflict)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxSingleKeyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
+		return
+	}
+	if len(body) == 0 {
+		http.Error(w, "empty body", http.StatusBadRequest)
+		return
+	}
+	gk := &rlwe.GaloisKey{}
+	if err := gk.UnmarshalBinary(body); err != nil {
+		http.Error(w, fmt.Sprintf("unmarshaling bootstrap Galois key: %v", err), http.StatusBadRequest)
+		return
+	}
+	sess.btpGaloisKeys[element] = gk
+	sess.lastActivity = time.Now()
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleBootstrapSwitchingKey uploads a named bootstrap switching/evaluation key.
+func (s *Server) HandleBootstrapSwitchingKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sess, ok := s.getSession(w, r)
+	if !ok {
+		return
+	}
+	name := r.PathValue("name")
+	if name == "" {
+		http.Error(w, "missing key name", http.StatusBadRequest)
+		return
+	}
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	if sess.state == sessionReady {
+		http.Error(w, "session already finalized", http.StatusConflict)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxSingleKeyBytes)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
+		return
+	}
+	if len(body) == 0 {
+		http.Error(w, "empty body", http.StatusBadRequest)
+		return
+	}
+	evk := &rlwe.EvaluationKey{}
+	if err := evk.UnmarshalBinary(body); err != nil {
+		http.Error(w, fmt.Sprintf("unmarshaling switching key %q: %v", name, err), http.StatusBadRequest)
+		return
+	}
+	sess.btpSwitchKeys[name] = evk
+	sess.lastActivity = time.Now()
+	w.WriteHeader(http.StatusOK)
+}
+
 type finalizeErrorResponse struct {
 	Error           string   `json:"error"`
 	MissingRLK      bool     `json:"missing_rlk,omitempty"`
@@ -329,7 +456,10 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	missingRLK := s.manifest.NeedsRLK && sess.rlk == nil
-	missingBtpKeys := len(s.manifest.BootstrapSlots) > 0 && sess.btpKeys == nil
+	// Bootstrap keys can come as monolithic blob OR streamed individually
+	hasBtpBlob := sess.btpKeys != nil
+	hasBtpStreamed := sess.btpRLK != nil || len(sess.btpGaloisKeys) > 0
+	missingBtpKeys := len(s.manifest.BootstrapSlots) > 0 && !hasBtpBlob && !hasBtpStreamed
 
 	if missingRLK || len(missingElements) > 0 || missingBtpKeys {
 		w.Header().Set("Content-Type", "application/json")
@@ -343,13 +473,46 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Assemble main evaluation key set
 	galKeys := make([]*rlwe.GaloisKey, 0, len(sess.galoisKeys))
 	for _, gk := range sess.galoisKeys {
 		galKeys = append(galKeys, gk)
 	}
 	evk := rlwe.NewMemEvaluationKeySet(sess.rlk, galKeys...)
 
-	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk, sess.btpKeys)
+	// Assemble bootstrap keys
+	var btpKeys *bootstrapping.EvaluationKeys
+	if hasBtpBlob {
+		btpKeys = sess.btpKeys
+	} else if hasBtpStreamed {
+		// Build from individually uploaded keys
+		btpGalKeys := make([]*rlwe.GaloisKey, 0, len(sess.btpGaloisKeys))
+		for _, gk := range sess.btpGaloisKeys {
+			btpGalKeys = append(btpGalKeys, gk)
+		}
+		btpKeys = &bootstrapping.EvaluationKeys{
+			MemEvaluationKeySet: rlwe.NewMemEvaluationKeySet(sess.btpRLK, btpGalKeys...),
+		}
+		// Attach switching keys by name
+		for name, key := range sess.btpSwitchKeys {
+			switch name {
+			case "EvkN1ToN2":
+				btpKeys.EvkN1ToN2 = key
+			case "EvkN2ToN1":
+				btpKeys.EvkN2ToN1 = key
+			case "EvkRealToCmplx":
+				btpKeys.EvkRealToCmplx = key
+			case "EvkCmplxToReal":
+				btpKeys.EvkCmplxToReal = key
+			case "EvkDenseToSparse":
+				btpKeys.EvkDenseToSparse = key
+			case "EvkSparseToDense":
+				btpKeys.EvkSparseToDense = key
+			}
+		}
+	}
+
+	eval, err := evaluator.NewEvaluatorFromKeySet(s.ckksParams, evk, btpKeys)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("creating evaluator: %v", err), http.StatusInternalServerError)
 		return
@@ -360,6 +523,9 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 	sess.rlk = nil
 	sess.galoisKeys = nil
 	sess.btpKeys = nil
+	sess.btpRLK = nil
+	sess.btpGaloisKeys = nil
+	sess.btpSwitchKeys = nil
 	sess.lastActivity = time.Now()
 
 	w.WriteHeader(http.StatusOK)
@@ -497,6 +663,9 @@ func (s *Server) Handler(clientDir string) http.Handler {
 	mux.HandleFunc("POST /session/{id}/keys/relin", s.HandleRelinKey)
 	mux.HandleFunc("POST /session/{id}/keys/galois/{element}", s.HandleGaloisKey)
 	mux.HandleFunc("POST /session/{id}/keys/bootstrap", s.HandleBootstrapKey)
+	mux.HandleFunc("POST /session/{id}/keys/bootstrap/relin", s.HandleBootstrapRelinKey)
+	mux.HandleFunc("POST /session/{id}/keys/bootstrap/galois/{element}", s.HandleBootstrapGaloisKey)
+	mux.HandleFunc("POST /session/{id}/keys/bootstrap/switching/{name}", s.HandleBootstrapSwitchingKey)
 	mux.HandleFunc("POST /session/{id}/keys/finalize", s.HandleFinalize)
 	mux.HandleFunc("POST /session/{id}/infer", s.HandleInfer)
 

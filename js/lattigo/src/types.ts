@@ -203,6 +203,27 @@ export interface WasmBridge {
   /** Marshal bootstrap evaluation keys to binary. */
   bootstrapEvalKeysMarshal(btpEvkHID: Handle): Uint8Array | ErrorResult;
 
+  // --- Bootstrap (streaming) ---
+
+  /** Extend SK to bootstrap ring. Returns {skN2HID, kgN2HID, needsRingSwitch, isConjugateInvariant}. */
+  bootstrapExtendSK(
+    btpParamsHID: Handle,
+    skHID: Handle,
+  ): { skN2HID: Handle; kgN2HID: Handle; needsRingSwitch: boolean; isConjugateInvariant: boolean } | ErrorResult;
+
+  /** Get Galois elements required by the bootstrap circuit. */
+  bootstrapGaloisElements(btpParamsHID: Handle): number[] | ErrorResult;
+
+  /** Generate ring-switching and encapsulation keys. Returns {keys: [{hid, name}...]}. */
+  bootstrapGenSwitchingKeys(
+    btpParamsHID: Handle,
+    skN1HID: Handle,
+    skN2HID: Handle,
+  ): { keys: Array<{ hid: Handle; name: string }> } | ErrorResult;
+
+  /** Marshal an individual evaluation key by handle. */
+  evalKeyMarshal(hid: Handle): Uint8Array | ErrorResult;
+
   // --- Polynomial ---
 
   /** Create a monomial-basis polynomial from coefficients. */

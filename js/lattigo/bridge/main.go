@@ -77,10 +77,13 @@ func main() {
 	ns.Set("memEvalKeySetMarshal", js.FuncOf(memEvalKeySetMarshal))
 	ns.Set("memEvalKeySetUnmarshal", js.FuncOf(memEvalKeySetUnmarshal))
 
-	// Bootstrap
+	// Bootstrap (monolithic — kept for backwards compat)
 	ns.Set("newBootstrapParams", js.FuncOf(newBootstrapParams))
 	ns.Set("bootstrapParamsGenEvalKeys", js.FuncOf(bootstrapParamsGenEvalKeys))
 	ns.Set("bootstrapEvalKeysMarshal", js.FuncOf(bootstrapEvalKeysMarshal))
+
+	// Bootstrap (streaming — generate one key at a time)
+	registerBootstrapStreaming(ns)
 
 	// Polynomial
 	ns.Set("newPolynomialMonomial", js.FuncOf(newPolynomialMonomial))

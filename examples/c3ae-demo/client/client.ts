@@ -272,13 +272,11 @@ async function initializeKeys(): Promise<void> {
     );
   }
 
-  // 8. Bootstrap keys
+  // 8. Bootstrap keys (streamed one at a time to minimize memory)
   if (manifest.bootstrap_slots.length > 0 && bridge) {
-    appendLine(
-      "Generating bootstrap keys (this may take a while)...",
-    );
     const t5 = performance.now();
 
+    // 8a. Create bootstrap params
     const btpLogN = ckksData.btp_logn ?? ckksData.logn;
     const btpLogP =
       manifest.boot_logp && manifest.boot_logp.length > 0
@@ -300,43 +298,116 @@ async function initializeKeys(): Promise<void> {
       btnInit.disabled = false;
       return;
     }
-    const btpParamsHID = btpParamsResult.handle;
+    const btpParamsHID = (btpParamsResult as { handle: number }).handle;
 
-    const btpResult = await bridge.bootstrapParamsGenEvalKeys(
-      btpParamsHID,
-      sk!.handle,
+    // 8b. Extend SK to bootstrap ring
+    appendLine("Extending secret key to bootstrap parameters...");
+    const extResult = bridge.bootstrapExtendSK(btpParamsHID, sk!.handle);
+    if ("error" in extResult) {
+      setStatus(`Bootstrap extend SK error: ${(extResult as { error: string }).error}`);
+      btnInit.disabled = false;
+      return;
+    }
+    const skN2HID = extResult.skN2HID as number;
+    const kgN2HID = extResult.kgN2HID as number;
+
+    // 8c. Generate + upload switching keys (small, 2-6 keys)
+    appendLine("Generating bootstrap switching keys...");
+    const switchResult = bridge.bootstrapGenSwitchingKeys(btpParamsHID, sk!.handle, skN2HID);
+    if ("error" in switchResult) {
+      setStatus(`Bootstrap switching keys error: ${(switchResult as { error: string }).error}`);
+      btnInit.disabled = false;
+      return;
+    }
+    const switchKeys = switchResult.keys as Array<{ hid: number; name: string }>;
+    for (const { hid, name } of switchKeys) {
+      const keyBytes = bridge.evalKeyMarshal(hid);
+      bridge.deleteHandle(hid);
+      if ("error" in keyBytes) {
+        setStatus(`Bootstrap switching key marshal error: ${(keyBytes as { error: string }).error}`);
+        btnInit.disabled = false;
+        return;
+      }
+      const resp = await fetch(`/session/${sessionId}/keys/bootstrap/switching/${name}`, {
+        method: "POST",
+        body: keyBytes as unknown as ArrayBuffer,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      if (!resp.ok) {
+        setStatus(`Bootstrap switching key upload failed: ${await resp.text()}`);
+        btnInit.disabled = false;
+        return;
+      }
+      appendLine(`  Switching key "${name}" uploaded (${formatBytes((keyBytes as Uint8Array).length)})`);
+    }
+
+    // 8d. Generate + upload bootstrap RLK
+    appendLine("Generating bootstrap relinearization key...");
+    const btpRlk = bridge.keyGenGenRelinKey(kgN2HID, skN2HID);
+    if ("error" in btpRlk) {
+      setStatus(`Bootstrap RLK error: ${(btpRlk as { error: string }).error}`);
+      btnInit.disabled = false;
+      return;
+    }
+    const btpRlkHID = (btpRlk as { handle: number }).handle;
+    const btpRlkBytes = bridge.relinKeyMarshal(btpRlkHID);
+    bridge.deleteHandle(btpRlkHID);
+    {
+      const resp = await fetch(`/session/${sessionId}/keys/bootstrap/relin`, {
+        method: "POST",
+        body: btpRlkBytes as unknown as ArrayBuffer,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      if (!resp.ok) {
+        setStatus(`Bootstrap RLK upload failed: ${await resp.text()}`);
+        btnInit.disabled = false;
+        return;
+      }
+    }
+    appendLine(`  Bootstrap RLK uploaded (${formatBytes((btpRlkBytes as Uint8Array).length)})`);
+
+    // 8e. Stream bootstrap Galois keys one at a time
+    const btpGaloisElements = bridge.bootstrapGaloisElements(btpParamsHID) as number[];
+    const btpTotal = btpGaloisElements.length;
+    appendLine(`Streaming ${btpTotal} bootstrap Galois key(s)...`);
+    const t6 = performance.now();
+    for (let i = 0; i < btpTotal; i++) {
+      const ge = btpGaloisElements[i];
+      const gkResult = bridge.keyGenGenGaloisKey(kgN2HID, skN2HID, ge);
+      if ("error" in gkResult) {
+        setStatus(`Bootstrap Galois key error (${ge}): ${(gkResult as { error: string }).error}`);
+        btnInit.disabled = false;
+        return;
+      }
+      const gkHID = (gkResult as { handle: number }).handle;
+      const gkBytes = bridge.galoisKeyMarshal(gkHID);
+      bridge.deleteHandle(gkHID);
+
+      const resp = await fetch(`/session/${sessionId}/keys/bootstrap/galois/${ge}`, {
+        method: "POST",
+        body: gkBytes as unknown as ArrayBuffer,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      if (!resp.ok) {
+        setStatus(`Bootstrap Galois key upload failed (${ge}): ${await resp.text()}`);
+        btnInit.disabled = false;
+        return;
+      }
+      setStatus(
+        `Bootstrap Galois keys: ${i + 1}/${btpTotal} [${Math.round(((i + 1) / btpTotal) * 100)}%] — ` +
+          `${formatDuration(performance.now() - t6)} elapsed`,
+      );
+    }
+    appendLine(
+      `${btpTotal} bootstrap Galois key(s) uploaded in ${formatDuration(performance.now() - t6)}`,
     );
+
+    // Cleanup bootstrap handles
+    bridge.deleteHandle(skN2HID);
+    bridge.deleteHandle(kgN2HID);
     bridge.deleteHandle(btpParamsHID);
 
-    const btpBytes = bridge.bootstrapEvalKeysMarshal(btpResult.btpEvkHID);
-    bridge.deleteHandle(btpResult.evkHID);
-    bridge.deleteHandle(btpResult.btpEvkHID);
-
-    if ("error" in btpBytes) {
-      setStatus(`Bootstrap keys marshal error: ${btpBytes.error}`);
-      btnInit.disabled = false;
-      return;
-    }
-
-    appendLine(
-      `Bootstrap keys generated in ${formatDuration(performance.now() - t5)} (${formatBytes(btpBytes.length)})`,
-    );
-
-    appendLine("Uploading bootstrap keys...");
-    const t6 = performance.now();
-    const resp = await fetch(`/session/${sessionId}/keys/bootstrap`, {
-      method: "POST",
-      body: btpBytes as unknown as ArrayBuffer,
-      headers: { "Content-Type": "application/octet-stream" },
-    });
-    if (!resp.ok) {
-      setStatus(`Bootstrap key upload failed: ${await resp.text()}`);
-      btnInit.disabled = false;
-      return;
-    }
-    appendLine(
-      `Bootstrap keys uploaded in ${formatDuration(performance.now() - t6)}`,
-    );
+    appendLine(`Bootstrap keys complete in ${formatDuration(performance.now() - t5)}`);
   }
 
   // 9. Finalize
