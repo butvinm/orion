@@ -10,7 +10,7 @@ Based on the C3AE (Compact yet Comprehensive Age Estimation) architecture adapte
 - Python 3.11+ with a venv containing `orion-compiler`, `orion-evaluator`, and `lattigo`
 - Node.js 18+
 - UTKFace dataset (for training)
-- ~67 GB RAM for full FHE inference (13 GB for compilation alone)
+- ~33 GB RAM for full FHE inference (7 GB for compilation alone)
 
 ## Quick Start
 
@@ -111,13 +111,15 @@ Browser (WASM)                    Go Server
 
 | Parameter | Value                                    |
 | --------- | ---------------------------------------- |
-| LogN      | 15 (ring dim = 32,768)                   |
+| LogN      | 14 (ring dim = 16,384)                   |
 | LogQ      | [55, 40, 40, 40, 40, 40, 40, 40, 40, 40] |
 | LogP      | [61, 61, 61]                             |
 | LogScale  | 40                                       |
 | H         | 192                                      |
 | Ring type | Standard (bootstrap-compatible)          |
 | Bootstrap | LogP=[61]x8                              |
+
+Input (64x64x3 = 12,288 values) is split across 2 ciphertexts of 8,192 slots each.
 
 ## Measurements
 
@@ -139,31 +141,31 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 | Metric              | Value                          |
 | ------------------- | ------------------------------ |
-| Fit time            | 0.02s                          |
-| Compile time        | **2.6 min**                    |
-| Model size (.orion) | **878 MB** (877,947,228 bytes) |
-| Peak RSS            | **13 GB**                      |
+| Fit time            | 0.5s                           |
+| Compile time        | **1.5 min**                    |
+| Model size (.orion) | **427 MB** (447,638,484 bytes) |
+| Peak RSS            | **6.7 GB**                     |
 
 ### Evaluator Setup
 
 | Metric          | Value                        |
 | --------------- | ---------------------------- |
-| Model load time | 2.4s                         |
-| Key generation  | 58s (334 Galois + bootstrap) |
-| Eval keys size  | 4.67 GB                      |
-| Bootstrap keys  | 2.13 GB                      |
-| Evaluator init  | 12s                          |
-| RSS delta       | 21.6 GB                      |
+| Model load time | 1.3s                         |
+| Key generation  | 28s (334 Galois + bootstrap) |
+| Eval keys size  | 2.26 GB                      |
+| Bootstrap keys  | 1.03 GB                      |
+| Evaluator init  | 6s                           |
+| RSS delta       | 10.4 GB                      |
 
 ### FHE Inference
 
-| Metric               | Value               |
-| -------------------- | ------------------- |
-| Encryption time      | 0.063s              |
-| **Inference time**   | **110s per sample** |
-| Decryption time      | 0.008s              |
-| **MAE vs cleartext** | **0.000000**        |
-| Peak RSS             | 67 GB               |
+| Metric               | Value              |
+| -------------------- | ------------------ |
+| Encryption time      | 0.067s             |
+| **Inference time**   | **57s per sample** |
+| Decryption time      | 0.008s             |
+| **MAE vs cleartext** | **0.000000**       |
+| Peak RSS             | 33 GB              |
 
 ### Cleartext Baseline
 
@@ -177,12 +179,10 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 | Metric             | Old Orion        | Orion v2                 |
 | ------------------ | ---------------- | ------------------------ |
-| Compilation time   | ~2 min           | **2.6 min**              |
-| Compilation memory | ~10 GB           | **13 GB**                |
-| Model artifact     | ~8 GB (HDF5)     | **878 MB** (.orion)      |
-| FHE inference      | 31.8s per sample | **110s per sample**      |
+| Compilation time   | ~2 min           | **1.5 min**              |
+| Compilation memory | ~10 GB           | **6.7 GB**               |
+| Model artifact     | ~8 GB (HDF5)     | **427 MB** (.orion)      |
+| FHE inference      | 31.8s per sample | **57s per sample**       |
 | Accuracy           | 93.9%            | **94.2%** (same weights) |
 | FPR                | 18.9%            | **15.9%** (same weights) |
-| Peak server memory | 10.19 GB         | **67 GB**                |
-
-Note: Orion v2 inference is slower (110s vs 32s) because LogN=15 (needed to fit 64x64x3 input in one CT) doubles the ring dimension vs old Orion's LogN=14. The old experiment used a different packing strategy that fit the input at LogN=14.
+| Peak server memory | 10.19 GB         | **33 GB**                |
