@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"encoding/binary"
 	"log"
 	"net/http"
 	"os"
@@ -394,32 +395,65 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ct := &rlwe.Ciphertext{}
-	if err := ct.UnmarshalBinary(body); err != nil {
-		http.Error(w, fmt.Sprintf("unmarshaling ciphertext: %v", err), http.StatusBadRequest)
+	// Parse length-prefixed ciphertext list: [u32 count][u64 len][bytes]...
+	if len(body) < 4 {
+		http.Error(w, "body too short for CT count", http.StatusBadRequest)
 		return
+	}
+	numCTs := int(binary.LittleEndian.Uint32(body[:4]))
+	off := 4
+	inputs := make([]*rlwe.Ciphertext, numCTs)
+	for i := 0; i < numCTs; i++ {
+		if off+8 > len(body) {
+			http.Error(w, fmt.Sprintf("truncated CT header at index %d", i), http.StatusBadRequest)
+			return
+		}
+		ctLen := int(binary.LittleEndian.Uint64(body[off : off+8]))
+		off += 8
+		if off+ctLen > len(body) {
+			http.Error(w, fmt.Sprintf("truncated CT data at index %d", i), http.StatusBadRequest)
+			return
+		}
+		ct := &rlwe.Ciphertext{}
+		if err := ct.UnmarshalBinary(body[off : off+ctLen]); err != nil {
+			http.Error(w, fmt.Sprintf("unmarshaling CT %d: %v", i, err), http.StatusBadRequest)
+			return
+		}
+		inputs[i] = ct
+		off += ctLen
 	}
 
 	t0 := time.Now()
 	sess.mu.Lock()
-	result, err := sess.eval.Forward(s.model, ct)
+	results, err := sess.eval.Forward(s.model, inputs)
 	sess.mu.Unlock()
 	elapsed := time.Since(t0)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("inference error: %v", err), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("FHE inference: %v", elapsed)
+	log.Printf("FHE inference: %v (%d input CTs -> %d output CTs)", elapsed, numCTs, len(results))
 
-	resultBytes, err := result.MarshalBinary()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("marshaling result: %v", err), http.StatusInternalServerError)
-		return
+	// Serialize results as length-prefixed list
+	var buf []byte
+	tmp := make([]byte, 4)
+	binary.LittleEndian.PutUint32(tmp, uint32(len(results)))
+	buf = append(buf, tmp...)
+	for _, r := range results {
+		rb, err := r.MarshalBinary()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("marshaling result: %v", err), http.StatusInternalServerError)
+			return
+		}
+		tmp := make([]byte, 8)
+		binary.LittleEndian.PutUint64(tmp, uint64(len(rb)))
+		buf = append(buf, tmp...)
+		buf = append(buf, rb...)
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("X-Inference-Time", elapsed.String())
-	w.Write(resultBytes)
+	w.Write(buf)
 }
 
 func (s *Server) StartCleanup(ctx context.Context, interval time.Duration) {

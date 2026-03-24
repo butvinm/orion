@@ -413,29 +413,44 @@ async function runInference(): Promise<void> {
   setStatus("Preprocessing image...");
   const { values } = preprocessImage(canvas);
 
-  // Pad to maxSlots
+  // Split into chunks of maxSlots, encode + encrypt each
   const maxSlots = params.maxSlots();
-  const padded = new Array<number>(maxSlots).fill(0);
-  for (let i = 0; i < Math.min(values.length, maxSlots); i++) {
-    padded[i] = values[i];
-  }
-
-  // Encode + encrypt
   setStatus("Encoding and encrypting...");
   const tEnc = performance.now();
 
   const defaultScale = params.defaultScale();
-  const pt = encoder.encode(padded, inputLevel, defaultScale);
-  const ct = encryptor.encryptNew(pt);
-  const ctBytes = ct.marshalBinary();
-  pt.close();
-  ct.close();
+  const ctChunks: Uint8Array[] = [];
+  for (let off = 0; off < values.length; off += maxSlots) {
+    const chunk = values.slice(off, off + maxSlots);
+    const padded = new Array<number>(maxSlots).fill(0);
+    for (let i = 0; i < chunk.length; i++) padded[i] = chunk[i];
+    const pt = encoder.encode(padded, inputLevel, defaultScale);
+    const ct = encryptor.encryptNew(pt);
+    ctChunks.push(ct.marshalBinary());
+    ct.close();
+    pt.close();
+  }
+
+  // Pack as length-prefixed: [u32 count][u64 len][bytes]...
+  let totalSize = 4;
+  for (const c of ctChunks) totalSize += 8 + c.length;
+  const packed = new Uint8Array(totalSize);
+  const dv = new DataView(packed.buffer);
+  dv.setUint32(0, ctChunks.length, true);
+  let pos = 4;
+  for (const c of ctChunks) {
+    dv.setUint32(pos, c.length, true);
+    dv.setUint32(pos + 4, 0, true); // high 32 bits of u64
+    pos += 8;
+    packed.set(c, pos);
+    pos += c.length;
+  }
 
   const encTime = performance.now() - tEnc;
 
   // POST to server
   setStatus(
-    `Sending ciphertext (${formatBytes(ctBytes.length)}) for FHE inference...`,
+    `Sending ${ctChunks.length} ciphertext(s) (${formatBytes(totalSize)}) for FHE inference...`,
   );
   const tInfer = performance.now();
 
@@ -444,7 +459,7 @@ async function runInference(): Promise<void> {
   try {
     const inferResp = await fetch(`/session/${sessionId}/infer`, {
       method: "POST",
-      body: ctBytes as unknown as ArrayBuffer,
+      body: packed as unknown as ArrayBuffer,
       headers: { "Content-Type": "application/octet-stream" },
     });
     if (!inferResp.ok) {
@@ -462,11 +477,15 @@ async function runInference(): Promise<void> {
 
   const inferTime = performance.now() - tInfer;
 
-  // Decrypt
+  // Decrypt first result CT from length-prefixed response
   setStatus("Decrypting result...");
   const tDec = performance.now();
 
-  const resultCt = Ciphertext.unmarshalBinary(resultBytes);
+  const rdv = new DataView(resultBytes.buffer);
+  // Skip count (4 bytes) + first length (8 bytes)
+  const firstLen = rdv.getUint32(4, true);
+  const firstCt = resultBytes.slice(12, 12 + firstLen);
+  const resultCt = Ciphertext.unmarshalBinary(firstCt);
   const resultPt = decryptor.decryptNew(resultCt);
   const outputValues = encoder.decode(resultPt, maxSlots);
   resultCt.close();
@@ -490,7 +509,7 @@ async function runInference(): Promise<void> {
       `\n` +
       `  Decrypt + Decode : ${formatDuration(decTime)}\n\n` +
       `Sizes:\n` +
-      `  Ciphertext : ${formatBytes(ctBytes.length)}\n` +
+      `  Ciphertext : ${formatBytes(totalSize)} (${ctChunks.length} CT)\n` +
       `  Result     : ${formatBytes(resultBytes.length)}`,
   );
   setStatus("Inference complete.");
