@@ -15,11 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
-	"runtime/debug"
-	"runtime/pprof"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -533,7 +529,6 @@ func (s *Server) HandleFinalize(w http.ResponseWriter, r *http.Request) {
 	sess.btpSwitchKeys = nil
 	sess.lastActivity = time.Now()
 
-	dumpHeapProfile("after_finalize")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -605,7 +600,6 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("FHE inference: %v (%d input CTs -> %d output CTs)", elapsed, numCTs, len(results))
-	dumpHeapProfile("after_inference")
 
 	// Serialize results as length-prefixed list
 	var buf []byte
@@ -683,53 +677,7 @@ func (s *Server) Handler(clientDir string) http.Handler {
 	return mux
 }
 
-func dumpHeapProfile(name string) {
-	runtime.GC() // force GC so profile reflects live objects
-	debug.FreeOSMemory() // return freed pages to OS
 
-	f, err := os.Create(fmt.Sprintf("/tmp/heap_%s.pb.gz", name))
-	if err != nil {
-		log.Printf("heap profile %s: create error: %v", name, err)
-		return
-	}
-	defer f.Close()
-	if err := pprof.WriteHeapProfile(f); err != nil {
-		log.Printf("heap profile %s: write error: %v", name, err)
-		return
-	}
-
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	// Read RSS from /proc/self/status
-	rssKB := 0
-	if data, err := os.ReadFile("/proc/self/status"); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			if strings.HasPrefix(line, "VmRSS:") {
-				fmt.Sscanf(line, "VmRSS: %d", &rssKB)
-			}
-		}
-	}
-
-	log.Printf("=== Memory breakdown: %s ===", name)
-	log.Printf("  RSS (from /proc):     %d MB", rssKB/1024)
-	log.Printf("  --- Go MemStats ---")
-	log.Printf("  Sys (total from OS):  %d MB", m.Sys/1024/1024)
-	log.Printf("  HeapSys:              %d MB  (heap spans obtained from OS)", m.HeapSys/1024/1024)
-	log.Printf("  HeapAlloc:            %d MB  (live heap objects)", m.HeapAlloc/1024/1024)
-	log.Printf("  HeapIdle:             %d MB  (spans with no objects — held by runtime)", m.HeapIdle/1024/1024)
-	log.Printf("  HeapInuse:            %d MB  (spans with objects)", m.HeapInuse/1024/1024)
-	log.Printf("  HeapReleased:         %d MB  (returned to OS)", m.HeapReleased/1024/1024)
-	log.Printf("  StackSys:             %d MB  (goroutine stacks)", m.StackSys/1024/1024)
-	log.Printf("  MSpanSys:             %d MB  (span metadata)", m.MSpanSys/1024/1024)
-	log.Printf("  MCacheSys:            %d MB  (mcache)", m.MCacheSys/1024/1024)
-	log.Printf("  BuckHashSys:          %d MB  (profiling)", m.BuckHashSys/1024/1024)
-	log.Printf("  GCSys:                %d MB  (GC metadata)", m.GCSys/1024/1024)
-	log.Printf("  OtherSys:             %d MB  (other runtime)", m.OtherSys/1024/1024)
-	log.Printf("  --- Derived ---")
-	log.Printf("  HeapIdle-HeapReleased:%d MB  (free but unreturned to OS)", (m.HeapIdle-m.HeapReleased)/1024/1024)
-	log.Printf("  NumGC:                %d", m.NumGC)
-}
 
 func newSessionID() (string, error) {
 	b := make([]byte, 16)
