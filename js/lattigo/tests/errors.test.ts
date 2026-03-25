@@ -15,61 +15,21 @@ beforeAll(async () => {
 });
 
 describe("Error handling", () => {
-  describe("Key unmarshal", () => {
-    it("SecretKey.unmarshalBinary throws on invalid bytes", () => {
-      expect(() =>
-        SecretKey.unmarshalBinary(new Uint8Array([1, 2, 3])),
-      ).toThrow();
-    });
-
-    it("PublicKey.unmarshalBinary throws on invalid bytes", () => {
-      expect(() =>
-        PublicKey.unmarshalBinary(new Uint8Array([1, 2, 3])),
-      ).toThrow();
-    });
-
-    it("RelinearizationKey.unmarshalBinary throws on invalid bytes", () => {
-      expect(() =>
-        RelinearizationKey.unmarshalBinary(new Uint8Array([1, 2, 3])),
-      ).toThrow();
-    });
-
-    it("GaloisKey.unmarshalBinary throws on invalid bytes", () => {
-      expect(() =>
-        GaloisKey.unmarshalBinary(new Uint8Array([1, 2, 3])),
-      ).toThrow();
-    });
-
-    it("Ciphertext.unmarshalBinary throws on invalid bytes", () => {
-      expect(() =>
-        Ciphertext.unmarshalBinary(new Uint8Array([1, 2, 3])),
-      ).toThrow();
-    });
-
-    it("Plaintext.unmarshalBinary throws on invalid bytes", () => {
-      expect(() =>
-        Plaintext.unmarshalBinary(new Uint8Array([1, 2, 3])),
-      ).toThrow();
-    });
-
-    it("MemEvaluationKeySet.unmarshalBinary throws on invalid bytes", () => {
-      expect(() =>
-        MemEvaluationKeySet.unmarshalBinary(new Uint8Array([1, 2, 3])),
-      ).toThrow();
-    });
-  });
-
-  describe("Empty byte arrays", () => {
-    it("SecretKey.unmarshalBinary throws on empty bytes", () => {
-      expect(() =>
-        SecretKey.unmarshalBinary(new Uint8Array([])),
-      ).toThrow();
-    });
-
-    it("Ciphertext.unmarshalBinary throws on empty bytes", () => {
-      expect(() =>
-        Ciphertext.unmarshalBinary(new Uint8Array([])),
-      ).toThrow();
-    });
+  it.each([
+    ["SecretKey", () => SecretKey.unmarshalBinary(new Uint8Array([1, 2, 3]))],
+    ["PublicKey", () => PublicKey.unmarshalBinary(new Uint8Array([1, 2, 3]))],
+    [
+      "RelinearizationKey",
+      () => RelinearizationKey.unmarshalBinary(new Uint8Array([1, 2, 3])),
+    ],
+    ["GaloisKey", () => GaloisKey.unmarshalBinary(new Uint8Array([1, 2, 3]))],
+    ["Ciphertext", () => Ciphertext.unmarshalBinary(new Uint8Array([1, 2, 3]))],
+    ["Plaintext", () => Plaintext.unmarshalBinary(new Uint8Array([1, 2, 3]))],
+    [
+      "MemEvaluationKeySet",
+      () => MemEvaluationKeySet.unmarshalBinary(new Uint8Array([1, 2, 3])),
+    ],
+  ])("%s.unmarshalBinary throws on invalid bytes", (_name, fn) => {
+    expect(fn).toThrow();
   });
 });

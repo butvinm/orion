@@ -272,17 +272,12 @@ func TestParsePolynomialConfig(t *testing.T) {
 	assert.NotZero(t, cfg.Prescale)
 }
 
-func TestParseLinearTransformConfigInvalid(t *testing.T) {
-	_, err := parseLinearTransformConfig(json.RawMessage(`{invalid`))
+func TestParseConfigInvalidJSON(t *testing.T) {
+	bad := json.RawMessage(`{invalid`)
+	_, err := parseLinearTransformConfig(bad)
 	assert.Error(t, err)
-}
-
-func TestParsePolynomialConfigInvalid(t *testing.T) {
-	_, err := parsePolynomialConfig(json.RawMessage(`{invalid`))
+	_, err = parsePolynomialConfig(bad)
 	assert.Error(t, err)
-}
-
-func TestParseBootstrapConfigInvalid(t *testing.T) {
-	_, err := parseBootstrapConfig(json.RawMessage(`{invalid`))
+	_, err = parseBootstrapConfig(bad)
 	assert.Error(t, err)
 }

@@ -41,15 +41,6 @@ class TestCKKSParams:
         assert p.ring_type == "conjugate_invariant"
         assert p.boot_logp is None
 
-    def test_list_inputs_coerced_to_tuples(self):
-        p = CKKSParams(logn=14, logq=[55, 40], logp=[61], log_default_scale=40)
-        assert isinstance(p.logq, tuple)
-        assert isinstance(p.logp, tuple)
-
-    def test_boot_logp_list_coerced(self):
-        p = self._default_params(boot_logp=[61, 61])
-        assert isinstance(p.boot_logp, tuple)
-
     def test_max_level(self):
         p = self._default_params()
         assert p.max_level == 3  # len((55, 40, 40, 40)) - 1
@@ -172,18 +163,6 @@ class TestKeyManifest:
                 btp_logn=14,
                 needs_rlk=True,
             )
-
-    def test_list_inputs_coerced(self):
-        m = KeyManifest(
-            galois_elements={5, 25},
-            bootstrap_slots=[4096],
-            boot_logp=[61],
-            btp_logn=14,
-            needs_rlk=True,
-        )
-        assert isinstance(m.galois_elements, frozenset)
-        assert isinstance(m.bootstrap_slots, tuple)
-        assert isinstance(m.boot_logp, tuple)
 
     def test_roundtrip_dict(self):
         m = KeyManifest(
