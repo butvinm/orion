@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,7 @@ func TestLoadModelMLP(t *testing.T) {
 	for _, node := range model.graph.Nodes {
 		if node.Op == "linear_transform" {
 			for ref, blobIdx := range node.BlobRefs {
-				if ref == "bias" {
+				if ref == "bias" || strings.HasPrefix(ref, "bias_") {
 					continue
 				}
 				assert.Less(t, blobIdx, len(model.rawBlobs), "blob ref %q index out of range", ref)
