@@ -417,11 +417,16 @@ class BootstrapParams:
         log_slots: int = 0,
     ):
         self._handle = ffi.new_bootstrap_params(
-            params._handle, logn=logn, logp=logp, h=h, log_slots=log_slots,
+            params._handle,
+            logn=logn,
+            logp=logp,
+            h=h,
+            log_slots=log_slots,
         )
 
     def gen_eval_keys(
-        self, sk: SecretKey,
+        self,
+        sk: SecretKey,
     ) -> tuple[MemEvaluationKeySet, BootstrapEvalKeys]:
         """Generate bootstrap evaluation keys.
 
@@ -431,7 +436,8 @@ class BootstrapParams:
             - btp_keys: BootstrapEvalKeys for serialization
         """
         evk_h, btp_evk_h = ffi.bootstrap_params_gen_eval_keys(
-            self._handle, sk._handle,
+            self._handle,
+            sk._handle,
         )
         return MemEvaluationKeySet._from_handle(evk_h), BootstrapEvalKeys(btp_evk_h)
 

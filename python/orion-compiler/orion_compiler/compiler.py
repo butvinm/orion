@@ -191,7 +191,7 @@ class Compiler:
         This method has ZERO Go/Lattigo dependency — only fit() needs Go.
         """
         blob_store = BlobStore()
-        metadata, blob_count = self._compile_core(lambda data: blob_store.append(data))
+        metadata, _blob_count = self._compile_core(lambda data: blob_store.append(data))
         return CompiledModel(
             params=self.ckks_params,
             config=self.config,

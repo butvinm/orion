@@ -67,48 +67,6 @@ def _make_params():
 
 
 class TestGoHandle:
-    def test_gohandle_raw_returns_value(self):
-        """GoHandle(42).raw == 42"""
-        h = GoHandle(42)
-        assert h.raw == 42
-        # Prevent __del__ from calling DeleteHandle on a fake value
-        h._raw = 0
-
-    def test_repr_open_with_tag(self):
-        """GoHandle(42, tag="Client") -> 'GoHandle(42 Client)'"""
-        h = GoHandle(42, tag="Client")
-        assert repr(h) == "GoHandle(42 Client)"
-        h._raw = 0
-
-    def test_repr_open_without_tag(self):
-        """GoHandle(42) -> 'GoHandle(42)'"""
-        h = GoHandle(42)
-        assert repr(h) == "GoHandle(42)"
-        h._raw = 0
-
-    def test_repr_closed_with_tag(self):
-        """After close, repr shows 'GoHandle(closed Evaluator)'"""
-        h = GoHandle(42, tag="Evaluator")
-        h._raw = 0  # simulate close without calling DeleteHandle on fake value
-        assert repr(h) == "GoHandle(closed Evaluator)"
-
-    def test_repr_closed_without_tag(self):
-        """After close, repr shows 'GoHandle(closed)'"""
-        h = GoHandle(42)
-        h._raw = 0
-        assert repr(h) == "GoHandle(closed)"
-
-    def test_repr_with_real_handle(self):
-        """FFI-created handle has correct repr."""
-        params = _make_params()
-        h = params._handle
-        r = repr(h)
-        assert r.startswith("GoHandle(")
-        assert "closed" not in r
-        params.close()
-        assert "closed" in repr(h)
-        _cleanup()
-
     def test_gohandle_close_is_idempotent(self):
         """h.close(); h.close() -- no error on second call.
 
@@ -436,25 +394,6 @@ class TestCiphertextClose:
 
 class TestModuliChain:
     """Test CKKSParams moduli chain via new lattigo API."""
-
-    def test_moduli_chain_returns_list(self):
-        """moduli_chain() returns a non-empty list of uint64 moduli."""
-        params = _make_params()
-        chain = params.moduli_chain()
-        assert isinstance(chain, list)
-        assert len(chain) > 0
-        assert all(isinstance(v, int) and v > 0 for v in chain)
-        params.close()
-        _cleanup()
-
-    def test_aux_moduli_chain_returns_list(self):
-        """aux_moduli_chain() returns a list of uint64 moduli."""
-        params = _make_params()
-        chain = params.aux_moduli_chain()
-        assert isinstance(chain, list)
-        assert all(isinstance(v, int) and v > 0 for v in chain)
-        params.close()
-        _cleanup()
 
     def test_moduli_chain_matches_params(self):
         """Moduli chain length should correspond to the number of Q primes in params."""

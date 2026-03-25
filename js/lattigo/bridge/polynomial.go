@@ -34,18 +34,17 @@ func newPolynomialChebyshev(_ js.Value, args []js.Value) any {
 	return handleResult(Store(&poly))
 }
 
-// genMinimaxCompositePolynomial(prec, logAlpha, logErr, degrees, debug)
+// genMinimaxCompositePolynomial(prec, logAlpha, logErr, degrees)
 // → {coeffs: Float64Array, seps: number[]} | {error: string}
 // Returns raw Lattigo output — no caching, no sign→[0,1] rescaling.
 func genMinimaxCompositePolynomial(_ js.Value, args []js.Value) any {
-	if len(args) < 5 {
-		return errorResult("genMinimaxCompositePolynomial: need prec, logAlpha, logErr, degrees, debug")
+	if len(args) < 4 {
+		return errorResult("genMinimaxCompositePolynomial: need prec, logAlpha, logErr, degrees")
 	}
 	prec := uint(args[0].Int())
 	logAlpha := args[1].Int()
 	logErr := args[2].Int()
 	degrees := jsToIntSlice(args[3])
-	debug := args[4].Int() != 0
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -56,7 +55,7 @@ func genMinimaxCompositePolynomial(_ js.Value, args []js.Value) any {
 	}()
 
 	coeffsBig := minimax.GenMinimaxCompositePolynomial(
-		prec, logAlpha, logErr, degrees, bignum.Sign, debug,
+		prec, logAlpha, logErr, degrees, bignum.Sign,
 	)
 
 	// Count total and build separators

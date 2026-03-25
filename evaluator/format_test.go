@@ -175,8 +175,12 @@ func TestParseBiasBlob(t *testing.T) {
 		}
 	}
 	require.NotNil(t, fc1)
+	// Compiler may emit "bias" or "bias_0" depending on packing.
 	biasIdx, ok := fc1.BlobRefs["bias"]
-	require.True(t, ok)
+	if !ok {
+		biasIdx, ok = fc1.BlobRefs["bias_0"]
+	}
+	require.True(t, ok, "fc1 should have a bias blob ref (bias or bias_0)")
 
 	bias, err := ParseBiasBlob(blobs[biasIdx], maxSlots)
 	require.NoError(t, err)
@@ -272,17 +276,12 @@ func TestParsePolynomialConfig(t *testing.T) {
 	assert.NotZero(t, cfg.Prescale)
 }
 
-func TestParseLinearTransformConfigInvalid(t *testing.T) {
-	_, err := parseLinearTransformConfig(json.RawMessage(`{invalid`))
+func TestParseConfigInvalidJSON(t *testing.T) {
+	bad := json.RawMessage(`{invalid`)
+	_, err := parseLinearTransformConfig(bad)
 	assert.Error(t, err)
-}
-
-func TestParsePolynomialConfigInvalid(t *testing.T) {
-	_, err := parsePolynomialConfig(json.RawMessage(`{invalid`))
+	_, err = parsePolynomialConfig(bad)
 	assert.Error(t, err)
-}
-
-func TestParseBootstrapConfigInvalid(t *testing.T) {
-	_, err := parseBootstrapConfig(json.RawMessage(`{invalid`))
+	_, err = parseBootstrapConfig(bad)
 	assert.Error(t, err)
 }

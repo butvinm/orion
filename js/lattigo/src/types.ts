@@ -247,7 +247,6 @@ export interface WasmBridge {
     logAlpha: number,
     logErr: number,
     degrees: number[],
-    debug: number,
   ): { coeffs: Float64Array; seps: number[] } | ErrorResult;
 }
 
