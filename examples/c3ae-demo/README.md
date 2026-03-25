@@ -10,7 +10,7 @@ Based on the C3AE (Compact yet Comprehensive Age Estimation) architecture adapte
 - Python 3.11+ with a venv containing `orion-compiler`, `orion-evaluator`, and `lattigo`
 - Node.js 18+
 - UTKFace dataset (for training)
-- ~33 GB RAM for full FHE inference (7 GB for compilation alone)
+- ~20 GB RAM for the Go server during FHE inference (7 GB for compilation alone)
 
 ## Quick Start
 
@@ -165,7 +165,7 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 | **Inference time**   | **57s per sample** |
 | Decryption time      | 0.008s             |
 | **MAE vs cleartext** | **0.000000**       |
-| Peak RSS             | 33 GB              |
+| Peak server RSS      | 18.5 GB            |
 
 ### Cleartext Baseline
 
@@ -185,4 +185,4 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 | FHE inference      | 31.8s per sample | **57s per sample**       |
 | Accuracy           | 93.9%            | **94.2%** (same weights) |
 | FPR                | 18.9%            | **15.9%** (same weights) |
-| Peak server memory | 10.19 GB         | **33 GB**                |
+| Peak server RSS    | 10.19 GB         | **18.5 GB**              |
