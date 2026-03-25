@@ -54,8 +54,7 @@ class Evaluator:
         """Release evaluator resources. Idempotent."""
         if self._handle:
             ffi.evaluator_close(self._handle)
-            ffi.delete_handle(self._handle)
-            self._handle = 0
+            self._handle = None
 
     def __enter__(self) -> "Evaluator":
         return self

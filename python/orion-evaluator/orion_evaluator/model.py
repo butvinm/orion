@@ -4,6 +4,7 @@ import json
 
 from . import ffi
 from .errors import EvaluatorError, ModelLoadError
+from .gohandle import GoHandle
 
 
 class Model:
@@ -19,7 +20,7 @@ class Model:
 
     __slots__ = ("_handle",)
 
-    def __init__(self, handle: int):
+    def __init__(self, handle: GoHandle):
         self._handle = handle
 
     @classmethod
@@ -50,8 +51,7 @@ class Model:
         """Release model resources. Idempotent."""
         if self._handle:
             ffi.model_close(self._handle)
-            ffi.delete_handle(self._handle)
-            self._handle = 0
+            self._handle = None
 
     def __enter__(self) -> "Model":
         return self

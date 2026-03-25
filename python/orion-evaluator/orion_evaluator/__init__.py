@@ -12,8 +12,9 @@ Usage::
 
 from .errors import EvaluatorError, ModelLoadError
 from .evaluator import Evaluator
+from .gohandle import HandleClosedError
 from .model import Model
 
-__all__ = ["Evaluator", "EvaluatorError", "Model", "ModelLoadError"]
+__all__ = ["Evaluator", "EvaluatorError", "HandleClosedError", "Model", "ModelLoadError"]
 
 __version__ = "2.0.2"
