@@ -90,9 +90,6 @@ class NewParameters:
     def get_embedding_method(self) -> str:
         return self._config.embedding_method
 
-    def get_debug_status(self) -> bool:
-        return False
-
     def get_backend(self) -> str:
         return "lattigo"
 
@@ -202,14 +199,14 @@ class CompilerBackend:
         return lattigo_ffi.new_polynomial_chebyshev(coeffs)
 
     def GenerateMinimaxSignCoeffs(
-        self, degrees: list[int], prec: int, logalpha: int, logerr: int, debug: int
+        self, degrees: list[int], prec: int, logalpha: int, logerr: int
     ) -> list[float]:
         """Generate minimax sign polynomial coefficients.
 
         Calls raw Lattigo minimax, applies sign→[0,1] rescaling
         (divide last poly by 2, add 0.5 to constant), and caches results.
         """
-        return _minimax_sign_cached(degrees, prec, logalpha, logerr, debug)
+        return _minimax_sign_cached(degrees, prec, logalpha, logerr)
 
     # -- Lifecycle --
 
@@ -257,7 +254,6 @@ def _minimax_sign_cached(
     prec: int,
     logalpha: int,
     logerr: int,
-    debug: int,
 ) -> list[float]:
     """Generate minimax sign coefficients with caching and sign→[0,1] rescaling."""
     cleaned = [d for d in degrees if d != 0]
@@ -275,7 +271,6 @@ def _minimax_sign_cached(
         prec,
         logalpha,
         logerr,
-        debug,
     )
 
     # Split into per-polynomial lists using separator indices
@@ -443,7 +438,6 @@ class PolynomialGenerator:
         prec: int = 128,
         logalpha: int = 12,
         logerr: int = 12,
-        debug: bool = False,
     ) -> tuple[torch.Tensor, ...]:
         degrees = [degrees] if isinstance(degrees, int) else list(degrees)
 
@@ -454,9 +448,7 @@ class PolynomialGenerator:
                 "generate_minimax_sign_coeffs(). "
             )
 
-        coeffs_flat = self.backend.GenerateMinimaxSignCoeffs(
-            degrees, prec, logalpha, logerr, int(debug)
-        )
+        coeffs_flat = self.backend.GenerateMinimaxSignCoeffs(degrees, prec, logalpha, logerr)
 
         coeffs_tensor = torch.tensor(coeffs_flat)
         splits = [degree + 1 for degree in degrees]

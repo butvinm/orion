@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
-	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/lattigo/v6/ring"
-	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
+	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/ring"
+	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 )
 
 // bootstrapExtendSK(btpParamsHID, skHID) → {skN2HID, kgN2HID} | {error}

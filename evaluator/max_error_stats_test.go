@@ -8,8 +8,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 	"github.com/stretchr/testify/require"
 )
 

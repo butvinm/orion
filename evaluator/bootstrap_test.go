@@ -9,11 +9,11 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
-	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
-	"github.com/baahl-nyu/lattigo/v6/utils"
-	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
+	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
+	"github.com/tuneinsight/lattigo/v6/utils"
+	"github.com/tuneinsight/lattigo/v6/utils/bignum"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

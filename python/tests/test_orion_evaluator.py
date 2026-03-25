@@ -147,9 +147,9 @@ class TestEvaluatorLifecycle:
         model = Model.load(data)
         evaluator, sk, params, kg = _make_evaluator_from_model(model)
 
-        assert evaluator._handle != 0
+        assert evaluator._handle is not None
         evaluator.close()
-        assert evaluator._handle == 0
+        assert evaluator._handle is None
 
         sk.close()
         kg.close()

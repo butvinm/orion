@@ -12,10 +12,10 @@ import (
 	"runtime/cgo"
 	"unsafe"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
-	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/lattigo/v6/ring"
-	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
+	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/ring"
+	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 )
 
 // Wrapper structs store params alongside the object so callers

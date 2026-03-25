@@ -1,7 +1,7 @@
 package orion
 
 import (
-	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
+	"github.com/tuneinsight/lattigo/v6/utils/bignum"
 )
 
 // Polynomial wraps a bignum.Polynomial for use with EvalPoly.

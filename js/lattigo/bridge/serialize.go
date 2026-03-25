@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 )
 
 // --- SecretKey ---

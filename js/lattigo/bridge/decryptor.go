@@ -5,8 +5,8 @@ package main
 import (
 	"syscall/js"
 
-	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 )
 
 // decryptorHandle bundles decryptor with its parameters (needed to create plaintexts).

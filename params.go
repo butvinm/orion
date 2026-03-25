@@ -3,8 +3,8 @@ package orion
 import (
 	"fmt"
 
-	"github.com/baahl-nyu/lattigo/v6/ring"
-	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
+	"github.com/tuneinsight/lattigo/v6/ring"
+	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 )
 
 // Params holds CKKS scheme parameters in a serialization-friendly form.

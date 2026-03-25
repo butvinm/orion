@@ -13,8 +13,8 @@ import (
 	"encoding/json"
 	"runtime/cgo"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
-	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
+	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 
 	orion "github.com/butvinm/orion"
 	"github.com/butvinm/orion/evaluator"
