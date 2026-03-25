@@ -432,7 +432,7 @@ class TestNewParametersAdapter:
         assert np.get_logp() == [61]
         assert np.get_logscale() == 40
         assert np.get_hamming_weight() == 192
-        assert np.get_ringtype() == "conjugateinvariant"
+        assert np.get_ringtype() == "conjugate_invariant"
         assert np.get_margin() == 3
         assert np.get_embedding_method() == "square"
         assert np.get_max_level() == 2
