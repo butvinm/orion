@@ -64,6 +64,39 @@ jobs:
           skip-existing: true
           verbose: true
 
+  publish-npm:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Install JS dependencies
+        working-directory: js/lattigo
+        run: npm install
+
+      - name: Build WASM and TypeScript
+        working-directory: js/lattigo
+        run: npm run build
+
+      - name: Publish to npm
+        working-directory: js/lattigo
+        run: npm publish --provenance --access public
+
   github-release:
     needs: build
     runs-on: ubuntu-latest
