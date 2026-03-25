@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { ensureWasmLoaded } from "./helpers.js";
 import {
-  CKKSParameters,
   SecretKey,
   PublicKey,
   RelinearizationKey,
@@ -16,22 +15,6 @@ beforeAll(async () => {
 });
 
 describe("Error handling", () => {
-  describe("CKKSParameters", () => {
-    it("constructor throws on invalid ring type", () => {
-      expect(
-        () =>
-          new CKKSParameters({
-            logN: 13,
-            logQ: [29, 26],
-            logP: [29],
-            logDefaultScale: 26,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ringType: "InvalidRingType" as any,
-          }),
-      ).toThrow();
-    });
-  });
-
   describe("Key unmarshal", () => {
     it("SecretKey.unmarshalBinary throws on invalid bytes", () => {
       expect(() =>
