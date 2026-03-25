@@ -175,8 +175,12 @@ func TestParseBiasBlob(t *testing.T) {
 		}
 	}
 	require.NotNil(t, fc1)
+	// Compiler may emit "bias" or "bias_0" depending on packing.
 	biasIdx, ok := fc1.BlobRefs["bias"]
-	require.True(t, ok)
+	if !ok {
+		biasIdx, ok = fc1.BlobRefs["bias_0"]
+	}
+	require.True(t, ok, "fc1 should have a bias blob ref (bias or bias_0)")
 
 	bias, err := ParseBiasBlob(blobs[biasIdx], maxSlots)
 	require.NoError(t, err)
