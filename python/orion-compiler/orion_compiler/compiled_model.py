@@ -399,6 +399,10 @@ class CompiledModel:
     def from_bytes(cls, data: bytes) -> "CompiledModel":
         metadata, blobs = _unpack_container(data, _MODEL_MAGIC)
 
+        version = metadata.get("version")
+        if version != 2:
+            raise ValueError(f"Unsupported format version {version} (expected 2)")
+
         p = metadata["params"]
         params = CKKSParams(
             logn=p["logn"],

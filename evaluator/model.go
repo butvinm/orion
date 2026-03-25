@@ -37,17 +37,22 @@ func LoadModel(data []byte) (*Model, error) {
 		return nil, fmt.Errorf("parsing container: %w", err)
 	}
 
-	// 2. Convert header params to CKKS parameters.
+	// 2. Validate format version.
+	if header.Version != 2 {
+		return nil, fmt.Errorf("unsupported format version %d (expected 2)", header.Version)
+	}
+
+	// 3. Convert header params to CKKS parameters.
 	p := headerToParams(header)
 	ckksParams, err := p.NewCKKSParameters()
 	if err != nil {
 		return nil, fmt.Errorf("creating CKKS parameters: %w", err)
 	}
 
-	// 3. Create temporary encoder for encoding diagonals and biases.
+	// 4. Create temporary encoder for encoding diagonals and biases.
 	enc := ckks.NewEncoder(ckksParams)
 
-	// 4. Build computation graph.
+	// 5. Build computation graph.
 	graph, err := buildGraph(header)
 	if err != nil {
 		return nil, fmt.Errorf("building graph: %w", err)
