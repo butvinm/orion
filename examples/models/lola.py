@@ -14,7 +14,7 @@ CONFIG = {
         logn=13,
         logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
         logp=[29, 29],
-        logscale=26,
+        log_default_scale=26,
         h=8192,
         ring_type="conjugate_invariant",
     ),

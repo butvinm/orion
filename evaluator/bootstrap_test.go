@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/bootstrapping"
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils"
@@ -23,13 +22,13 @@ import (
 
 // bootstrapTestParams returns CKKS params suitable for bootstrap testing at logn=14.
 // These match the plan's spec: logn=14, logq=[55,40,40,40], logp=[61,61],
-// logscale=40, boot_logp=[61x6], ring_type=standard, h=192.
+// log_default_scale=40, boot_logp=[61x6], ring_type=standard, h=192.
 func bootstrapTestParams() orion.Params {
 	return orion.Params{
 		LogN:     14,
 		LogQ:     []int{55, 40, 40, 40},
 		LogP:     []int{61, 61},
-		LogScale: 40,
+		LogDefaultScale: 40,
 		H:        192,
 		RingType: "standard",
 		BootLogP: []int{61, 61, 61, 61, 61, 61},
@@ -98,7 +97,7 @@ func buildSyntheticBootstrapModel(t *testing.T, ckksParams ckks.Parameters, p or
 			LogN:     p.LogN,
 			LogQ:     p.LogQ,
 			LogP:     p.LogP,
-			LogScale: p.LogScale,
+			LogDefaultScale: p.LogDefaultScale,
 			H:        p.H,
 			RingType: p.RingType,
 			BootLogP: p.BootLogP,
@@ -139,8 +138,8 @@ func buildSyntheticBootstrapModel(t *testing.T, ckksParams ckks.Parameters, p or
 		clientParam: p,
 		params:      ckksParams,
 		graph:       graph,
-		transforms:  make(map[string]map[string]lintrans.LinearTransformation),
-		biases:      make(map[string]*rlwe.Plaintext),
+		rawBlobs:    nil,
+		biases:      make(map[string][]*rlwe.Plaintext),
 		polys:       make(map[string]bignum.Polynomial),
 		ltConfigs:   make(map[string]*LinearTransformConfig),
 		polyConfigs: make(map[string]*PolynomialConfig),
@@ -195,8 +194,10 @@ func TestEvalBootstrap(t *testing.T) {
 			ct := encryptVector(t, ctx, input, inputLevel)
 			require.Equal(t, inputLevel, ct.Level())
 
-			result, err := eval.Forward(model, ct)
+			results, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 			require.NoError(t, err)
+			require.Len(t, results, 1)
+			result := results[0]
 
 			assert.Greater(t, result.Level(), inputLevel,
 				"bootstrap should refresh level: got %d, want > %d", result.Level(), inputLevel)
@@ -265,7 +266,7 @@ func TestEvalBootstrapRejectsLevel0(t *testing.T) {
 	}
 	ct := encryptVector(t, ctx, input, inputLevel)
 
-	_, err = eval.Forward(model, ct)
+	_, err = eval.Forward(model, []*rlwe.Ciphertext{ct})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "input level >= 1")
 }
@@ -339,8 +340,10 @@ func TestForwardWithBootstrap(t *testing.T) {
 	}
 	ct := encryptVector(t, ctx, padded, inputLevel)
 
-	result, err := eval.Forward(model, ct)
+	results, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 	require.NoError(t, err, "Forward failed")
+	require.Len(t, results, 1)
+	result := results[0]
 
 	decoded := decryptVector(t, ctx, result)
 	expected := loadJSONFloats(t, expectedPath)
@@ -434,8 +437,10 @@ func TestBootstrapMaxErrorDistribution(t *testing.T) {
 		ct := ckks.NewCiphertext(ckksParams, 1, inputLevel)
 		require.NoError(t, encryptor.Encrypt(pt, ct))
 
-		result, err := eval.Forward(model, ct)
+		results, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 		require.NoError(t, err)
+		require.Len(t, results, 1)
+		result := results[0]
 
 		ptOut := ckks.NewPlaintext(ckksParams, result.Level())
 		decryptor.Decrypt(result, ptOut)

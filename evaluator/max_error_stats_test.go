@@ -85,8 +85,9 @@ func TestMaxErrorDistribution(t *testing.T) {
 				ct := ckks.NewCiphertext(ckksParams, 1, inputLevel)
 				require.NoError(t, encryptor.Encrypt(pt, ct))
 
-				result, err := eval.Forward(model, ct)
+				results, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 				require.NoError(t, err)
+				result := results[0]
 
 				ptOut := ckks.NewPlaintext(ckksParams, result.Level())
 				decryptor.Decrypt(result, ptOut)

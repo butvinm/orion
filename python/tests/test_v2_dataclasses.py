@@ -24,7 +24,7 @@ class TestCKKSParams:
             logn=14,
             logq=(55, 40, 40, 40),
             logp=(61, 61),
-            logscale=40,
+            log_default_scale=40,
         )
         defaults.update(overrides)
         return CKKSParams(**defaults)
@@ -34,13 +34,13 @@ class TestCKKSParams:
         assert p.logn == 14
         assert p.logq == (55, 40, 40, 40)
         assert p.logp == (61, 61)
-        assert p.logscale == 40
+        assert p.log_default_scale == 40
         assert p.h == 192
         assert p.ring_type == "conjugate_invariant"
         assert p.boot_logp is None
 
     def test_list_inputs_coerced_to_tuples(self):
-        p = CKKSParams(logn=14, logq=[55, 40], logp=[61], logscale=40)
+        p = CKKSParams(logn=14, logq=[55, 40], logp=[61], log_default_scale=40)
         assert isinstance(p.logq, tuple)
         assert isinstance(p.logp, tuple)
 
@@ -238,7 +238,7 @@ def _sample_graph():
 
 
 def _sample_compiled_model():
-    params = CKKSParams(logn=14, logq=(55, 40, 40), logp=(61,), logscale=40)
+    params = CKKSParams(logn=14, logq=(55, 40, 40), logp=(61,), log_default_scale=40)
     config = CompilerConfig()
     manifest = KeyManifest(
         galois_elements=frozenset({5, 25}),
@@ -277,7 +277,7 @@ class TestCompiledModel:
         assert cm2.params.logn == cm.params.logn
         assert cm2.params.logq == cm.params.logq
         assert cm2.params.logp == cm.params.logp
-        assert cm2.params.logscale == cm.params.logscale
+        assert cm2.params.log_default_scale == cm.params.log_default_scale
         assert cm2.params.h == cm.params.h
         assert cm2.params.ring_type == cm.params.ring_type
         assert cm2.config.margin == cm.config.margin
@@ -301,7 +301,7 @@ class TestCompiledModel:
             CompiledModel.from_bytes(bytes(data))
 
     def test_empty_blobs(self):
-        params = CKKSParams(logn=14, logq=(55, 40), logp=(61,), logscale=40)
+        params = CKKSParams(logn=14, logq=(55, 40), logp=(61,), log_default_scale=40)
         graph = Graph(
             input="x",
             output="x",
@@ -330,7 +330,7 @@ class TestCompiledModel:
 
     def test_large_blob(self):
         """Verify blobs up to ~1MB roundtrip correctly."""
-        params = CKKSParams(logn=14, logq=(55, 40), logp=(61,), logscale=40)
+        params = CKKSParams(logn=14, logq=(55, 40), logp=(61,), log_default_scale=40)
         big_blob = bytes(range(256)) * 4096  # ~1MB
         graph = Graph(
             input="x",
@@ -363,7 +363,7 @@ class TestCompiledModel:
             logn=14,
             logq=(55, 40, 40, 40),
             logp=(61, 61),
-            logscale=40,
+            log_default_scale=40,
             ring_type="standard",
             boot_logp=(61, 61, 61, 61, 61, 61),
         )
@@ -423,7 +423,7 @@ class TestNewParametersAdapter:
             logn=14,
             logq=(55, 40, 40),
             logp=(61,),
-            logscale=40,
+            log_default_scale=40,
             ring_type="conjugate_invariant",
         )
         config = CompilerConfig(margin=3, embedding_method="square")
@@ -447,7 +447,7 @@ class TestNewParametersAdapter:
             logn=14,
             logq=(55, 40),
             logp=(61,),
-            logscale=40,
+            log_default_scale=40,
             ring_type="standard",
         )
         np = NewParameters.from_ckks_params(ckks)
@@ -460,14 +460,14 @@ class TestNewParametersAdapter:
             logn=14,
             logq=(55, 40),
             logp=(61,),
-            logscale=40,
+            log_default_scale=40,
             boot_logp=(50, 50),
         )
         np = NewParameters.from_ckks_params(ckks)
         assert np.get_boot_logp() == [50, 50]
 
     def test_from_ckks_params_default_config(self):
-        ckks = CKKSParams(logn=14, logq=(55, 40), logp=(61,), logscale=40)
+        ckks = CKKSParams(logn=14, logq=(55, 40), logp=(61,), log_default_scale=40)
         np = NewParameters.from_ckks_params(ckks)
         assert np.get_margin() == 2
         assert np.get_embedding_method() == "hybrid"

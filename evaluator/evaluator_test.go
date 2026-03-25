@@ -116,18 +116,27 @@ func TestForwardNilModel(t *testing.T) {
 	defer eval.Close()
 
 	ct := &rlwe.Ciphertext{}
-	_, err := eval.Forward(nil, ct)
+	_, err := eval.Forward(nil, []*rlwe.Ciphertext{ct})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "model is nil")
 }
 
-func TestForwardNilInput(t *testing.T) {
+func TestForwardEmptyInput(t *testing.T) {
 	model, eval, _ := newTestEvaluator(t)
 	defer eval.Close()
 
-	_, err := eval.Forward(model, nil)
+	_, err := eval.Forward(model, []*rlwe.Ciphertext{})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "input ciphertext is nil")
+	assert.Contains(t, err.Error(), "input ciphertext list is empty")
+}
+
+func TestForwardNilInputCT(t *testing.T) {
+	model, eval, _ := newTestEvaluator(t)
+	defer eval.Close()
+
+	_, err := eval.Forward(model, []*rlwe.Ciphertext{nil})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "input ciphertext[0] is nil")
 }
 
 func TestForwardBootstrapWithoutKeysReturnsError(t *testing.T) {
@@ -152,7 +161,7 @@ func TestForwardBootstrapWithoutKeysReturnsError(t *testing.T) {
 
 	ct := encryptVector(t, ctx, zeros, inputLevel)
 
-	_, err := eval.Forward(model, ct)
+	_, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "bootstrap keys not provided")
 }
@@ -177,7 +186,7 @@ func TestForwardUnknownOpReturnsError(t *testing.T) {
 
 	ct := encryptVector(t, ctx, zeros, inputLevel)
 
-	_, err := eval.Forward(model, ct)
+	_, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown op")
 }
@@ -194,7 +203,7 @@ func TestForwardClosedEvaluatorReturnsError(t *testing.T) {
 
 	ct := encryptVector(t, ctx, zeros, inputLevel)
 
-	_, err := eval.Forward(model, ct)
+	_, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "evaluator is closed")
 }
@@ -385,11 +394,12 @@ func loadModelAndEvaluate(t *testing.T, modelPath, inputPath, expectedPath strin
 
 	ct := encryptVector(t, ctx, padded, inputLevel)
 
-	// Run Forward.
-	result, err := eval.Forward(model, ct)
+	// Run Forward with single-element CT list.
+	results, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
 	require.NoError(t, err, "Forward failed")
+	require.Len(t, results, 1, "expected 1 output CT")
 
-	decoded := decryptVector(t, ctx, result)
+	decoded := decryptVector(t, ctx, results[0])
 
 	expected := loadJSONFloats(t, expectedPath)
 	return decoded, expected
@@ -495,15 +505,17 @@ func TestMultipleEvaluatorsShareModel(t *testing.T) {
 
 	// Evaluator 1: encrypt, forward, decrypt.
 	ct1 := encryptVector(t, ctx1, padded, inputLevel)
-	result1, err := eval1.Forward(model, ct1)
+	results1, err := eval1.Forward(model, []*rlwe.Ciphertext{ct1})
 	require.NoError(t, err)
-	decoded1 := decryptVector(t, ctx1, result1)
+	require.Len(t, results1, 1)
+	decoded1 := decryptVector(t, ctx1, results1[0])
 
 	// Evaluator 2: encrypt, forward, decrypt.
 	ct2 := encryptVector(t, ctx2, padded, inputLevel)
-	result2, err := eval2.Forward(model, ct2)
+	results2, err := eval2.Forward(model, []*rlwe.Ciphertext{ct2})
 	require.NoError(t, err)
-	decoded2 := decryptVector(t, ctx2, result2)
+	require.Len(t, results2, 1)
+	decoded2 := decryptVector(t, ctx2, results2[0])
 
 	tolerance := 0.025
 	for i, v := range expectedValues {

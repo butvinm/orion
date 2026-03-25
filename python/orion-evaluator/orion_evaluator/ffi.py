@@ -7,10 +7,12 @@ No Orion-specific types cross the FFI boundary.
 import ctypes
 import os
 import platform
+import struct
 import threading
 from typing import Any
 
 from .errors import EvaluatorError
+from .gohandle import GoHandle
 
 _uintptr = ctypes.c_size_t
 _errout = ctypes.POINTER(ctypes.c_char_p)
@@ -21,21 +23,15 @@ _prototypes_set = False
 
 
 def _load_library() -> ctypes.CDLL:
-    """Load the platform-specific shared library."""
-    if platform.system() == "Linux":
-        lib_name = "orion-evaluator-linux.so"
-    elif platform.system() == "Darwin":
-        if platform.machine().lower() in ("arm64", "aarch64"):
-            lib_name = "orion-evaluator-mac-arm64.dylib"
-        else:
-            lib_name = "orion-evaluator-mac.dylib"
-    elif platform.system() == "Windows":
-        lib_name = "orion-evaluator-windows.dll"
-    else:
-        raise EvaluatorError(f"Unsupported platform: {platform.system()}")
+    """Load the Linux shared library. Only Linux x86_64 is supported."""
+    if platform.system() != "Linux":
+        raise EvaluatorError(
+            f"Unsupported platform: {platform.system()}. "
+            "Only Linux x86_64 is supported. See README for building from source."
+        )
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    lib_path = os.path.join(current_dir, lib_name)
+    lib_path = os.path.join(current_dir, "orion-evaluator-linux.so")
 
     try:
         return ctypes.CDLL(lib_path)
@@ -93,7 +89,8 @@ def _setup_prototypes(lib: ctypes.CDLL) -> None:
         _uintptr,  # eval handle
         _uintptr,  # model handle
         ctypes.c_void_p,
-        ctypes.c_ulong,  # ct data
+        ctypes.c_ulong,  # ct data (length-prefixed)
+        ctypes.c_int,  # numCTs
         ctypes.POINTER(ctypes.c_ulong),  # out len
         _errout,
     ]
@@ -140,17 +137,22 @@ def _bytes_ptr(data: bytes) -> tuple[Any, ctypes.c_ulong]:
 # =========================================================================
 
 
-def load_model(data: bytes) -> int:
-    """Load a .orion v2 file. Returns raw handle (uintptr_t)."""
+def _delete_handle(raw: int) -> None:
+    """Delete a cgo handle by raw value."""
+    _get_lib().DeleteHandle(_uintptr(raw))
+
+
+def load_model(data: bytes) -> GoHandle:
+    """Load a .orion v2 file. Returns GoHandle wrapping the model."""
     lib = _lib_call()
     err = _make_errout()
     ptr, length = _bytes_ptr(data)
     h = lib.EvalLoadModel(ptr, length, ctypes.byref(err))
     _check_err(err)
-    return int(h)
+    return GoHandle(int(h), tag="EvalModel", delete_fn=_delete_handle)
 
 
-def model_client_params(handle: int) -> tuple[str, str, int]:
+def model_client_params(handle: GoHandle) -> tuple[str, str, int]:
     """Get client params from model. Returns (params_json, manifest_json, input_level)."""
     lib = _lib_call()
     err = _make_errout()
@@ -162,7 +164,7 @@ def model_client_params(handle: int) -> tuple[str, str, int]:
     input_level = ctypes.c_int(0)
 
     lib.EvalModelClientParams(
-        _uintptr(handle),
+        _uintptr(handle.raw),
         ctypes.byref(params_out),
         ctypes.byref(params_len),
         ctypes.byref(manifest_out),
@@ -181,14 +183,10 @@ def model_client_params(handle: int) -> tuple[str, str, int]:
     return params_json, manifest_json, input_level.value
 
 
-def model_close(handle: int) -> None:
-    """Close model resources."""
-    _lib_call().EvalModelClose(_uintptr(handle))
-
-
-def delete_handle(handle: int) -> None:
-    """Delete a cgo handle."""
-    _get_lib().DeleteHandle(_uintptr(handle))
+def model_close(handle: GoHandle) -> None:
+    """Close model Go-side resources, then release the cgo handle."""
+    _lib_call().EvalModelClose(_uintptr(handle.raw))
+    handle.close()
 
 
 # =========================================================================
@@ -196,8 +194,8 @@ def delete_handle(handle: int) -> None:
 # =========================================================================
 
 
-def new_evaluator(params_json: str, keys_bytes: bytes, btp_keys_bytes: bytes | None = None) -> int:
-    """Create evaluator from params JSON and MemEvaluationKeySet bytes. Returns raw handle."""
+def new_evaluator(params_json: str, keys_bytes: bytes, btp_keys_bytes: bytes | None = None) -> GoHandle:
+    """Create evaluator from params JSON and MemEvaluationKeySet bytes."""
     lib = _lib_call()
     err = _make_errout()
     ptr, length = _bytes_ptr(keys_bytes)
@@ -217,31 +215,58 @@ def new_evaluator(params_json: str, keys_bytes: bytes, btp_keys_bytes: bytes | N
         ctypes.byref(err),
     )
     _check_err(err)
-    return int(h)
+    return GoHandle(int(h), tag="Evaluator", delete_fn=_delete_handle)
 
 
-def evaluator_forward(eval_handle: int, model_handle: int, ct_bytes: bytes) -> bytes:
-    """Run forward pass. Accepts/returns Lattigo ciphertext binary bytes."""
+def _pack_ct_list(ct_bytes_list: list[bytes]) -> bytes:
+    """Pack a list of CT byte blobs into length-prefixed format."""
+    parts = []
+    for ct_bytes in ct_bytes_list:
+        parts.append(struct.pack("<Q", len(ct_bytes)))
+        parts.append(ct_bytes)
+    return b"".join(parts)
+
+
+def _unpack_ct_list(data: bytes) -> list[bytes]:
+    """Unpack length-prefixed CT byte blobs."""
+    result = []
+    offset = 0
+    while offset < len(data):
+        ct_len = struct.unpack_from("<Q", data, offset)[0]
+        offset += 8
+        result.append(data[offset : offset + ct_len])
+        offset += ct_len
+    return result
+
+
+def evaluator_forward(eval_handle: GoHandle, model_handle: GoHandle, ct_bytes_list: list[bytes]) -> list[bytes]:
+    """Run forward pass. Accepts/returns lists of Lattigo ciphertext binary bytes."""
     lib = _lib_call()
     err = _make_errout()
     out_len = ctypes.c_ulong(0)
-    ptr, length = _bytes_ptr(ct_bytes)
+
+    packed = _pack_ct_list(ct_bytes_list)
+    ptr, length = _bytes_ptr(packed)
 
     result_ptr = lib.EvalForward(
-        _uintptr(eval_handle),
-        _uintptr(model_handle),
+        _uintptr(eval_handle.raw),
+        _uintptr(model_handle.raw),
         ptr,
         length,
+        ctypes.c_int(len(ct_bytes_list)),
         ctypes.byref(out_len),
         ctypes.byref(err),
     )
     _check_err(err)
 
-    result = ctypes.string_at(result_ptr, out_len.value)
+    n = out_len.value
+    buf = bytearray(n)
+    ctypes.memmove((ctypes.c_char * n).from_buffer(buf), result_ptr, n)
     lib.FreeCArray(result_ptr)
-    return result
+    return _unpack_ct_list(bytes(buf))
 
 
-def evaluator_close(eval_handle: int) -> None:
-    """Close evaluator resources."""
-    _lib_call().EvalClose(_uintptr(eval_handle))
+def evaluator_close(eval_handle: GoHandle) -> None:
+    """Close evaluator Go-side resources, then release the cgo handle."""
+    _lib_call().EvalClose(_uintptr(eval_handle.raw))
+    eval_handle.close()

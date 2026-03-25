@@ -28,7 +28,7 @@ MLP_PARAMS = CKKSParams(
     logn=13,
     logq=[29, 26, 26, 26, 26, 26],
     logp=[29, 29],
-    logscale=26,
+    log_default_scale=26,
     h=8192,
     ring_type="conjugate_invariant",
 )
@@ -330,8 +330,9 @@ class TestNumerical:
                 y_padded = np.zeros(max_slots)
                 y_padded[:block_height] = y
 
-                # Add bias
-                bias_blob = compiled.blobs[node.blob_refs["bias"]]
+                # Add bias (bias_0 for single-output-CT nodes)
+                bias_ref = "bias_0" if "bias_0" in node.blob_refs else "bias"
+                bias_blob = compiled.blobs[node.blob_refs[bias_ref]]
                 bias = np.array(unpack_raw_bias(bias_blob, max_slots))
                 y_padded += bias
 
@@ -440,8 +441,11 @@ class TestBlobFormat:
         max_slots = compiled.params.max_slots
 
         for node in compiled.graph.nodes:
-            if node.op == "linear_transform" and node.blob_refs and "bias" in node.blob_refs:
-                blob = compiled.blobs[node.blob_refs["bias"]]
-                assert len(blob) == max_slots * 8, (
-                    f"Bias blob for {node.name}: expected {max_slots * 8} bytes, got {len(blob)}"
-                )
+            if node.op == "linear_transform" and node.blob_refs:
+                # Check all bias blobs (bias_0, bias_1, ...)
+                for ref_name, idx in node.blob_refs.items():
+                    if ref_name.startswith("bias_"):
+                        blob = compiled.blobs[idx]
+                        assert len(blob) == max_slots * 8, (
+                            f"Bias blob {ref_name} for {node.name}: expected {max_slots * 8} bytes, got {len(blob)}"
+                        )

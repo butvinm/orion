@@ -208,7 +208,7 @@ class KeyGenerator:
     """Wraps Lattigo's rlwe.KeyGenerator."""
 
     def __init__(self, params: Parameters):
-        self._handle = ffi.new_key_generator(params._h)
+        self._handle = ffi.new_key_generator(params._handle)
 
     @classmethod
     def _from_handle(cls, handle: GoHandle) -> KeyGenerator:
@@ -254,7 +254,7 @@ class Encryptor:
     """Wraps Lattigo's rlwe.Encryptor (public-key encryption)."""
 
     def __init__(self, params: Parameters, pk: PublicKey):
-        self._handle = ffi.new_encryptor(params._h, pk._handle)
+        self._handle = ffi.new_encryptor(params._handle, pk._handle)
 
     @classmethod
     def _from_handle(cls, handle: GoHandle) -> Encryptor:
@@ -287,7 +287,7 @@ class Decryptor:
     """Wraps Lattigo's rlwe.Decryptor."""
 
     def __init__(self, params: Parameters, sk: SecretKey):
-        self._handle = ffi.new_decryptor(params._h, sk._handle)
+        self._handle = ffi.new_decryptor(params._handle, sk._handle)
 
     @classmethod
     def _from_handle(cls, handle: GoHandle) -> Decryptor:
@@ -352,6 +352,93 @@ class MemEvaluationKeySet:
         self._handle.close()
 
     def __enter__(self) -> MemEvaluationKeySet:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+# =========================================================================
+# Bootstrap
+# =========================================================================
+
+
+class BootstrapEvalKeys:
+    """Wraps Lattigo's bootstrapping.EvaluationKeys (serializable bootstrap keys)."""
+
+    def __init__(self, handle: GoHandle):
+        self._handle = handle
+
+    def marshal_binary(self) -> bytes:
+        return ffi.bootstrap_eval_keys_marshal(self._handle)
+
+    def close(self) -> None:
+        self._handle.close()
+
+    def __enter__(self) -> BootstrapEvalKeys:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+class BootstrapParams:
+    """Wraps Lattigo's bootstrapping parameters.
+
+    Used to generate the evaluation keys required for bootstrapping
+    (ciphertext refresh) during FHE inference.
+
+    Example::
+
+        btp = BootstrapParams(params, logn=14, logp=[61]*6, h=192, log_slots=7)
+        evk, btp_keys = btp.gen_eval_keys(sk)
+        btp_keys_bytes = btp_keys.marshal_binary()
+    """
+
+    def __init__(
+        self,
+        params: Parameters,
+        *,
+        logn: int = 0,
+        logp: list[int] | None = None,
+        h: int = 0,
+        log_slots: int = 0,
+    ):
+        self._handle = ffi.new_bootstrap_params(
+            params._handle, logn=logn, logp=logp, h=h, log_slots=log_slots,
+        )
+
+    def gen_eval_keys(
+        self, sk: SecretKey,
+    ) -> tuple[MemEvaluationKeySet, BootstrapEvalKeys]:
+        """Generate bootstrap evaluation keys.
+
+        Returns:
+            A tuple of (evk, btp_keys) where:
+            - evk: MemEvaluationKeySet for the evaluator
+            - btp_keys: BootstrapEvalKeys for serialization
+        """
+        evk_h, btp_evk_h = ffi.bootstrap_params_gen_eval_keys(
+            self._handle, sk._handle,
+        )
+        return MemEvaluationKeySet._from_handle(evk_h), BootstrapEvalKeys(btp_evk_h)
+
+    def close(self) -> None:
+        self._handle.close()
+
+    def __enter__(self) -> BootstrapParams:
         return self
 
     def __exit__(self, *args: object) -> None:

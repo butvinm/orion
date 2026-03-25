@@ -10,6 +10,7 @@ import argparse
 import importlib
 import os
 import sys
+import tempfile
 import torch
 
 from orion_compiler import Compiler, CKKSParams
@@ -47,6 +48,8 @@ def cleartext_forward(net, test_input):
 
 def compile_and_run(net, config, test_input, cleartext):
     """Compile model and run full FHE pipeline."""
+    from contextlib import ExitStack
+
     from orion_evaluator import Model, Evaluator
     from lattigo.ckks import Parameters, Encoder
     from lattigo.rlwe import (
@@ -57,114 +60,85 @@ def compile_and_run(net, config, test_input, cleartext):
         Ciphertext as RLWECiphertext,
     )
 
-    # Compile
+    # Compile directly to file
     print("Compiling model...")
     ckks_params = CKKSParams(**config["ckks_params"])
     compiler = Compiler(net, ckks_params)
     compiler.fit(test_input)
-    compiled = compiler.compile()
-    model_bytes = compiled.to_bytes()
-    print(f"Compiled model size: {len(model_bytes)} bytes")
+    model_path = tempfile.mktemp(suffix=".orion")
+    compiler.compile_to_file(model_path)
+    print(f"Compiled model size: {os.path.getsize(model_path)} bytes")
 
-    # Load in evaluator
-    model = Model.load(model_bytes)
-    params_dict, manifest, input_level = model.client_params()
+    with ExitStack() as stack:
+        # Load in evaluator
+        with open(model_path, "rb") as f:
+            model = stack.enter_context(Model.load(f.read()))
+        os.unlink(model_path)
+        params_dict, manifest, input_level = model.client_params()
 
-    # Keygen
-    # Translate params_dict to new constructor (logscale → log_default_scale)
-    pd = dict(params_dict)
-    if "logscale" in pd:
-        pd["log_default_scale"] = pd.pop("logscale")
-    pd.setdefault("ring_type", "conjugate_invariant")
-    params = Parameters(**pd)
-    kg = KeyGenerator(params)
-    sk = kg.gen_secret_key()
-    pk = kg.gen_public_key(sk)
-    encoder = Encoder(params)
-    encryptor = Encryptor(params, pk)
-    decryptor = Decryptor(params, sk)
+        # Keygen
+        params = stack.enter_context(Parameters.from_dict(params_dict))
+        kg = stack.enter_context(KeyGenerator(params))
+        sk = stack.enter_context(kg.gen_secret_key())
+        pk = stack.enter_context(kg.gen_public_key(sk))
+        encoder = stack.enter_context(Encoder(params))
+        encryptor = stack.enter_context(Encryptor(params, pk))
+        decryptor = stack.enter_context(Decryptor(params, sk))
 
-    rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
-    gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
-    evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
-    keys_bytes = evk.marshal_binary()
-
-    # Bootstrap keys check
-    btp_keys_bytes = None
-    bootstrap_slots = manifest.get("bootstrap_slots", [])
-    if bootstrap_slots:
-        print(f"Model requires bootstrap (slots: {bootstrap_slots})")
-        print("Full FHE E2E requires 64+ GB RAM — skipping FHE inference")
-        print("Use --cleartext-only to verify model correctness")
-        # Cleanup what we've allocated so far
-        evk.close()
-        for gk in gks:
-            gk.close()
+        rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
         if rlk:
-            rlk.close()
-        decryptor.close()
-        encryptor.close()
-        pk.close()
-        sk.close()
-        kg.close()
-        encoder.close()
-        params.close()
-        model.close()
-        return
+            stack.enter_context(rlk)
+        gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
+        for gk in gks:
+            stack.enter_context(gk)
+        evk = stack.enter_context(MemEvaluationKeySet(rlk=rlk, galois_keys=gks))
+        keys_bytes = evk.marshal_binary()
 
-    evaluator = Evaluator(params_dict, keys_bytes, btp_keys_bytes=btp_keys_bytes)
+        # Bootstrap keys check
+        btp_keys_bytes = None
+        bootstrap_slots = manifest.get("bootstrap_slots", [])
+        if bootstrap_slots:
+            print(f"Model requires bootstrap (slots: {bootstrap_slots})")
+            print("Full FHE E2E requires 64+ GB RAM — skipping FHE inference")
+            print("Use --cleartext-only to verify model correctness")
+            return
 
-    # Encrypt
-    max_slots = params.max_slots()
-    flat = test_input.flatten().double().tolist()
-    padded = flat + [0.0] * (max_slots - len(flat))
-    scale = params.default_scale()
+        evaluator = stack.enter_context(
+            Evaluator(params_dict, keys_bytes, btp_keys_bytes=btp_keys_bytes)
+        )
 
-    pt = encoder.encode(padded, input_level, scale)
-    ct = encryptor.encrypt_new(pt)
-    ct_bytes = ct.marshal_binary()
+        # Encrypt
+        max_slots = params.max_slots()
+        flat = test_input.flatten().double().tolist()
+        padded = flat + [0.0] * (max_slots - len(flat))
+        scale = params.default_scale()
 
-    # Forward
-    print("Running FHE inference...")
-    result_bytes = evaluator.forward(model, ct_bytes)
+        pt = stack.enter_context(encoder.encode(padded, input_level, scale))
+        ct = stack.enter_context(encryptor.encrypt_new(pt))
+        ct_bytes = ct.marshal_binary()
 
-    # Decrypt
-    result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
-    result_pt = decryptor.decrypt_new(result_ct)
-    decoded = encoder.decode(result_pt, max_slots)
+        # Forward
+        print("Running FHE inference...")
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        result_bytes = result_bytes_list[0]
 
-    # Compare
-    print(f"\nCleartext output: {[f'{v:.4f}' for v in cleartext]}")
-    print(f"FHE output:      {[f'{decoded[i]:.4f}' for i in range(len(cleartext))]}")
+        # Decrypt
+        result_ct = stack.enter_context(RLWECiphertext.unmarshal_binary(result_bytes))
+        result_pt = stack.enter_context(decryptor.decrypt_new(result_ct))
+        decoded = encoder.decode(result_pt, max_slots)
 
-    diffs = [abs(cleartext[i] - decoded[i]) for i in range(len(cleartext))]
-    mae = sum(diffs) / len(diffs)
-    max_diff = max(diffs)
-    print(f"\nMAE: {mae:.6f}")
-    print(f"Max diff: {max_diff:.6f}")
+        # Compare
+        print(f"\nCleartext output: {[f'{v:.4f}' for v in cleartext]}")
+        print(f"FHE output:      {[f'{decoded[i]:.4f}' for i in range(len(cleartext))]}")
 
-    assert mae < 0.1, f"MAE {mae} exceeds tolerance 0.1"
-    print("PASS: MAE within tolerance")
+        diffs = [abs(cleartext[i] - decoded[i]) for i in range(len(cleartext))]
+        mae = sum(diffs) / len(diffs)
+        max_diff = max(diffs)
+        print(f"\nMAE: {mae:.6f}")
+        print(f"Max diff: {max_diff:.6f}")
 
-    # Cleanup
-    result_pt.close()
-    result_ct.close()
-    evaluator.close()
-    evk.close()
-    for gk in gks:
-        gk.close()
-    if rlk:
-        rlk.close()
-    ct.close()
-    pt.close()
-    decryptor.close()
-    encryptor.close()
-    pk.close()
-    sk.close()
-    kg.close()
-    encoder.close()
-    params.close()
-    model.close()
+        assert mae < 0.1, f"MAE {mae} exceeds tolerance 0.1"
+        print("PASS: MAE within tolerance")
 
 
 def main():

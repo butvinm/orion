@@ -5,12 +5,56 @@ The binary format uses a magic header, JSON metadata, and length-prefixed blobs.
 """
 
 import json
+import os
 import struct
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from orion_compiler.params import CKKSParams, CompilerConfig, CostProfile
+
+
+class BlobStore:
+    """Write-once blob storage backed by a temporary file.
+
+    Blobs are written to disk as they're appended, keeping memory usage
+    proportional to one blob at a time. Implements __len__ and __getitem__
+    so it can be used anywhere list[bytes] is expected for reading.
+    """
+
+    def __init__(self) -> None:
+        self._file = tempfile.TemporaryFile()
+        self._entries: list[tuple[int, int]] = []  # (offset, length)
+
+    def append(self, data: bytes) -> int:
+        """Append a blob, return its index."""
+        offset = self._file.tell()
+        self._file.write(data)
+        idx = len(self._entries)
+        self._entries.append((offset, len(data)))
+        return idx
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def __getitem__(self, idx: int) -> bytes:
+        offset, length = self._entries[idx]
+        self._file.seek(offset)
+        return self._file.read(length)
+
+    def __iter__(self):
+        for i in range(len(self._entries)):
+            yield self[i]
+
+    def close(self) -> None:
+        self._file.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
 # -- Binary format helpers --
 
@@ -304,16 +348,16 @@ class CompiledModel:
     input_level: int
     cost: CostProfile
     graph: Graph
-    blobs: list[bytes]  # binary blobs indexed by node blob_refs
+    blobs: list[bytes] | BlobStore  # binary blobs indexed by node blob_refs
 
-    def to_bytes(self) -> bytes:
-        metadata = {
+    def _build_metadata(self) -> dict[str, Any]:
+        return {
             "version": 2,
             "params": {
                 "logn": self.params.logn,
                 "logq": list(self.params.logq),
                 "logp": list(self.params.logp),
-                "logscale": self.params.logscale,
+                "log_default_scale": self.params.log_default_scale,
                 "h": self.params.h,
                 "ring_type": self.params.ring_type,
                 "boot_logp": (list(self.params.boot_logp) if self.params.boot_logp else None),
@@ -330,18 +374,41 @@ class CompiledModel:
             "graph": self.graph.to_dict(),
             "blob_count": len(self.blobs),
         }
-        return _pack_container(_MODEL_MAGIC, metadata, self.blobs)
+
+    def to_bytes(self) -> bytes:
+        return _pack_container(_MODEL_MAGIC, self._build_metadata(), self.blobs)
+
+    def to_file(self, path: str | os.PathLike[str]) -> None:
+        """Write the compiled model to a file, streaming blobs one at a time.
+
+        Unlike to_bytes(), this avoids creating a single large bytes object,
+        reducing peak memory by the size of the .orion file.
+        """
+        metadata = self._build_metadata()
+        meta_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
+        with open(path, "wb") as f:
+            f.write(_MODEL_MAGIC)
+            f.write(struct.pack("<I", len(meta_bytes)))
+            f.write(meta_bytes)
+            f.write(struct.pack("<I", len(self.blobs)))
+            for blob in self.blobs:
+                f.write(struct.pack("<Q", len(blob)))
+                f.write(blob)
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "CompiledModel":
         metadata, blobs = _unpack_container(data, _MODEL_MAGIC)
+
+        version = metadata.get("version")
+        if version != 2:
+            raise ValueError(f"Unsupported format version {version} (expected 2)")
 
         p = metadata["params"]
         params = CKKSParams(
             logn=p["logn"],
             logq=tuple(p["logq"]),
             logp=tuple(p["logp"]),
-            logscale=p["logscale"],
+            log_default_scale=p["log_default_scale"],
             h=p["h"],
             ring_type=p["ring_type"],
             boot_logp=tuple(p["boot_logp"]) if p.get("boot_logp") else None,

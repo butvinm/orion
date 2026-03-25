@@ -208,5 +208,12 @@ go.work.sum
 # env file
 .env
 
+# Node.js
+node_modules/
+
+# WASM build artifacts
+examples/*/client/wasm/
+examples/*/client/client.js
+
 # ralphex progress logs
 .ralphex/progress/

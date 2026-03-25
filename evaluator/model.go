@@ -2,33 +2,34 @@ package evaluator
 
 import (
 	"fmt"
-	"math"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/baahl-nyu/lattigo/v6/core/rlwe"
-	"github.com/baahl-nyu/lattigo/v6/ring"
 	"github.com/baahl-nyu/lattigo/v6/schemes/ckks"
 	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
 
 	orion "github.com/butvinm/orion"
 )
 
-// Model holds a parsed and CKKS-encoded compiled model.
+// Model holds a parsed compiled model with raw blob data for lazy LT encoding.
 // It is immutable after LoadModel() and safe to share across goroutines.
+// Linear transform diagonals are NOT pre-encoded — the Evaluator encodes them
+// on demand during Forward() to avoid the ~23x memory blowup from CKKS encoding.
 type Model struct {
 	header      *CompiledHeader
 	clientParam orion.Params // cached for ClientParams()
 	params      ckks.Parameters
 	graph       *Graph
-	transforms  map[string]map[string]lintrans.LinearTransformation // node -> ref -> LT
-	biases      map[string]*rlwe.Plaintext                          // node -> bias
-	polys       map[string]bignum.Polynomial                        // node -> polynomial
-	ltConfigs   map[string]*LinearTransformConfig                   // node -> parsed LT config
-	polyConfigs map[string]*PolynomialConfig                        // node -> parsed poly config
+	rawBlobs    [][]byte                         // raw blob data (sub-slices of input, no copy)
+	biases      map[string][]*rlwe.Plaintext     // node -> per-output-CT biases
+	polys       map[string]bignum.Polynomial     // node -> polynomial
+	ltConfigs   map[string]*LinearTransformConfig // node -> parsed LT config
+	polyConfigs map[string]*PolynomialConfig      // node -> parsed poly config
 }
 
-// LoadModel parses a .orion v2 file and CKKS-encodes diagonals, biases,
-// and polynomials at load time. The returned Model is immutable.
+// LoadModel parses a .orion v2 file, stores raw blob data, and CKKS-encodes
+// only biases and polynomials at load time. Linear transform diagonals are
+// kept as raw blobs and encoded on demand during Forward() to avoid the ~23x
+// memory blowup from CKKS encoding. The returned Model is immutable.
 func LoadModel(data []byte) (*Model, error) {
 	// 1. Parse container.
 	header, blobs, err := ParseContainer(data)
@@ -36,17 +37,22 @@ func LoadModel(data []byte) (*Model, error) {
 		return nil, fmt.Errorf("parsing container: %w", err)
 	}
 
-	// 2. Convert header params to CKKS parameters.
+	// 2. Validate format version.
+	if header.Version != 2 {
+		return nil, fmt.Errorf("unsupported format version %d (expected 2)", header.Version)
+	}
+
+	// 3. Convert header params to CKKS parameters.
 	p := headerToParams(header)
 	ckksParams, err := p.NewCKKSParameters()
 	if err != nil {
 		return nil, fmt.Errorf("creating CKKS parameters: %w", err)
 	}
 
-	// 3. Create temporary encoder for encoding diagonals and biases.
+	// 4. Create temporary encoder for encoding diagonals and biases.
 	enc := ckks.NewEncoder(ckksParams)
 
-	// 4. Build computation graph.
+	// 5. Build computation graph.
 	graph, err := buildGraph(header)
 	if err != nil {
 		return nil, fmt.Errorf("building graph: %w", err)
@@ -59,18 +65,20 @@ func LoadModel(data []byte) (*Model, error) {
 		clientParam: p,
 		params:      ckksParams,
 		graph:       graph,
-		transforms:  make(map[string]map[string]lintrans.LinearTransformation),
-		biases:      make(map[string]*rlwe.Plaintext),
+		rawBlobs:    blobs,
+		biases:      make(map[string][]*rlwe.Plaintext),
 		polys:       make(map[string]bignum.Polynomial),
 		ltConfigs:   make(map[string]*LinearTransformConfig),
 		polyConfigs: make(map[string]*PolynomialConfig),
 	}
 
-	// 5-6. Process each node based on op type.
+	// Process each node: parse configs, encode biases (small), load polynomials.
+	// Linear transform diagonals are NOT encoded here — they are encoded on
+	// demand during Forward() to avoid ~23x memory blowup from CKKS encoding.
 	for _, node := range graph.Nodes {
 		switch node.Op {
 		case "linear_transform":
-			if err := m.loadLinearTransform(node, blobs, ckksParams, enc, maxSlots); err != nil {
+			if err := m.loadLinearTransformMetadata(node, blobs, ckksParams, enc, maxSlots); err != nil {
 				return nil, fmt.Errorf("loading linear_transform %q: %w", node.Name, err)
 			}
 		case "polynomial":
@@ -87,14 +95,13 @@ func LoadModel(data []byte) (*Model, error) {
 	return m, nil
 }
 
-// loadLinearTransform encodes diagonals and bias for a linear_transform node.
-func (m *Model) loadLinearTransform(node *Node, blobs [][]byte, ckksParams ckks.Parameters, enc *ckks.Encoder, maxSlots int) error {
+// loadLinearTransformMetadata parses config and encodes bias for a linear_transform node.
+// Diagonal encoding is deferred to Forward() time to avoid ~23x memory blowup.
+func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksParams ckks.Parameters, enc *ckks.Encoder, maxSlots int) error {
 	cfg, err := parseLinearTransformConfig(node.ConfigRaw)
 	if err != nil {
 		return fmt.Errorf("parsing config: %w", err)
 	}
-
-	nodeTransforms := make(map[string]lintrans.LinearTransformation)
 
 	// Validate node level is within the moduli chain.
 	if node.Level < 0 || node.Level > ckksParams.MaxLevel() {
@@ -106,66 +113,64 @@ func (m *Model) loadLinearTransform(node *Node, blobs [][]byte, ckksParams ckks.
 		return fmt.Errorf("bsgs_ratio must be positive, got %f", cfg.BSGSRatio)
 	}
 
-	for ref, blobIdx := range node.BlobRefs {
-		if ref == "bias" {
-			continue // handled separately below
-		}
+	// Validate NumInputCTs/NumOutputCTs are positive.
+	if cfg.NumInputCTs <= 0 {
+		cfg.NumInputCTs = 1
+	}
+	if cfg.NumOutputCTs <= 0 {
+		cfg.NumOutputCTs = 1
+	}
 
+	// Validate blob refs point to valid indices (but don't parse/encode diagonals).
+	for ref, blobIdx := range node.BlobRefs {
+		if ref == "bias" || len(ref) > 5 && ref[:5] == "bias_" {
+			continue
+		}
 		if blobIdx < 0 || blobIdx >= len(blobs) {
 			return fmt.Errorf("blob ref %q index %d out of range (have %d blobs)", ref, blobIdx, len(blobs))
 		}
-
-		diagMap, err := ParseDiagonalBlob(blobs[blobIdx], maxSlots)
-		if err != nil {
-			return fmt.Errorf("parsing diagonal blob %q: %w", ref, err)
-		}
-
-		// Build Lattigo diagonals (cast — both are map[int][]float64).
-		diagonals := lintrans.Diagonals[float64](diagMap)
-
-		ltparams := lintrans.Parameters{
-			DiagonalsIndexList:        diagonals.DiagonalsIndexList(),
-			LevelQ:                    node.Level,
-			LevelP:                    ckksParams.MaxLevelP(),
-			Scale:                     rlwe.NewScale(ckksParams.Q()[node.Level]),
-			LogDimensions:             ring.Dimensions{Rows: 0, Cols: ckksParams.LogMaxSlots()},
-			LogBabyStepGiantStepRatio: int(math.Log2(cfg.BSGSRatio)),
-		}
-
-		lt := lintrans.NewTransformation(ckksParams, ltparams)
-		if err := lintrans.Encode(enc, diagonals, lt); err != nil {
-			return fmt.Errorf("encoding linear transform %q: %w", ref, err)
-		}
-
-		nodeTransforms[ref] = lt
 	}
 
-	m.transforms[node.Name] = nodeTransforms
 	m.ltConfigs[node.Name] = cfg
 
-	// Encode bias if present.
-	if biasIdx, ok := node.BlobRefs["bias"]; ok {
+	// Encode per-row biases (biases are small).
+	biasLevel := node.Level - node.Depth
+	if biasLevel < 0 {
+		return fmt.Errorf("bias level %d is negative (node level=%d, depth=%d)", biasLevel, node.Level, node.Depth)
+	}
+
+	var biasPts []*rlwe.Plaintext
+	for row := 0; row < cfg.NumOutputCTs; row++ {
+		ref := fmt.Sprintf("bias_%d", row)
+		biasIdx, ok := node.BlobRefs[ref]
+		if !ok {
+			continue
+		}
 		if biasIdx < 0 || biasIdx >= len(blobs) {
-			return fmt.Errorf("bias blob index %d out of range (have %d blobs)", biasIdx, len(blobs))
+			return fmt.Errorf("bias blob %q index %d out of range (have %d blobs)", ref, biasIdx, len(blobs))
 		}
 
 		biasVec, err := ParseBiasBlob(blobs[biasIdx], maxSlots)
 		if err != nil {
-			return fmt.Errorf("parsing bias blob: %w", err)
+			return fmt.Errorf("parsing bias blob %q: %w", ref, err)
 		}
 
-		biasLevel := node.Level - node.Depth
-		if biasLevel < 0 {
-			return fmt.Errorf("bias level %d is negative (node level=%d, depth=%d)", biasLevel, node.Level, node.Depth)
-		}
 		pt := ckks.NewPlaintext(ckksParams, biasLevel)
 		pt.Scale = rlwe.NewScale(ckksParams.DefaultScale())
 
 		if err := enc.Encode(biasVec, pt); err != nil {
-			return fmt.Errorf("encoding bias: %w", err)
+			return fmt.Errorf("encoding bias %q: %w", ref, err)
 		}
 
-		m.biases[node.Name] = pt
+		// Grow slice if needed
+		for len(biasPts) <= row {
+			biasPts = append(biasPts, nil)
+		}
+		biasPts[row] = pt
+	}
+
+	if len(biasPts) > 0 {
+		m.biases[node.Name] = biasPts
 	}
 
 	return nil
@@ -223,7 +228,7 @@ func headerToParams(header *CompiledHeader) orion.Params {
 		LogN:     header.Params.LogN,
 		LogQ:     header.Params.LogQ,
 		LogP:     header.Params.LogP,
-		LogScale: header.Params.LogScale,
+		LogDefaultScale: header.Params.LogDefaultScale,
 		H:        header.Params.H,
 		RingType: header.Params.RingType,
 		BootLogP: header.Params.BootLogP,

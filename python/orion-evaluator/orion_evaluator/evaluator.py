@@ -17,7 +17,7 @@ class Evaluator:
 
         # keys_bytes = MemEvaluationKeySet.MarshalBinary() bytes
         evaluator = Evaluator(params, keys_bytes)
-        result_ct_bytes = evaluator.forward(model, input_ct_bytes)
+        result_ct_bytes_list = evaluator.forward(model, [input_ct_bytes])
         evaluator.close()
     """
 
@@ -34,28 +34,27 @@ class Evaluator:
         params_json = json.dumps(params)
         self._handle = ffi.new_evaluator(params_json, keys_bytes, btp_keys_bytes)
 
-    def forward(self, model: Model, ct_bytes: bytes) -> bytes:
+    def forward(self, model: Model, ct_bytes_list: list[bytes]) -> list[bytes]:
         """Run FHE forward pass.
 
         Args:
             model: Loaded Model
-            ct_bytes: Input ciphertext (rlwe.Ciphertext.MarshalBinary() bytes)
+            ct_bytes_list: List of input ciphertext bytes (rlwe.Ciphertext.MarshalBinary())
 
         Returns:
-            Output ciphertext bytes (rlwe.Ciphertext.MarshalBinary() format)
+            List of output ciphertext bytes (rlwe.Ciphertext.MarshalBinary() format)
         """
         if not self._handle:
             raise EvaluatorError("Evaluator is closed")
         if not model._handle:
             raise EvaluatorError("Model is closed")
-        return ffi.evaluator_forward(self._handle, model._handle, ct_bytes)
+        return ffi.evaluator_forward(self._handle, model._handle, ct_bytes_list)
 
     def close(self) -> None:
         """Release evaluator resources. Idempotent."""
         if self._handle:
             ffi.evaluator_close(self._handle)
-            ffi.delete_handle(self._handle)
-            self._handle = 0
+            self._handle = None
 
     def __enter__(self) -> "Evaluator":
         return self

@@ -78,7 +78,7 @@ Orion provides **compilation**, **encoding**, and **evaluation** — never const
 
 ```python
 import orion_compiler.nn as on
-from orion_compiler import Compiler, CKKSParams, CompiledModel
+from orion_compiler import Compiler, CKKSParams
 from lattigo.ckks import Parameters, Encoder
 from lattigo.rlwe import KeyGenerator, Encryptor, Decryptor, MemEvaluationKeySet
 from orion_evaluator import Model, Evaluator
@@ -97,35 +97,37 @@ class MLP(on.Module):
         x = self.act1(self.fc1(x))
         return self.fc2(x)
 
-# 2. Compile
+# 2. Compile — writes blobs directly to file, no intermediate storage
 net = MLP()
 compiler = Compiler(net, CKKSParams(logn=14, logq=[...], logp=[...], logscale=40))
 compiler.fit(dataloader)
-compiled = compiler.compile()
-model_bytes = compiled.to_bytes()
+compiler.compile_to_file("model.orion")
 
-# 3. Client — keygen + encrypt using Lattigo primitives directly
-params = Parameters.from_logn(logn=14, logq=[...], logp=[...], logscale=40)
-kg = KeyGenerator.new(params)
+# 3. Load model and get client params
+with open("model.orion", "rb") as f:
+    model = Model.load(f.read())
+params_dict, manifest, input_level = model.client_params()
+
+# 4. Client — keygen + encrypt using Lattigo primitives directly
+params = Parameters.from_dict(params_dict)
+kg = KeyGenerator(params)
 sk = kg.gen_secret_key()
 pk = kg.gen_public_key(sk)
-encoder = Encoder.new(params)
-encryptor = Encryptor.new(params, pk)
-pt = encoder.encode(input_values, level=compiled.input_level, scale=params.default_scale())
+encoder = Encoder(params)
+encryptor = Encryptor(params, pk)
+pt = encoder.encode(input_values, level=input_level, scale=params.default_scale())
 ct = encryptor.encrypt_new(pt)
 ct_bytes = ct.marshal_binary()
 
-# 4. Server — Go evaluator via orion-evaluator
-model = Model.load(model_bytes)
-params_dict, _, _ = model.client_params()
+# 5. Server — Go evaluator via orion-evaluator
 keys_bytes = evk.marshal_binary()  # MemEvaluationKeySet
 evaluator = Evaluator(params_dict, keys_bytes)
-result_bytes = evaluator.forward(model, ct_bytes)
+result_bytes_list = evaluator.forward(model, [ct_bytes])  # list in, list out
 
-# 5. Client — decrypt
+# 6. Client — decrypt
 from lattigo.rlwe import Ciphertext as RLWECiphertext
-result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
-decryptor = Decryptor.new(params, sk)
+result_ct = RLWECiphertext.unmarshal_binary(result_bytes_list[0])
+decryptor = Decryptor(params, sk)
 result_pt = decryptor.decrypt_new(result_ct)
 output = encoder.decode(result_pt, params.max_slots())
 ```
@@ -141,7 +143,7 @@ output = encoder.decode(result_pt, params.max_slots())
 - `orion_compiler.nn` — FHE-compatible layers (cleartext-only forward)
 - `orion_compiler.core` — Compilation algorithms (tracer, packing, level assignment, auto-bootstrap, galois)
 - `orion_evaluator.Model` — `load()`, `client_params()`, `close()`
-- `orion_evaluator.Evaluator` — `__init__(params, keys_bytes, btp_keys_bytes=None)`, `forward(model, ct_bytes) → bytes`, `close()`
+- `orion_evaluator.Evaluator` — `__init__(params, keys_bytes, btp_keys_bytes=None)`, `forward(model, ct_bytes_list) → list[bytes]`, `close()`
 
 ### Go evaluator (`evaluator/`)
 

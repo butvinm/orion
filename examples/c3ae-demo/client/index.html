@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>C3AE Age Verification — Encrypted</title>
+    <style>
+      body {
+        font-family: monospace;
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 0 20px;
+        background: #fff;
+        color: #222;
+      }
+      h1 {
+        font-size: 1.4em;
+      }
+      p.subtitle {
+        color: #555;
+        font-size: 0.9em;
+        margin-top: -8px;
+      }
+      .section {
+        margin: 20px 0;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: bold;
+      }
+      .row {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .preview-box {
+        border: 1px solid #ccc;
+        width: 128px;
+        height: 128px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f6f6f6;
+      }
+      canvas {
+        image-rendering: pixelated;
+        width: 128px;
+        height: 128px;
+      }
+      .buttons {
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        padding: 10px 20px;
+        cursor: pointer;
+        font-size: 1em;
+        border: 1px solid #999;
+        background: #f0f0f0;
+      }
+      button:hover:not(:disabled) {
+        background: #ddd;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      pre {
+        background: #f6f6f6;
+        border: 1px solid #ddd;
+        padding: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        min-height: 60px;
+        font-size: 0.9em;
+      }
+      #status {
+        color: #333;
+      }
+      #output {
+        color: #005500;
+      }
+      input[type="file"] {
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>C3AE Age Verification (Encrypted)</h1>
+    <p class="subtitle">
+      Privacy-preserving age check using CKKS homomorphic encryption. The secret
+      key and face image never leave the browser.
+    </p>
+
+    <div class="section row">
+      <div>
+        <label for="file-input">Face image (JPEG/PNG):</label>
+        <input type="file" id="file-input" accept="image/*" />
+      </div>
+      <div class="preview-box">
+        <canvas id="preview" width="64" height="64"></canvas>
+      </div>
+    </div>
+
+    <div class="section buttons">
+      <button id="btn-init">Initialize Keys</button>
+      <button id="btn-infer" disabled>Encrypt &amp; Infer</button>
+    </div>
+
+    <div class="section">
+      <label>Status:</label>
+      <pre id="status">Click "Initialize Keys" to begin.</pre>
+    </div>
+
+    <div class="section">
+      <label>Result:</label>
+      <pre id="output"></pre>
+    </div>
+
+    <script src="wasm/wasm_exec.js"></script>
+    <script type="module" src="client.js"></script>
+  </body>
+</html>

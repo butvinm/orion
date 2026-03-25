@@ -10,25 +10,17 @@ ROOT_DIR = Path(__file__).parent.parent
 
 
 def _platform_suffix() -> str:
-    system = platform.system()
-    if system == "Windows":
-        return "windows.dll"
-    elif system == "Darwin":
-        machine = platform.machine().lower()
-        if machine in ("arm64", "aarch64"):
-            return "mac-arm64.dylib"
-        return "mac.dylib"
-    elif system == "Linux":
-        return "linux.so"
-    raise RuntimeError(f"Unsupported platform: {system}")
+    if platform.system() != "Linux":
+        raise RuntimeError(
+            f"Unsupported platform: {platform.system()}. "
+            "Only Linux x86_64 is supported for building CGO bridges."
+        )
+    return "linux.so"
 
 
 def _go_env() -> dict[str, str]:
     env = os.environ.copy()
     env["CGO_ENABLED"] = "1"
-    if platform.system() == "Darwin":
-        machine = platform.machine().lower()
-        env["GOARCH"] = "arm64" if machine in ("arm64", "aarch64") else "amd64"
     return env
 
 

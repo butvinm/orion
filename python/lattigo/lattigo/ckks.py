@@ -40,16 +40,24 @@ class Parameters:
             log_nth_root,
         )
 
+    # Keys accepted by __init__ (used by from_dict to filter extras).
+    _KNOWN_KEYS = frozenset({"logn", "logq", "logp", "log_default_scale", "ring_type", "h", "log_nth_root"})
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Parameters:
+        """Create Parameters from a dict (e.g. from Model.client_params()).
+
+        Filters out keys not accepted by __init__ (like boot_logp, btp_logn).
+        """
+        filtered = {k: v for k, v in d.items() if k in cls._KNOWN_KEYS}
+        return cls(**filtered)
+
     @classmethod
     def _from_handle(cls, handle: GoHandle) -> Parameters:
         """Wrap an existing Go handle (internal use)."""
         obj = object.__new__(cls)
         obj._handle = handle
         return obj
-
-    @property
-    def _h(self) -> GoHandle:
-        return self._handle
 
     def max_slots(self) -> int:
         """Maximum number of plaintext slots."""
@@ -60,7 +68,7 @@ class Parameters:
         return ffi.ckks_params_max_level(self._handle)
 
     def default_scale(self) -> int:
-        """Default scale as uint64 (2^logscale)."""
+        """Default scale as uint64 (2^log_default_scale)."""
         return ffi.ckks_params_default_scale(self._handle)
 
     def galois_element(self, rotation: int) -> int:
@@ -95,7 +103,7 @@ class Encoder:
     """CKKS encoder. Wraps Lattigo's ckks.Encoder."""
 
     def __init__(self, params: Parameters):
-        self._handle = ffi.new_encoder(params._h)
+        self._handle = ffi.new_encoder(params._handle)
         self._params = params
 
     @classmethod
@@ -112,7 +120,7 @@ class Encoder:
         Returns an rlwe.Plaintext object (from lattigo.rlwe module).
         Import it lazily to avoid circular imports.
         """
-        from . import rlwe as _rlwe
+        from . import rlwe as _rlwe  # noqa: PLC0415 — lazy import for circular dep
 
         pt_h = ffi.encoder_encode(self._handle, values, level, scale)
         return _rlwe.Plaintext(pt_h)

@@ -33,16 +33,8 @@ def _cleanup():
 
 
 def _params_from_dict(params_dict: dict) -> Parameters:
-    """Convert a client_params() dict to a Parameters object.
-
-    client_params() returns 'logscale' but the new Parameters constructor
-    expects 'log_default_scale'. Also ensures ring_type has a default.
-    """
-    d = dict(params_dict)
-    if "logscale" in d:
-        d["log_default_scale"] = d.pop("logscale")
-    d.setdefault("ring_type", "conjugate_invariant")
-    return Parameters(**d)
+    """Convert a client_params() dict to a Parameters object."""
+    return Parameters.from_dict(params_dict)
 
 
 # -----------------------------------------------------------------------
@@ -69,7 +61,7 @@ class TestModelLifecycle:
         assert "logn" in params
         assert "logq" in params
         assert "logp" in params
-        assert "logscale" in params
+        assert "log_default_scale" in params
 
         assert isinstance(manifest, dict)
         assert "galois_elements" in manifest
@@ -177,7 +169,7 @@ class TestEvaluatorLifecycle:
         evaluator.close()
 
         with pytest.raises(EvaluatorError, match="closed"):
-            evaluator.forward(model, b"dummy")
+            evaluator.forward(model, [b"dummy"])
 
         sk.close()
         kg.close()
@@ -283,7 +275,10 @@ class TestBootstrapKeyParameter:
         ct = encryptor.encrypt_new(pt)
         ct_bytes = ct.marshal_binary()
 
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        assert isinstance(result_bytes_list, list)
+        assert len(result_bytes_list) == 1
+        result_bytes = result_bytes_list[0]
         assert isinstance(result_bytes, bytes)
         assert len(result_bytes) > 0
 
@@ -367,7 +362,10 @@ class TestE2EForward:
         ct_bytes = ct.marshal_binary()
 
         # Forward pass
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        assert isinstance(result_bytes_list, list)
+        assert len(result_bytes_list) == 1
+        result_bytes = result_bytes_list[0]
         assert isinstance(result_bytes, bytes)
         assert len(result_bytes) > 0
 
@@ -439,7 +437,7 @@ class TestE2EForward:
             logn=13,
             logq=[29, 26, 26, 26, 26, 26],
             logp=[29, 29],
-            logscale=26,
+            log_default_scale=26,
             h=8192,
             ring_type="conjugate_invariant",
         )
@@ -480,7 +478,8 @@ class TestE2EForward:
         ct = encryptor.encrypt_new(pt)
         ct_bytes = ct.marshal_binary()
 
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        result_bytes = result_bytes_list[0]
 
         # Decrypt
         from lattigo.rlwe import Ciphertext as RLWECiphertext
@@ -552,7 +551,7 @@ class TestE2EForward:
             logn=13,
             logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
             logp=[29, 29],
-            logscale=26,
+            log_default_scale=26,
             h=8192,
             ring_type="conjugate_invariant",
         )
@@ -593,7 +592,8 @@ class TestE2EForward:
         ct = encryptor.encrypt_new(pt)
         ct_bytes = ct.marshal_binary()
 
-        result_bytes = evaluator.forward(model, ct_bytes)
+        result_bytes_list = evaluator.forward(model, [ct_bytes])
+        result_bytes = result_bytes_list[0]
 
         # Decrypt
         from lattigo.rlwe import Ciphertext as RLWECiphertext

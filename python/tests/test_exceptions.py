@@ -121,16 +121,16 @@ class TestValidationErrorIntegration:
         from orion_compiler.params import CKKSParams
 
         with pytest.raises(ValidationError, match="logn must be positive"):
-            CKKSParams(logn=0, logq=[40], logp=[40], logscale=40)
+            CKKSParams(logn=0, logq=[40], logp=[40], log_default_scale=40)
 
     def test_empty_logq_raises_validation_error(self):
         from orion_compiler.params import CKKSParams
 
         with pytest.raises(ValidationError, match="logq must be non-empty"):
-            CKKSParams(logn=13, logq=[], logp=[40], logscale=40)
+            CKKSParams(logn=13, logq=[], logp=[40], log_default_scale=40)
 
     def test_invalid_ring_type_raises_validation_error(self):
         from orion_compiler.params import CKKSParams
 
         with pytest.raises(ValidationError, match="ring_type must be one of"):
-            CKKSParams(logn=13, logq=[40], logp=[40], logscale=40, ring_type="invalid")
+            CKKSParams(logn=13, logq=[40], logp=[40], log_default_scale=40, ring_type="invalid")

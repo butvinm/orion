@@ -7,16 +7,21 @@ graph (nodes + edges), polynomial coefficients, and a KeyManifest.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
+import os
+import struct
 import time
-from typing import Any
+from typing import IO, Any
 
 import torch
 from torch.utils.data import DataLoader, RandomSampler
 from tqdm import tqdm
 
 from orion_compiler.compiled_model import (
+    _MODEL_MAGIC,
+    BlobStore,
     CompiledModel,
     Graph,
     GraphEdge,
@@ -179,8 +184,75 @@ class Compiler:
 
         Returns a CompiledModel containing all artifacts needed by
         Client (for key generation) and Evaluator (for inference).
+        Blobs are stored in a file-backed BlobStore; use to_file() to
+        write the .orion file without loading all blobs into memory.
 
         This method has ZERO Go/Lattigo dependency — only fit() needs Go.
+        """
+        blob_store = BlobStore()
+        metadata, blob_count = self._compile_core(
+            lambda data: blob_store.append(data)
+        )
+        return CompiledModel(
+            params=self.ckks_params,
+            config=self.config,
+            manifest=KeyManifest.from_dict(metadata["manifest"]),
+            input_level=metadata["input_level"],
+            cost=CostProfile.from_dict(metadata["cost"]),
+            graph=Graph.from_dict(metadata["graph"]),
+            blobs=blob_store,
+        )
+
+    # Maximum metadata JSON size. Padded with spaces for seek-back writes.
+    # Real metadata is typically 3-50 KB (galois elements + graph nodes).
+    _RESERVED_META_SIZE = 1 << 17  # 128 KB
+
+    def compile_to_file(self, path: str | os.PathLike[str]) -> None:
+        """Compile and write the .orion file directly — no intermediate storage.
+
+        Diagonal blobs are written to the output file as they're generated.
+        Only one module's diagonals are in memory at a time.
+        """
+        with open(path, "wb") as f:
+            # Reserve space: magic(8) + meta_len(4) + metadata(reserved) + blob_count(4)
+            f.write(_MODEL_MAGIC)
+            f.write(struct.pack("<I", self._RESERVED_META_SIZE))
+            f.write(b"\x00" * self._RESERVED_META_SIZE)
+            blob_count_pos = f.tell()
+            f.write(struct.pack("<I", 0))  # placeholder
+
+            def write_blob(data: bytes) -> int:
+                idx = write_blob.count
+                f.write(struct.pack("<Q", len(data)))
+                f.write(data)
+                write_blob.count += 1
+                return idx
+
+            write_blob.count = 0
+
+            metadata, blob_count = self._compile_core(write_blob)
+
+            # Seek back and write actual metadata + blob count
+            meta_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
+            if len(meta_bytes) > self._RESERVED_META_SIZE:
+                raise CompilationError(
+                    f"Metadata JSON ({len(meta_bytes)} bytes) exceeds reserved space "
+                    f"({self._RESERVED_META_SIZE} bytes)"
+                )
+            padded = meta_bytes + b" " * (self._RESERVED_META_SIZE - len(meta_bytes))
+            f.seek(12)  # after magic(8) + meta_len(4)
+            f.write(padded)
+            f.seek(blob_count_pos)
+            f.write(struct.pack("<I", blob_count))
+
+    def _compile_core(
+        self,
+        emit_blob: ...,
+    ) -> tuple[dict[str, Any], int]:
+        """Shared compilation logic.
+
+        emit_blob(data: bytes) -> int: called for each blob, must return its index.
+        Returns (metadata_dict, blob_count).
         """
         if self._traced is None:
             raise CompilationError(
@@ -223,13 +295,32 @@ class Compiler:
                 last_linear = node
                 break
 
-        # Generate diagonals
+        # Generate diagonals — pack each module immediately and free float data.
+        # Only one module's raw diagonals are in memory at a time.
         logger.info("[3/5] Generating matrix diagonals...")
+        max_slots = self.params.get_slots()
+        blob_count = 0
+
         for node in topo_sort:
             module = network_dag.nodes[node]["module"]
             if isinstance(module, LinearTransform):
                 logger.info("Packing %s:", node)
                 module.generate_diagonals(last=(node == last_linear))
+
+                # Pack diagonals and emit immediately
+                module._early_blob_refs: dict[str, int] = {}
+                module._diag_indices_per_block: dict[tuple[int, int], list[int]] = {}
+                for (row, col), diag_dict in module.diagonals.items():
+                    blob_data = pack_raw_diagonals(diag_dict, max_slots)
+                    module._early_blob_refs[f"diag_{row}_{col}"] = emit_blob(blob_data)
+                    module._diag_indices_per_block[(row, col)] = list(diag_dict.keys())
+                    blob_count += 1
+
+                # Replace diagonals with skeleton preserving len() for
+                # bootstrap solver's latency estimation (only reads len(diags))
+                module.diagonals = {
+                    k: dict.fromkeys(v.keys()) for k, v in module.diagonals.items()
+                }
 
         # Find residual connections
         network_dag.find_residuals()
@@ -260,11 +351,9 @@ class Compiler:
         # -- v2: Build graph nodes, edges, blobs (no module.compile() calls) --
         logger.info("[5/5] Building computation graph...")
 
-        max_slots = self.params.get_slots()
         nth_root = nth_root_for_ring(self.ckks_params.logn, self.ckks_params.ring_type)
         slots = max_slots
 
-        blobs: list[bytes] = []
         graph_nodes: list[GraphNode] = []
         galois_elements: set[int] = set()
 
@@ -280,10 +369,13 @@ class Compiler:
                 continue
 
             graph_node = self._build_graph_node(
-                node, module, blobs, max_slots, slots, nth_root, galois_elements
+                node, module, emit_blob, max_slots, slots, nth_root, galois_elements
             )
             if graph_node is not None:
                 graph_nodes.append(graph_node)
+            # Count bias blobs emitted in _build_graph_node
+            if graph_node and graph_node.blob_refs:
+                blob_count += sum(1 for k in graph_node.blob_refs if k.startswith("bias_"))
 
         # Extract edges, filtering out fork/join auxiliary nodes
         graph_edges = self._extract_edges(network_dag)
@@ -354,23 +446,39 @@ class Compiler:
             bootstrap_key_count=len(manifest.bootstrap_slots),
         )
 
-        compiled = CompiledModel(
-            params=self.ckks_params,
-            config=self.config,
-            manifest=manifest,
-            input_level=input_level,
-            cost=cost,
-            graph=graph,
-            blobs=blobs,
-        )
+        metadata = {
+            "version": 2,
+            "params": {
+                "logn": self.ckks_params.logn,
+                "logq": list(self.ckks_params.logq),
+                "logp": list(self.ckks_params.logp),
+                "log_default_scale": self.ckks_params.log_default_scale,
+                "h": self.ckks_params.h,
+                "ring_type": self.ckks_params.ring_type,
+                "boot_logp": (
+                    list(self.ckks_params.boot_logp) if self.ckks_params.boot_logp else None
+                ),
+                "btp_logn": self.ckks_params.btp_logn,
+            },
+            "config": {
+                "margin": self.config.margin,
+                "embedding_method": self.config.embedding_method,
+                "fuse_modules": self.config.fuse_modules,
+            },
+            "manifest": manifest.to_dict(),
+            "input_level": input_level,
+            "cost": cost.to_dict(),
+            "graph": graph.to_dict(),
+            "blob_count": blob_count,
+        }
 
-        return compiled
+        return metadata, blob_count
 
     def _build_graph_node(
         self,
         node_name: str,
         module: Module,
-        blobs: list[bytes],
+        emit_blob: ...,
         max_slots: int,
         slots: int,
         nth_root: int,
@@ -389,25 +497,40 @@ class Compiler:
         blob_refs: dict[str, int] | None = None
 
         if isinstance(module, LinearTransform):
-            # Raw diagonals -> blobs (no Go calls)
-            blob_refs = {}
-            for (row, col), diag_dict in module.diagonals.items():
-                blob_data = pack_raw_diagonals(diag_dict, max_slots)
-                blob_refs[f"diag_{row}_{col}"] = len(blobs)
-                blobs.append(blob_data)
+            # Diagonals were already packed during step [3/5].
+            # Use pre-saved blob refs and diagonal indices.
+            blob_refs = dict(module._early_blob_refs)
+            diag_indices_per_block = module._diag_indices_per_block
 
-            # Raw bias -> blob (different constructors for Linear vs Conv2d)
+            # Block dimensions from diagonalize: (row, col) keys
+            block_keys = list(diag_indices_per_block.keys())
+            num_block_rows = max(r for r, c in block_keys) + 1 if block_keys else 1
+            num_block_cols = max(c for r, c in block_keys) + 1 if block_keys else 1
+
+            # Raw bias -> blob(s). One bias blob per output CT row.
             if isinstance(module, Conv2d):
                 bias_vec = packing.construct_conv2d_bias(module)
             else:
                 bias_vec = packing.construct_linear_bias(module)
-            bias_data = pack_raw_bias(bias_vec.tolist(), max_slots)
-            blob_refs["bias"] = len(blobs)
-            blobs.append(bias_data)
+            bias_flat = bias_vec.tolist()
+
+            if num_block_rows == 1:
+                padded_bias = bias_flat + [0.0] * (max_slots - len(bias_flat))
+                blob_refs["bias_0"] = emit_blob(pack_raw_bias(padded_bias[:max_slots], max_slots))
+            else:
+                for row in range(num_block_rows):
+                    start = row * max_slots
+                    end = start + max_slots
+                    segment = bias_flat[start:end]
+                    if len(segment) < max_slots:
+                        segment = segment + [0.0] * (max_slots - len(segment))
+                    blob_refs[f"bias_{row}"] = emit_blob(pack_raw_bias(segment, max_slots))
 
             config = {
                 "bsgs_ratio": module.bsgs_ratio,
                 "output_rotations": module.output_rotations,
+                "num_input_cts": num_block_cols,
+                "num_output_cts": num_block_rows,
             }
 
             shape = {}
@@ -420,8 +543,7 @@ class Compiler:
             if hasattr(module, "output_shape") and module.output_shape is not None:
                 shape["output"] = list(module.output_shape)
 
-            # Compute Galois elements for this LT (pure Python)
-            diag_indices_per_block = {k: list(v.keys()) for k, v in module.diagonals.items()}
+            # Compute Galois elements using saved indices (diagonals already freed)
             lt_galois = compute_galois_elements_for_linear_transform(
                 diag_indices_per_block,
                 slots,
@@ -456,7 +578,7 @@ class Compiler:
         elif isinstance(module, Bootstrap):
             assert module.fhe_input_shape is not None
             elements = module.fhe_input_shape.numel()
-            btp_slots = 2 ** math.ceil(math.log2(elements))
+            btp_slots = min(2 ** math.ceil(math.log2(elements)), max_slots)
             config = {
                 "input_level": module.input_level,
                 "input_min": float(module.input_min),

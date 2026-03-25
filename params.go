@@ -10,14 +10,14 @@ import (
 // Params holds CKKS scheme parameters in a serialization-friendly form.
 // Mirrors Python's CKKSParams dataclass.
 type Params struct {
-	LogN     int    `json:"logn"`
-	LogQ     []int  `json:"logq"`
-	LogP     []int  `json:"logp"`
-	LogScale int    `json:"logscale"`
-	H        int    `json:"h"`
-	RingType string `json:"ring_type"` // "standard" or "conjugate_invariant"
-	BootLogP []int  `json:"boot_logp,omitempty"`
-	BtpLogN  int    `json:"btp_logn,omitempty"`
+	LogN            int    `json:"logn"`
+	LogQ            []int  `json:"logq"`
+	LogP            []int  `json:"logp"`
+	LogDefaultScale int    `json:"log_default_scale"`
+	H               int    `json:"h"`
+	RingType        string `json:"ring_type"` // "standard" or "conjugate_invariant"
+	BootLogP        []int  `json:"boot_logp,omitempty"`
+	BtpLogN         int    `json:"btp_logn,omitempty"`
 }
 
 // NewCKKSParameters constructs Lattigo ckks.Parameters from Params.
@@ -36,7 +36,7 @@ func (p Params) NewCKKSParameters() (ckks.Parameters, error) {
 		LogN:            p.LogN,
 		LogQ:            p.LogQ,
 		LogP:            p.LogP,
-		LogDefaultScale: p.LogScale,
+		LogDefaultScale: p.LogDefaultScale,
 		Xs:              ring.Ternary{H: p.H},
 		RingType:        rt,
 	}
@@ -58,9 +58,9 @@ func (p Params) MaxSlots() int {
 	return 1 << p.LogN
 }
 
-// DefaultScale returns 2^LogScale as a uint64.
+// DefaultScale returns 2^LogDefaultScale as a uint64.
 func (p Params) DefaultScale() uint64 {
-	return 1 << uint(p.LogScale)
+	return 1 << uint(p.LogDefaultScale)
 }
 
 // MaxLevel returns the maximum multiplicative level (len(LogQ) - 1).

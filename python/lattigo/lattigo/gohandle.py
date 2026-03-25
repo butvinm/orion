@@ -18,21 +18,15 @@ _lib_lock = threading.Lock()
 
 
 def _load_library() -> ctypes.CDLL:
-    """Load the platform-specific shared library."""
-    if platform.system() == "Linux":
-        lib_name = "orionclient-linux.so"
-    elif platform.system() == "Darwin":
-        if platform.machine().lower() in ("arm64", "aarch64"):
-            lib_name = "orionclient-mac-arm64.dylib"
-        else:
-            lib_name = "orionclient-mac.dylib"
-    elif platform.system() == "Windows":
-        lib_name = "orionclient-windows.dll"
-    else:
-        raise FFIError(f"Unsupported platform: {platform.system()}")
+    """Load the Linux shared library. Only Linux x86_64 is supported."""
+    if platform.system() != "Linux":
+        raise FFIError(
+            f"Unsupported platform: {platform.system()}. "
+            "Only Linux x86_64 is supported. See README for building from source."
+        )
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    lib_path = os.path.join(current_dir, lib_name)
+    lib_path = os.path.join(current_dir, "orionclient-linux.so")
 
     try:
         return ctypes.CDLL(lib_path)
