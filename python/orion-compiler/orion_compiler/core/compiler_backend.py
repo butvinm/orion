@@ -90,9 +90,6 @@ class NewParameters:
     def get_embedding_method(self) -> str:
         return self._config.embedding_method
 
-    def get_debug_status(self) -> bool:
-        return False
-
     def get_backend(self) -> str:
         return "lattigo"
 
