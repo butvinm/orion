@@ -9,15 +9,21 @@ import gc
 import json
 import os
 
+import orion_compiler.nn as on
 import pytest
 import torch
 from lattigo.ckks import Encoder, Parameters
+from lattigo.rlwe import (
+    Ciphertext as RLWECiphertext,
+)
 from lattigo.rlwe import (
     Decryptor,
     Encryptor,
     KeyGenerator,
     MemEvaluationKeySet,
 )
+from orion_compiler.compiler import Compiler
+from orion_compiler.params import CKKSParams
 from orion_evaluator import Evaluator, EvaluatorError, Model
 from orion_evaluator.errors import ModelLoadError
 
@@ -45,7 +51,8 @@ def _params_from_dict(params_dict: dict) -> Parameters:
 class TestModelLifecycle:
     def test_load_valid_model(self):
         """Model.load succeeds on valid .orion file."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         assert model._handle != 0
         model.close()
@@ -53,7 +60,8 @@ class TestModelLifecycle:
 
     def test_client_params(self):
         """Model.client_params returns valid params, manifest, input_level."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         params, manifest, input_level = model.client_params()
 
@@ -76,7 +84,8 @@ class TestModelLifecycle:
 
     def test_close_is_idempotent(self):
         """Closing a model twice does not crash."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         model.close()
         model.close()  # should not raise
@@ -84,7 +93,8 @@ class TestModelLifecycle:
 
     def test_closed_model_raises(self):
         """Operations on closed model raise."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         model.close()
         with pytest.raises(EvaluatorError, match="closed"):
@@ -132,7 +142,8 @@ def _make_evaluator_from_model(model):
 class TestEvaluatorLifecycle:
     def test_create_and_close(self):
         """Evaluator can be created and closed."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         evaluator, sk, params, kg = _make_evaluator_from_model(model)
 
@@ -148,7 +159,8 @@ class TestEvaluatorLifecycle:
 
     def test_close_is_idempotent(self):
         """Closing evaluator twice does not crash."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         evaluator, sk, params, kg = _make_evaluator_from_model(model)
 
@@ -163,7 +175,8 @@ class TestEvaluatorLifecycle:
 
     def test_closed_evaluator_raises(self):
         """Operations on closed evaluator raise."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         evaluator, sk, params, kg = _make_evaluator_from_model(model)
         evaluator.close()
@@ -186,7 +199,8 @@ class TestEvaluatorLifecycle:
 class TestBootstrapKeyParameter:
     def test_evaluator_without_btp_keys_on_non_bootstrap_model(self):
         """Evaluator(params, keys, btp_keys_bytes=None) works for non-bootstrap model."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         params_dict, manifest, _input_level = model.client_params()
         params = _params_from_dict(params_dict)
@@ -216,7 +230,8 @@ class TestBootstrapKeyParameter:
 
     def test_evaluator_positional_btp_keys_none(self):
         """Evaluator(params, keys, None) works same as omitting btp_keys_bytes."""
-        data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            data = f.read()
         model = Model.load(data)
         params_dict, manifest, _input_level = model.client_params()
         params = _params_from_dict(params_dict)
@@ -246,7 +261,8 @@ class TestBootstrapKeyParameter:
 
     def test_forward_without_btp_keys_e2e(self):
         """E2E forward pass with explicit btp_keys_bytes=None works on non-bootstrap model."""
-        model_data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            model_data = f.read()
         model = Model.load(model_data)
         params_dict, manifest, input_level = model.client_params()
 
@@ -281,8 +297,6 @@ class TestBootstrapKeyParameter:
         result_bytes = result_bytes_list[0]
         assert isinstance(result_bytes, bytes)
         assert len(result_bytes) > 0
-
-        from lattigo.rlwe import Ciphertext as RLWECiphertext
 
         result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
         result_pt = decryptor.decrypt_new(result_ct)
@@ -328,7 +342,8 @@ class TestE2EForward:
         Uses the pre-compiled mlp.orion test model with known input/expected output.
         """
         # Load model
-        model_data = open(MLP_ORION, "rb").read()
+        with open(MLP_ORION, "rb") as f:
+            model_data = f.read()
         model = Model.load(model_data)
         params_dict, manifest, input_level = model.client_params()
 
@@ -370,8 +385,6 @@ class TestE2EForward:
         assert len(result_bytes) > 0
 
         # Decrypt result
-        from lattigo.rlwe import Ciphertext as RLWECiphertext
-
         result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
         result_pt = decryptor.decrypt_new(result_ct)
         decoded = encoder.decode(result_pt, max_slots)
@@ -413,9 +426,6 @@ class TestE2EForward:
 
         This test exercises the full pipeline from PyTorch model to encrypted inference.
         """
-        import orion_compiler.nn as on
-        from orion_compiler.compiler import Compiler
-        from orion_compiler.params import CKKSParams
 
         class TinyMLP(on.Module):
             def __init__(self):
@@ -482,8 +492,6 @@ class TestE2EForward:
         result_bytes = result_bytes_list[0]
 
         # Decrypt
-        from lattigo.rlwe import Ciphertext as RLWECiphertext
-
         result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
         result_pt = decryptor.decrypt_new(result_ct)
         decoded = encoder.decode(result_pt, max_slots)
@@ -525,9 +533,6 @@ class TestE2EForward:
 
     def test_forward_conv2d_small_channels(self):
         """E2E: Conv2d(1,5,k=2,s=2,p=0) with small channel count and output rotations."""
-        import orion_compiler.nn as on
-        from orion_compiler.compiler import Compiler
-        from orion_compiler.params import CKKSParams
 
         class SmallConvNet(on.Module):
             """Minimal Conv2d model with small channel count and output rotations."""
@@ -596,8 +601,6 @@ class TestE2EForward:
         result_bytes = result_bytes_list[0]
 
         # Decrypt
-        from lattigo.rlwe import Ciphertext as RLWECiphertext
-
         result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
         result_pt = decryptor.decrypt_new(result_ct)
         decoded = encoder.decode(result_pt, max_slots)

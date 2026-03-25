@@ -41,7 +41,9 @@ class Parameters:
         )
 
     # Keys accepted by __init__ (used by from_dict to filter extras).
-    _KNOWN_KEYS = frozenset({"logn", "logq", "logp", "log_default_scale", "ring_type", "h", "log_nth_root"})
+    _KNOWN_KEYS = frozenset(
+        {"logn", "logq", "logp", "log_default_scale", "ring_type", "h", "log_nth_root"}
+    )
 
     @classmethod
     def from_dict(cls, d: dict) -> Parameters:

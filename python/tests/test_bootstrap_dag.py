@@ -3,13 +3,21 @@
 Task 4: Bootstrap operations become explicit DAG nodes instead of forward hooks.
 """
 
+import gc
 import types
 from unittest.mock import MagicMock
 
 import networkx as nx
+import orion_compiler.nn as on
 import torch
+from orion_compiler.compiler import Compiler
 from orion_compiler.core.auto_bootstrap import BootstrapPlacer, BootstrapSolver
+from orion_compiler.core.fuser import Fuser
+from orion_compiler.core.network_dag import NetworkDAG
+from orion_compiler.nn.linear import LinearTransform
+from orion_compiler.nn.module import Module
 from orion_compiler.nn.operations import Bootstrap
+from orion_compiler.params import CKKSParams
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -285,10 +293,6 @@ class TestBootstrapIntegration:
 
         Verifies that boot_* nodes appear in the DAG after compilation.
         """
-        import orion_compiler.nn as on
-        from orion_compiler.compiler import Compiler
-        from orion_compiler.params import CKKSParams
-
         # Short logq chain: l_eff = 2 (only 2 usable levels).
         # MLP with 2 linear layers + 1 quad = 3 depth -> bootstraps needed.
         short_params = CKKSParams(
@@ -320,10 +324,6 @@ class TestBootstrapIntegration:
 
         # Access the internal DAG to verify bootstrap insertion.
         # We need to replicate the compile() steps up to bootstrap placement.
-        from orion_compiler.core.fuser import Fuser
-        from orion_compiler.core.network_dag import NetworkDAG
-        from orion_compiler.nn.module import Module
-
         network_dag = NetworkDAG(compiler._traced)
         network_dag.build_dag()
 
@@ -345,8 +345,6 @@ class TestBootstrapIntegration:
             network_dag.remove_fused_batchnorms()
 
         topo_sort = list(network_dag.topological_sort())
-        from orion_compiler.nn.linear import LinearTransform
-
         last_linear = None
         for node in reversed(topo_sort):
             module = network_dag.nodes[node]["module"]
@@ -401,6 +399,4 @@ class TestBootstrapIntegration:
             assert len(succs) >= 1, f"{bn} has no successors"
 
         del compiler
-        import gc
-
         gc.collect()

@@ -259,7 +259,7 @@ def _extract_diagonals_sparse(
 
     result: dict[int, list[float]] = {}
     groups = np.split(np.arange(len(order)), split_points)
-    for d, group in zip(unique_diags, groups):
+    for d, group in zip(unique_diags, groups, strict=False):
         diag_vec = np.zeros(num_slots, dtype=np.float64)
         diag_vec[sorted_pos[group]] = sorted_vals[group]
         if np.any(diag_vec != 0):
@@ -362,7 +362,10 @@ def diagonalize(
             ]
 
             nonzero_diagonals = _extract_diagonals_sparse(
-                block_sparse, block_height, num_slots, reps,
+                block_sparse,
+                block_height,
+                num_slots,
+                reps,
             )
 
             total_diagonals += len(nonzero_diagonals)

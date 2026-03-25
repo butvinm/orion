@@ -4,6 +4,8 @@ Mirrors lattigo.gohandle.GoHandle for consistent handle lifecycle management
 across all Orion FFI packages.
 """
 
+from collections.abc import Callable
+
 from .errors import EvaluatorError
 
 
@@ -14,9 +16,9 @@ class HandleClosedError(EvaluatorError):
 class GoHandle:
     """RAII wrapper for a cgo.Handle (opaque uintptr_t). Idempotent close."""
 
-    __slots__ = ("_raw", "_tag", "_delete_fn")
+    __slots__ = ("_delete_fn", "_raw", "_tag")
 
-    def __init__(self, raw: int, tag: str = "", *, delete_fn: object = None):
+    def __init__(self, raw: int, tag: str = "", *, delete_fn: Callable[[int], None] | None = None):
         self._raw = raw
         self._tag = tag
         self._delete_fn = delete_fn

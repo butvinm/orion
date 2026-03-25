@@ -8,7 +8,7 @@ import json
 import os
 import struct
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,7 +24,7 @@ class BlobStore:
     """
 
     def __init__(self) -> None:
-        self._file = tempfile.TemporaryFile()
+        self._file = tempfile.TemporaryFile()  # noqa: SIM115
         self._entries: list[tuple[int, int]] = []  # (offset, length)
 
     def append(self, data: bytes) -> int:
@@ -43,7 +43,7 @@ class BlobStore:
         self._file.seek(offset)
         return self._file.read(length)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[bytes]:
         for i in range(len(self._entries)):
             yield self[i]
 
@@ -55,6 +55,7 @@ class BlobStore:
             self.close()
         except Exception:
             pass
+
 
 # -- Binary format helpers --
 
@@ -376,7 +377,7 @@ class CompiledModel:
         }
 
     def to_bytes(self) -> bytes:
-        return _pack_container(_MODEL_MAGIC, self._build_metadata(), self.blobs)
+        return _pack_container(_MODEL_MAGIC, self._build_metadata(), list(self.blobs))
 
     def to_file(self, path: str | os.PathLike[str]) -> None:
         """Write the compiled model to a file, streaming blobs one at a time.

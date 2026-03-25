@@ -21,7 +21,7 @@ class Model:
     __slots__ = ("_handle",)
 
     def __init__(self, handle: GoHandle):
-        self._handle = handle
+        self._handle: GoHandle | None = handle
 
     @classmethod
     def load(cls, data: bytes) -> "Model":

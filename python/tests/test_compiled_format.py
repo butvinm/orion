@@ -446,6 +446,8 @@ class TestBlobFormat:
                 for ref_name, idx in node.blob_refs.items():
                     if ref_name.startswith("bias_"):
                         blob = compiled.blobs[idx]
-                        assert len(blob) == max_slots * 8, (
-                            f"Bias blob {ref_name} for {node.name}: expected {max_slots * 8} bytes, got {len(blob)}"
+                        expected = max_slots * 8
+                        assert len(blob) == expected, (
+                            f"Bias blob {ref_name} for {node.name}: "
+                            f"expected {expected} bytes, got {len(blob)}"
                         )

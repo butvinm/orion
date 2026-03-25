@@ -3,6 +3,7 @@
 import pytest
 from lattigo.errors import FFIError, HandleClosedError, LatticeError
 from orion_compiler.errors import CompilationError, CompilerError, ValidationError
+from orion_compiler.params import CKKSParams
 from orion_evaluator.errors import EvaluatorError, ModelLoadError
 
 
@@ -118,19 +119,13 @@ class TestValidationErrorIntegration:
     """Test that ValidationError is raised by CKKSParams validation."""
 
     def test_invalid_logn_raises_validation_error(self):
-        from orion_compiler.params import CKKSParams
-
         with pytest.raises(ValidationError, match="logn must be positive"):
             CKKSParams(logn=0, logq=[40], logp=[40], log_default_scale=40)
 
     def test_empty_logq_raises_validation_error(self):
-        from orion_compiler.params import CKKSParams
-
         with pytest.raises(ValidationError, match="logq must be non-empty"):
             CKKSParams(logn=13, logq=[], logp=[40], log_default_scale=40)
 
     def test_invalid_ring_type_raises_validation_error(self):
-        from orion_compiler.params import CKKSParams
-
         with pytest.raises(ValidationError, match="ring_type must be one of"):
             CKKSParams(logn=13, logq=[40], logp=[40], log_default_scale=40, ring_type="invalid")
