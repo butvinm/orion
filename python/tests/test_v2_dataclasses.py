@@ -1,6 +1,8 @@
 """Unit tests for v2 data structures: CKKSParams, CompilerConfig,
 KeyManifest, CompiledModel, EvalKeys, and the NewParameters adapter."""
 
+import json
+
 import pytest
 from orion_compiler.compiled_model import (
     CompiledModel,
@@ -97,15 +99,11 @@ class TestCKKSParams:
         assert p.btp_logn == 16
 
     def test_btp_logn_in_bridge_json(self):
-        import json
-
         p = self._default_params(boot_logp=(61, 61), btp_logn=15)
         d = json.loads(p.to_bridge_json())
         assert d["btp_logn"] == 15
 
     def test_btp_logn_absent_from_bridge_json_when_none(self):
-        import json
-
         p = self._default_params()
         d = json.loads(p.to_bridge_json())
         assert "btp_logn" not in d

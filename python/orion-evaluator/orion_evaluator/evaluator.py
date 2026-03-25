@@ -4,6 +4,7 @@ import json
 
 from . import ffi
 from .errors import EvaluatorError
+from .gohandle import GoHandle
 from .model import Model
 
 
@@ -32,7 +33,7 @@ class Evaluator:
             btp_keys_bytes: bootstrapping.EvaluationKeys.MarshalBinary() output (optional)
         """
         params_json = json.dumps(params)
-        self._handle = ffi.new_evaluator(params_json, keys_bytes, btp_keys_bytes)
+        self._handle: GoHandle | None = ffi.new_evaluator(params_json, keys_bytes, btp_keys_bytes)
 
     def forward(self, model: Model, ct_bytes_list: list[bytes]) -> list[bytes]:
         """Run FHE forward pass.

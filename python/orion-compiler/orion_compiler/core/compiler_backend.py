@@ -18,7 +18,6 @@ from lattigo.gohandle import GoHandle
 
 from orion_compiler.params import CKKSParams, CompilerConfig
 
-
 # =========================================================================
 # NewParameters — thin adapter over CKKSParams + CompilerConfig
 # =========================================================================

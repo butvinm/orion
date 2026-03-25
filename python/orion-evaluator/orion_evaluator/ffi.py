@@ -194,7 +194,9 @@ def model_close(handle: GoHandle) -> None:
 # =========================================================================
 
 
-def new_evaluator(params_json: str, keys_bytes: bytes, btp_keys_bytes: bytes | None = None) -> GoHandle:
+def new_evaluator(
+    params_json: str, keys_bytes: bytes, btp_keys_bytes: bytes | None = None
+) -> GoHandle:
     """Create evaluator from params JSON and MemEvaluationKeySet bytes."""
     lib = _lib_call()
     err = _make_errout()
@@ -239,7 +241,9 @@ def _unpack_ct_list(data: bytes) -> list[bytes]:
     return result
 
 
-def evaluator_forward(eval_handle: GoHandle, model_handle: GoHandle, ct_bytes_list: list[bytes]) -> list[bytes]:
+def evaluator_forward(
+    eval_handle: GoHandle, model_handle: GoHandle, ct_bytes_list: list[bytes]
+) -> list[bytes]:
     """Run forward pass. Accepts/returns lists of Lattigo ciphertext binary bytes."""
     lib = _lib_call()
     err = _make_errout()

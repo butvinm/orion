@@ -7,6 +7,7 @@ import gc
 import json
 import struct
 
+import networkx as nx
 import orion_compiler.nn as on
 import pytest
 import torch
@@ -237,8 +238,6 @@ class TestCompiler:
 
     def test_edges_form_valid_dag(self, compiled_mlp):
         """Edges form a valid DAG (acyclic)."""
-        import networkx as nx
-
         compiled = compiled_mlp
         g = nx.DiGraph()
         for node in compiled.graph.nodes:

@@ -13,7 +13,8 @@ import math
 import os
 import struct
 import time
-from typing import IO, Any
+from collections.abc import Callable
+from typing import Any
 
 import torch
 from torch.utils.data import DataLoader, RandomSampler
@@ -190,9 +191,7 @@ class Compiler:
         This method has ZERO Go/Lattigo dependency — only fit() needs Go.
         """
         blob_store = BlobStore()
-        metadata, blob_count = self._compile_core(
-            lambda data: blob_store.append(data)
-        )
+        metadata, blob_count = self._compile_core(lambda data: blob_store.append(data))
         return CompiledModel(
             params=self.ckks_params,
             config=self.config,
@@ -221,14 +220,14 @@ class Compiler:
             blob_count_pos = f.tell()
             f.write(struct.pack("<I", 0))  # placeholder
 
+            counter = [0]
+
             def write_blob(data: bytes) -> int:
-                idx = write_blob.count
+                idx = counter[0]
                 f.write(struct.pack("<Q", len(data)))
                 f.write(data)
-                write_blob.count += 1
+                counter[0] += 1
                 return idx
-
-            write_blob.count = 0
 
             metadata, blob_count = self._compile_core(write_blob)
 
@@ -247,7 +246,7 @@ class Compiler:
 
     def _compile_core(
         self,
-        emit_blob: ...,
+        emit_blob: Callable[[bytes], int],
     ) -> tuple[dict[str, Any], int]:
         """Shared compilation logic.
 
@@ -308,12 +307,12 @@ class Compiler:
                 module.generate_diagonals(last=(node == last_linear))
 
                 # Pack diagonals and emit immediately
-                module._early_blob_refs: dict[str, int] = {}
-                module._diag_indices_per_block: dict[tuple[int, int], list[int]] = {}
+                module._early_blob_refs = {}  # type: ignore[assignment]
+                module._diag_indices_per_block = {}  # type: ignore[assignment]
                 for (row, col), diag_dict in module.diagonals.items():
                     blob_data = pack_raw_diagonals(diag_dict, max_slots)
-                    module._early_blob_refs[f"diag_{row}_{col}"] = emit_blob(blob_data)
-                    module._diag_indices_per_block[(row, col)] = list(diag_dict.keys())
+                    module._early_blob_refs[f"diag_{row}_{col}"] = emit_blob(blob_data)  # type: ignore[operator,index]
+                    module._diag_indices_per_block[(row, col)] = list(diag_dict.keys())  # type: ignore[operator,assignment]
                     blob_count += 1
 
                 # Replace diagonals with skeleton preserving len() for
@@ -478,7 +477,7 @@ class Compiler:
         self,
         node_name: str,
         module: Module,
-        emit_blob: ...,
+        emit_blob: Callable[[bytes], int],
         max_slots: int,
         slots: int,
         nth_root: int,
@@ -499,8 +498,11 @@ class Compiler:
         if isinstance(module, LinearTransform):
             # Diagonals were already packed during step [3/5].
             # Use pre-saved blob refs and diagonal indices.
-            blob_refs = dict(module._early_blob_refs)
-            diag_indices_per_block = module._diag_indices_per_block
+            blob_refs = dict(module._early_blob_refs)  # type: ignore[arg-type]
+            assert blob_refs is not None
+            diag_indices_per_block: dict[tuple[int, int], list[int]] = (
+                module._diag_indices_per_block  # type: ignore[assignment]
+            )
 
             # Block dimensions from diagonalize: (row, col) keys
             block_keys = list(diag_indices_per_block.keys())
