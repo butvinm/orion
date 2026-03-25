@@ -30,8 +30,9 @@ import (
 
 const (
 	maxSingleKeyBytes    = 16 * 1024 * 1024       // 16 MB
-	maxCiphertextBytes   = 32 * 1024 * 1024        // 32 MB
-	maxBootstrapKeyBytes = 6 * 1024 * 1024 * 1024  // 6 GB
+	maxBootstrapSingleKeyBytes = 256 * 1024 * 1024       // 256 MB — individual bootstrap keys are larger than main keys
+	maxCiphertextBytes         = 32 * 1024 * 1024        // 32 MB
+	maxBootstrapKeyBytes       = 6 * 1024 * 1024 * 1024  // 6 GB — monolithic bootstrap blob
 )
 
 type sessionState int
@@ -319,7 +320,7 @@ func (s *Server) HandleBootstrapRelinKey(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "session already finalized", http.StatusConflict)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxSingleKeyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBootstrapSingleKeyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
@@ -361,7 +362,7 @@ func (s *Server) HandleBootstrapGaloisKey(w http.ResponseWriter, r *http.Request
 		http.Error(w, "session already finalized", http.StatusConflict)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxSingleKeyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBootstrapSingleKeyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
@@ -402,7 +403,7 @@ func (s *Server) HandleBootstrapSwitchingKey(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "session already finalized", http.StatusConflict)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxSingleKeyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, maxBootstrapSingleKeyBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("reading body: %v", err), http.StatusBadRequest)
