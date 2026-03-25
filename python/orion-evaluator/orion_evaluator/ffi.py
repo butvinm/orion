@@ -23,21 +23,15 @@ _prototypes_set = False
 
 
 def _load_library() -> ctypes.CDLL:
-    """Load the platform-specific shared library."""
-    if platform.system() == "Linux":
-        lib_name = "orion-evaluator-linux.so"
-    elif platform.system() == "Darwin":
-        if platform.machine().lower() in ("arm64", "aarch64"):
-            lib_name = "orion-evaluator-mac-arm64.dylib"
-        else:
-            lib_name = "orion-evaluator-mac.dylib"
-    elif platform.system() == "Windows":
-        lib_name = "orion-evaluator-windows.dll"
-    else:
-        raise EvaluatorError(f"Unsupported platform: {platform.system()}")
+    """Load the Linux shared library. Only Linux x86_64 is supported."""
+    if platform.system() != "Linux":
+        raise EvaluatorError(
+            f"Unsupported platform: {platform.system()}. "
+            "Only Linux x86_64 is supported. See README for building from source."
+        )
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    lib_path = os.path.join(current_dir, lib_name)
+    lib_path = os.path.join(current_dir, "orion-evaluator-linux.so")
 
     try:
         return ctypes.CDLL(lib_path)
