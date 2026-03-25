@@ -223,7 +223,6 @@ def _setup_prototypes(lib: ctypes.CDLL) -> None:
         ctypes.c_int,  # logAlpha, logErr
         ctypes.POINTER(ctypes.c_int),
         ctypes.c_int,  # degreesPtr, numDegrees
-        ctypes.c_int,  # debug
         ctypes.POINTER(ctypes.POINTER(ctypes.c_double)),
         ctypes.POINTER(ctypes.c_int),  # outCoeffs, outLen
         ctypes.POINTER(ctypes.POINTER(ctypes.c_int)),
@@ -683,7 +682,6 @@ def gen_minimax_composite_polynomial(
     prec: int,
     log_alpha: int,
     log_err: int,
-    debug: int,
 ) -> tuple[list[float], list[int]]:
     """Generate raw minimax composite polynomial coefficients.
 
@@ -705,7 +703,6 @@ def gen_minimax_composite_polynomial(
         ctypes.c_int(log_err),
         deg_arr,
         deg_len,
-        ctypes.c_int(debug),
         ctypes.byref(out_coeffs),
         ctypes.byref(out_len),
         ctypes.byref(out_seps),

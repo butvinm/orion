@@ -208,9 +208,8 @@ class _Sign(Module):
         return super().extra_repr() + f", degrees={self.degrees}"
 
     def fit(self, context: CompilationContext) -> None:
-        debug = context.params.get_debug_status()
         self.coeffs = context.poly_evaluator.generate_minimax_sign_coeffs(
-            self.degrees, self.prec, self.logalpha, self.logerr, debug
+            self.degrees, self.prec, self.logalpha, self.logerr
         )
 
         for i, coeffs in enumerate(self.coeffs):

@@ -8,8 +8,8 @@ import (
 	"runtime/cgo"
 	"unsafe"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/minimax"
-	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
+	"github.com/tuneinsight/lattigo/v6/circuits/ckks/minimax"
+	"github.com/tuneinsight/lattigo/v6/utils/bignum"
 )
 
 // =========================================================================
@@ -47,7 +47,6 @@ func GenMinimaxCompositePolynomial(
 	prec C.uint,
 	logAlpha C.int, logErr C.int,
 	degreesPtr *C.int, numDegrees C.int,
-	debug C.int,
 	outCoeffs **C.double, outLen *C.int,
 	outSeps **C.int, outNumPolys *C.int,
 	errOut **C.char,
@@ -56,7 +55,7 @@ func GenMinimaxCompositePolynomial(
 	degrees := cIntsToGoInts(degreesPtr, numDegrees)
 
 	coeffsBig := minimax.GenMinimaxCompositePolynomial(
-		uint(prec), int(logAlpha), int(logErr), degrees, bignum.Sign, int(debug) != 0,
+		uint(prec), int(logAlpha), int(logErr), degrees, bignum.Sign,
 	)
 
 	// Count total coefficients and build separator indices

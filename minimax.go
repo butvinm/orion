@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/minimax"
-	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
+	"github.com/tuneinsight/lattigo/v6/circuits/ckks/minimax"
+	"github.com/tuneinsight/lattigo/v6/utils/bignum"
 )
 
 // minimaxCache caches previously computed minimax sign coefficients.
@@ -19,7 +19,7 @@ var (
 // GenerateMinimaxSignCoeffs computes composite minimax polynomial
 // coefficients for the sign function approximation.
 // Returns a flat slice of float64 coefficients (all polynomials concatenated).
-func GenerateMinimaxSignCoeffs(degrees []int, prec uint, logAlpha, logErr int, debug bool) ([]float64, error) {
+func GenerateMinimaxSignCoeffs(degrees []int, prec uint, logAlpha, logErr int) ([]float64, error) {
 	cleaned := make([]int, 0, len(degrees))
 	for _, d := range degrees {
 		if d != 0 {
@@ -51,7 +51,7 @@ func GenerateMinimaxSignCoeffs(degrees []int, prec uint, logAlpha, logErr int, d
 
 	// Generate coefficients
 	coeffs := minimax.GenMinimaxCompositePolynomial(
-		prec, logAlpha, logErr, cleaned, bignum.Sign, debug,
+		prec, logAlpha, logErr, cleaned, bignum.Sign,
 	)
 
 	// Scale last polynomial from [-1,1] -> [0,1]:

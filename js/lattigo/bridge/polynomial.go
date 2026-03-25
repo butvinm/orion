@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/baahl-nyu/lattigo/v6/circuits/ckks/minimax"
-	"github.com/baahl-nyu/lattigo/v6/utils/bignum"
+	"github.com/tuneinsight/lattigo/v6/circuits/ckks/minimax"
+	"github.com/tuneinsight/lattigo/v6/utils/bignum"
 )
 
 // newPolynomialMonomial(coeffs: Float64Array | number[]) → {handle: number} | {error: string}
