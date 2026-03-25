@@ -1,166 +1,101 @@
 """Compile-time backend adapter wrapping Lattigo FFI.
 
-Provides the same interface as the old backend/python/ wrappers
-(NewParameters, NewEncoder, PolynomialGenerator) but backed by the
-lattigo bridge shared library.
+Provides NewParameters (adapter), NewEncoder, PolynomialGenerator,
+and CompilerBackend — all backed by the lattigo bridge shared library.
 """
 
 from __future__ import annotations
 
 import threading
 from collections.abc import Sequence
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import torch
 from lattigo import ffi as lattigo_ffi
 from lattigo.gohandle import GoHandle
 
-if TYPE_CHECKING:
-    from orion_compiler.params import CKKSParams, CompilerConfig
+from orion_compiler.params import CKKSParams, CompilerConfig
 
 
 # =========================================================================
-# NewParameters (moved from backend/python/parameters.py)
+# NewParameters — thin adapter over CKKSParams + CompilerConfig
 # =========================================================================
 
 
-@dataclass
-class CKKSParameters:
-    logn: int
-    logq: list[int]
-    logp: list[int]
-    log_default_scale: int | None = field(default=None)
-    h: int = 192
-    ringtype: str = "standard"
-    boot_logp: list[int] | None = field(default=None)
-
-    def __post_init__(self) -> None:
-        if self.logq and self.logp and len(self.logp) > len(self.logq):
-            raise ValueError(
-                f"Invalid parameters: The length of logp ({len(self.logp)}) "
-                f"cannot exceed the length of logq ({len(self.logq)})."
-            )
-        valid_ringtypes = {"standard", "conjugateinvariant"}
-        ring = self.ringtype.lower()
-        if ring not in valid_ringtypes:
-            raise ValueError(
-                f"Invalid ringtype: {self.ringtype}. Only 'Standard' or "
-                f"'ConjugateInvariant' ring types are supported."
-            )
-        self.log_default_scale = self.log_default_scale or self.logq[-1]
-        self.boot_logp = self.boot_logp or self.logp
-        self.logslots = self.logn - 1 if self.ringtype.lower() == "standard" else self.logn
-
-
-@dataclass
-class OrionParameters:
-    margin: int = 2
-    fuse_modules: bool = True
-    debug: bool = True
-    embedding_method: Literal["hybrid", "square"] = "hybrid"
-    backend: Literal["lattigo", "openfhe", "heaan"] = "lattigo"
-
-
-@dataclass
 class NewParameters:
-    params_json: dict[str, Any]
-    ckks_params: CKKSParameters = field(init=False)
-    orion_params: OrionParameters = field(init=False)
+    """Adapter providing getter methods expected by the compilation pipeline.
 
-    def __post_init__(self) -> None:
-        params = self.params_json
-        ckks_params = {k.lower(): v for k, v in params.get("ckks_params", {}).items()}
-        boot_params = {k.lower(): v for k, v in params.get("boot_params", {}).items()}
-        orion_params = {k.lower(): v for k, v in params.get("orion", {}).items()}
-        self.ckks_params = CKKSParameters(**ckks_params, boot_logp=boot_params.get("logp"))
-        self.orion_params = OrionParameters(**orion_params)
+    Wraps CKKSParams (cryptographic parameters) and CompilerConfig
+    (compilation settings) directly — no intermediate dataclasses.
+    """
 
-    def get_logn(self) -> int:
-        return self.ckks_params.logn
-
-    def get_margin(self) -> int:
-        return self.orion_params.margin
-
-    def get_fuse_modules(self) -> bool:
-        return self.orion_params.fuse_modules
-
-    def get_debug_status(self) -> bool:
-        return self.orion_params.debug
-
-    def get_backend(self) -> str:
-        return self.orion_params.backend.lower()
-
-    def get_logq(self) -> list[int]:
-        return self.ckks_params.logq
-
-    def get_logp(self) -> list[int]:
-        return self.ckks_params.logp
-
-    def get_logscale(self) -> int:
-        assert self.ckks_params.log_default_scale is not None
-        return self.ckks_params.log_default_scale
-
-    def get_default_scale(self) -> int:
-        assert self.ckks_params.log_default_scale is not None
-        return 1 << self.ckks_params.log_default_scale
-
-    def get_hamming_weight(self) -> int:
-        return self.ckks_params.h
-
-    def get_ringtype(self) -> str:
-        return self.ckks_params.ringtype.lower()
-
-    def get_max_level(self) -> int:
-        return len(self.ckks_params.logq) - 1
-
-    def get_slots(self) -> int:
-        return int(1 << self.ckks_params.logslots)
-
-    def get_ring_degree(self) -> int:
-        return int(1 << self.ckks_params.logn)
-
-    def get_embedding_method(self) -> str:
-        return self.orion_params.embedding_method.lower()
-
-    def get_boot_logp(self) -> list[int] | None:
-        return self.ckks_params.boot_logp
+    def __init__(self, ckks: CKKSParams, config: CompilerConfig):
+        self._ckks = ckks
+        self._config = config
 
     @classmethod
     def from_ckks_params(
         cls, ckks_params: CKKSParams, config: CompilerConfig | None = None
     ) -> NewParameters:
-        from orion_compiler.params import CompilerConfig as _CC
-
         if config is None:
-            config = _CC()
-        ring_type_map = {
-            "conjugate_invariant": "ConjugateInvariant",
-            "standard": "Standard",
-        }
-        legacy_ring_type = ring_type_map[ckks_params.ring_type]
-        params_json: dict[str, Any] = {
-            "ckks_params": {
-                "LogN": ckks_params.logn,
-                "LogQ": list(ckks_params.logq),
-                "LogP": list(ckks_params.logp),
-                "log_default_scale": ckks_params.log_default_scale,
-                "H": ckks_params.h,
-                "RingType": legacy_ring_type,
-            },
-            "boot_params": {},
-            "orion": {
-                "margin": config.margin,
-                "embedding_method": config.embedding_method,
-                "fuse_modules": config.fuse_modules,
-                "backend": "lattigo",
-                "debug": False,
-            },
-        }
-        if ckks_params.boot_logp is not None:
-            params_json["boot_params"]["LogP"] = list(ckks_params.boot_logp)
-        return cls(params_json=params_json)
+            config = CompilerConfig()
+        return cls(ckks_params, config)
+
+    # -- CKKS parameter getters --
+
+    def get_logn(self) -> int:
+        return self._ckks.logn
+
+    def get_logq(self) -> list[int]:
+        return list(self._ckks.logq)
+
+    def get_logp(self) -> list[int]:
+        return list(self._ckks.logp)
+
+    def get_logscale(self) -> int:
+        return self._ckks.log_default_scale
+
+    def get_default_scale(self) -> int:
+        return 1 << self._ckks.log_default_scale
+
+    def get_hamming_weight(self) -> int:
+        return self._ckks.h
+
+    def get_ringtype(self) -> str:
+        return self._ckks.ring_type
+
+    def get_max_level(self) -> int:
+        return self._ckks.max_level
+
+    def get_slots(self) -> int:
+        return self._ckks.max_slots
+
+    def get_ring_degree(self) -> int:
+        return self._ckks.ring_degree
+
+    def get_boot_logp(self) -> list[int] | None:
+        if self._ckks.boot_logp is None:
+            return None
+        return list(self._ckks.boot_logp)
+
+    # -- Compiler config getters --
+
+    def get_margin(self) -> int:
+        return self._config.margin
+
+    def get_fuse_modules(self) -> bool:
+        return self._config.fuse_modules
+
+    def get_embedding_method(self) -> str:
+        return self._config.embedding_method
+
+    def get_debug_status(self) -> bool:
+        return False
+
+    def get_backend(self) -> str:
+        return "lattigo"
 
 
 # =========================================================================
@@ -186,21 +121,19 @@ class CompilerBackend:
 
         Creates CKKS Parameters and Encoder for compile-time encode/decode.
         """
-        p = params.ckks_params
-        ring_map = {"standard": "standard", "conjugateinvariant": "conjugate_invariant"}
-        ring_type = ring_map.get(p.ringtype.lower(), "conjugate_invariant")
+        ckks = params._ckks
 
         log_nth_root = 0
-        if hasattr(p, "btp_logn") and p.btp_logn and p.btp_logn > 0:
-            log_nth_root = p.btp_logn + 1
+        if ckks.btp_logn and ckks.btp_logn > 0:
+            log_nth_root = ckks.btp_logn + 1
 
         self._params_h = lattigo_ffi.new_ckks_params(
-            logn=p.logn,
-            logq=list(p.logq),
-            logp=list(p.logp),
-            log_default_scale=p.log_default_scale or p.logq[-1],
-            h=p.h,
-            ring_type=ring_type,
+            logn=ckks.logn,
+            logq=list(ckks.logq),
+            logp=list(ckks.logp),
+            log_default_scale=ckks.log_default_scale,
+            h=ckks.h,
+            ring_type=ckks.ring_type,
             log_nth_root=log_nth_root,
         )
         self._encoder_h = lattigo_ffi.new_encoder(self._params_h)
