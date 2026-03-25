@@ -25,6 +25,7 @@ describe("Error handling", () => {
             logQ: [29, 26],
             logP: [29],
             logDefaultScale: 26,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             ringType: "InvalidRingType" as any,
           }),
       ).toThrow();
