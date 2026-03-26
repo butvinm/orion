@@ -17,7 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 // Load Go WASM runtime (sets globalThis.Go)
-require(join(__dirname, "../../lattigo/wasm/wasm_exec.js"));
+require(join(__dirname, "node_modules/orion-v2-lattigo/wasm/wasm_exec.js"));
 
 import {
   loadLattigo,
@@ -27,8 +27,8 @@ import {
   GaloisKey,
   MemEvaluationKeySet,
   isError,
-} from "@orion/lattigo";
-import type { WasmBridge } from "@orion/lattigo";
+} from "orion-v2-lattigo";
+import type { WasmBridge } from "orion-v2-lattigo";
 
 // ---------------------------------------------------------------------------
 // Types matching orion-compiler's KeyManifest.to_dict() output
