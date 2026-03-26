@@ -1,6 +1,6 @@
 # Release Orion
 
-Create a new release of orion packages (orion, orion-compiler, orion-evaluator).
+Create a new release of orion packages (orion-compiler, orion-evaluator).
 
 **Arguments:** `$ARGUMENTS` — the version to release (e.g. `2.1.0`). Required.
 
@@ -17,7 +17,7 @@ If any check fails, stop and tell the user.
 
 ## Version files to bump
 
-Update the `version` field in these files (and only these — do NOT touch `python/lattigo/` or `js/lattigo/`):
+Update the `version` field in these files (and only these):
 
 - `pyproject.toml` (root)
 - `python/orion-compiler/pyproject.toml`
@@ -32,10 +32,9 @@ Update the `version` field in these files (and only these — do NOT touch `pyth
 4. Push to main: `git push origin main`
 5. Create and push tag: `git tag v$ARGUMENTS && git push origin v$ARGUMENTS`
 6. Monitor the release workflow: `gh run list --workflow release.yml --limit 1`
-   - The release workflow builds Python wheels, publishes to PyPI, publishes `js/lattigo` to npm, and creates a GitHub Release
+   - The release workflow builds Python wheels for orion-compiler and orion-evaluator, publishes to PyPI, and creates a GitHub Release
 7. Print the GitHub Release URL when done: `https://github.com/butvinm/orion/releases/tag/v$ARGUMENTS`
 
-## What NOT to bump
+## What this does NOT publish
 
-- `python/lattigo/pyproject.toml` — version tracks upstream lattigo, not orion
-- `js/lattigo/package.json` — version tracks upstream lattigo, not orion
+- `python/lattigo/` and `js/lattigo/` have their own release workflow (`release-lattigo.yml`), triggered by `lattigo-v*` tags. Use `/release-lattigo` for those.
