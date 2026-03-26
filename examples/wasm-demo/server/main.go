@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	orion "github.com/butvinm/orion"
+	orion "github.com/butvinm/orion/v2"
 
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 
-	"github.com/butvinm/orion/evaluator"
+	"github.com/butvinm/orion/v2/evaluator"
 )
 
 // Maximum request body sizes.

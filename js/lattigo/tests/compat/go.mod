@@ -1,4 +1,4 @@
-module github.com/butvinm/orion/js/lattigo/tests/compat
+module github.com/butvinm/orion/v2/js/lattigo/tests/compat
 
 go 1.24.0
 

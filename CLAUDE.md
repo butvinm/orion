@@ -179,5 +179,5 @@ Each package defines its own exception hierarchy. Use these instead of generic `
 
 - Three separate packages: `orion-v2-lattigo`, `orion-v2-compiler`, `orion-v2-evaluator` (import names: `lattigo`, `orion_compiler`, `orion_evaluator`)
 - No `Client` class — users use Lattigo primitives directly
-- Go evaluator is a subpackage of the root module (`github.com/butvinm/orion/evaluator`)
+- Go evaluator is a subpackage of the root module (`github.com/butvinm/orion/v2/evaluator`)
 - Tests in `python/tests/`, run with `pytest python/tests/`

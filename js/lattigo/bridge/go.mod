@@ -1,4 +1,4 @@
-module github.com/butvinm/orion/js/lattigo/bridge
+module github.com/butvinm/orion/v2/js/lattigo/bridge
 
 go 1.24.0
 
