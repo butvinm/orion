@@ -37,4 +37,6 @@ Update the `version` field in these files (and only these):
 
 ## What this does NOT publish
 
-- `python/lattigo/` and `js/lattigo/` have their own release workflow (`release-lattigo.yml`), triggered by `lattigo-v*` tags. Use `/release-lattigo` for those.
+- `python/lattigo/` uses `release-lattigo-python.yml` (`lattigo-py-v*` tags)
+- `js/lattigo/` uses `release-lattigo-js.yml` (`lattigo-js-v*` tags)
+- Use `/release-lattigo py <version>` or `/release-lattigo js <version>` for those.
