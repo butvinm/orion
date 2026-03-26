@@ -45,11 +45,11 @@ Full FHE demo with bootstrap: [`examples/c3ae-demo/`](examples/c3ae-demo/) — a
 pip install orion-v2-lattigo orion-v2-compiler orion-v2-evaluator
 ```
 
-Requires Python 3.11–3.12. Wheels include prebuilt CGO shared libraries for Linux x86_64.
+Requires Python 3.11+. Wheels include prebuilt CGO shared libraries for Linux x86_64.
 
 ### From source
 
-**Prerequisites:** Go 1.22+, Python 3.11–3.12, C compiler, `libgmp-dev`, `libssl-dev`, [uv](https://docs.astral.sh/uv/).
+**Prerequisites:** Go 1.22+, Python 3.11+, C compiler, `libgmp-dev`, `libssl-dev`, [uv](https://docs.astral.sh/uv/).
 
 ```bash
 # Ubuntu

@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "orion-v2-lattigo"
 version = "6.2.3"
 description = "Python bindings for Lattigo CKKS primitives"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
 readme = "README.md"
