@@ -2,7 +2,7 @@ module github.com/butvinm/orion/v2/examples/wasm-demo/server
 
 go 1.24.0
 
-require github.com/butvinm/orion/v2 v0.0.0
+require github.com/butvinm/orion/v2 v2.0.0
 
 replace github.com/butvinm/orion/v2 => ../../../
 
