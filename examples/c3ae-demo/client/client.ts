@@ -19,8 +19,8 @@ import {
   Encryptor,
   Decryptor,
   Ciphertext,
-} from "@orion/lattigo";
-import type { WasmBridge, SecretKey } from "@orion/lattigo";
+} from "orion-v2-lattigo";
+import type { WasmBridge, SecretKey } from "orion-v2-lattigo";
 
 interface OrionParams {
   logn: number;
