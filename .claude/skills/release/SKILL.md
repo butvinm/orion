@@ -32,7 +32,7 @@ Update the `version` field in these files (and only these — do NOT touch `pyth
 4. Push to main: `git push origin main`
 5. Create and push tag: `git tag v$ARGUMENTS && git push origin v$ARGUMENTS`
 6. Monitor the release workflow: `gh run list --workflow release.yml --limit 1`
-   - The release workflow builds Python wheels, publishes to PyPI, and creates a GitHub Release
+   - The release workflow builds Python wheels, publishes to PyPI, publishes `js/lattigo` to npm, and creates a GitHub Release
 7. Print the GitHub Release URL when done: `https://github.com/butvinm/orion/releases/tag/v$ARGUMENTS`
 
 ## What NOT to bump
