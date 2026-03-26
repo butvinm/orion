@@ -21,17 +21,21 @@ The compiler produces a `.orion` file containing the computation graph and model
 Model examples in [`examples/models/`](examples/models/):
 
 ```bash
-python examples/models/run.py mlp        # MNIST MLP — small, runs on any machine
-python examples/models/run.py lenet      # MNIST LeNet
-python examples/models/run.py lola       # MNIST LoLa
+python examples/models/run.py mlp          # MNIST MLP — ~3 GB RAM
+python examples/models/run.py lenet        # MNIST LeNet — ~3 GB RAM
+python examples/models/run.py lola         # MNIST LoLa — ~3 GB RAM
 
-# CIFAR-10 models (bootstrap-enabled, require 64+ GB RAM for full FHE)
-python examples/models/run.py alexnet --cleartext-only
-python examples/models/run.py vgg --cleartext-only
-python examples/models/run.py resnet --cleartext-only
+# CIFAR-10 models — bootstrap-enabled, need significant RAM for FHE keygen + eval
+python examples/models/run.py alexnet      # AlexNet — ~130 GB RAM
+python examples/models/run.py vgg          # VGG — ~130 GB RAM
+python examples/models/run.py resnet       # ResNet — ~130 GB RAM
 ```
 
+Use `--cleartext-only` to skip FHE and verify model correctness without memory requirements.
+
 Browser demo in [`examples/wasm-demo/`](examples/wasm-demo/) — encrypted MNIST inference where the secret key never leaves the browser.
+
+Full FHE demo with bootstrap: [`examples/c3ae-demo/`](examples/c3ae-demo/) — age estimation on encrypted face images.
 
 ## Installation
 
@@ -66,7 +70,10 @@ uv sync
 import orion_compiler.nn as on
 from orion_compiler import Compiler, CKKSParams
 from lattigo.ckks import Parameters, Encoder
-from lattigo.rlwe import KeyGenerator, Encryptor, Decryptor, MemEvaluationKeySet
+from lattigo.rlwe import (
+    KeyGenerator, Encryptor, Decryptor, MemEvaluationKeySet,
+    Ciphertext as RLWECiphertext,
+)
 from orion_evaluator import Model, Evaluator
 
 # 1. Define model
@@ -84,30 +91,38 @@ class MLP(on.Module):
         return self.fc2(x)
 
 # 2. Compile
-compiler = Compiler(MLP(), CKKSParams(logn=14, logq=[55, 40, 40, 40], logp=[61, 61], logscale=40))
+ckks = CKKSParams(logn=14, logq=[55, 40, 40, 40], logp=[61, 61],
+                   log_default_scale=40, ring_type="conjugate_invariant")
+compiler = Compiler(MLP(), ckks)
 compiler.fit(dataloader)
-compiled = compiler.compile()
-model_bytes = compiled.to_bytes()
+compiler.compile_to_file("model.orion")
 
-# 3. Encrypt (client-side, using Lattigo directly)
-params = Parameters.from_logn(logn=14, logq=[55, 40, 40, 40], logp=[61, 61], logscale=40)
-kg = KeyGenerator.new(params)
+# 3. Load compiled model and get client params
+with open("model.orion", "rb") as f:
+    model = Model.load(f.read())
+params_dict, manifest, input_level = model.client_params()
+
+# 4. Keygen + encrypt (client-side, using Lattigo directly)
+params = Parameters.from_dict(params_dict)
+kg = KeyGenerator(params)
 sk, pk = kg.gen_secret_key(), kg.gen_public_key(sk)
-encoder = Encoder.new(params)
-encryptor = Encryptor.new(params, pk)
+encoder = Encoder(params)
+encryptor = Encryptor(params, pk)
 
-pt = encoder.encode(input_values, level=compiled.input_level, scale=params.default_scale())
+rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
+gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
+evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
+
+pt = encoder.encode(input_values, level=input_level, scale=params.default_scale())
 ct = encryptor.encrypt_new(pt)
 
-# 4. Evaluate (server-side)
-model = Model.load(model_bytes)
-evaluator = Evaluator(model.client_params()[0], evk.marshal_binary())
-result_bytes = evaluator.forward(model, ct.marshal_binary())
+# 5. Evaluate (server-side)
+evaluator = Evaluator(params_dict, evk.marshal_binary())
+result_bytes_list = evaluator.forward(model, [ct.marshal_binary()])
 
-# 5. Decrypt (client-side)
-from lattigo.rlwe import Ciphertext as RLWECiphertext
-result_ct = RLWECiphertext.unmarshal_binary(result_bytes)
-decryptor = Decryptor.new(params, sk)
+# 6. Decrypt (client-side)
+result_ct = RLWECiphertext.unmarshal_binary(result_bytes_list[0])
+decryptor = Decryptor(params, sk)
 output = encoder.decode(decryptor.decrypt_new(result_ct), params.max_slots())
 ```
 
