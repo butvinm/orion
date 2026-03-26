@@ -443,7 +443,7 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 
 	// Serialize Forward calls on this session — Lattigo evaluators are not goroutine-safe.
 	sess.mu.Lock()
-	result, err := sess.eval.Forward(s.model, ct)
+	results, err := sess.eval.Forward(s.model, []*rlwe.Ciphertext{ct})
 	sess.mu.Unlock()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("inference error: %v", err), http.StatusInternalServerError)
@@ -451,7 +451,7 @@ func (s *Server) HandleInfer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Marshal result.
-	resultBytes, err := result.MarshalBinary()
+	resultBytes, err := results[0].MarshalBinary()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("marshaling result: %v", err), http.StatusInternalServerError)
 		return

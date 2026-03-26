@@ -2,9 +2,7 @@ module github.com/butvinm/orion/v2/examples/c3ae-demo/server
 
 go 1.24.0
 
-require github.com/butvinm/orion/v2 v2.0.0
-
-replace github.com/butvinm/orion/v2 => ../../../
+require github.com/butvinm/orion/v2 v2.1.3
 
 require github.com/tuneinsight/lattigo/v6 v6.2.0
 
