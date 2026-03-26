@@ -1,11 +1,11 @@
-module github.com/butvinm/orion/python/orion-evaluator/bridge
+module github.com/butvinm/orion/v2/python/orion-evaluator/bridge
 
 go 1.24.0
 
-replace github.com/butvinm/orion => ../../../
+replace github.com/butvinm/orion/v2 => ../../../
 
 require (
-	github.com/butvinm/orion v0.0.0-00010101000000-000000000000
+	github.com/butvinm/orion/v2 v2.0.0-00010101000000-000000000000
 	github.com/tuneinsight/lattigo/v6 v6.2.0
 )
 

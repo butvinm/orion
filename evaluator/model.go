@@ -7,7 +7,7 @@ import (
 	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 	"github.com/tuneinsight/lattigo/v6/utils/bignum"
 
-	orion "github.com/butvinm/orion"
+	orion "github.com/butvinm/orion/v2"
 )
 
 // Model holds a parsed compiled model with raw blob data for lazy LT encoding.

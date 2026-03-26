@@ -1,4 +1,4 @@
-# @orion/lattigo
+# orion-v2-lattigo
 
 TypeScript bindings for Lattigo's CKKS operations via Go WASM. Enables browser-side key generation, encryption, and decryption — the secret key never leaves the client.
 
@@ -32,7 +32,7 @@ import {
   Encoder,
   Encryptor,
   Decryptor,
-} from "@orion/lattigo";
+} from "orion-v2-lattigo";
 
 // Load the WASM bridge — required before calling any API
 const bridge = await loadLattigo("wasm/lattigo.wasm");

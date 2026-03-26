@@ -1,0 +1,4 @@
+orion-v2-lattigo>=6.2.3
+orion-v2-compiler>=2.1.2
+orion-v2-evaluator>=2.1.2
+Pillow>=9.0.0

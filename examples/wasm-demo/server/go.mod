@@ -1,10 +1,10 @@
-module github.com/butvinm/orion/examples/wasm-demo/server
+module github.com/butvinm/orion/v2/examples/wasm-demo/server
 
 go 1.24.0
 
-require github.com/butvinm/orion v0.0.0
+require github.com/butvinm/orion/v2 v2.0.0
 
-replace github.com/butvinm/orion => ../../../
+replace github.com/butvinm/orion/v2 => ../../../
 
 require github.com/tuneinsight/lattigo/v6 v6.2.0
 

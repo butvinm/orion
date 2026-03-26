@@ -2,7 +2,7 @@
  * Roundtrip example: keygen -> encode -> encrypt -> decrypt -> decode.
  *
  * Demonstrates the full CKKS homomorphic encryption lifecycle using
- * the @orion/lattigo WASM bindings in Node.js.
+ * the orion-v2-lattigo WASM bindings in Node.js.
  */
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 // Load Go WASM runtime (sets globalThis.Go)
-require(join(__dirname, "../../lattigo/wasm/wasm_exec.js"));
+require(join(__dirname, "node_modules/orion-v2-lattigo/wasm/wasm_exec.js"));
 
 import {
   loadLattigo,
@@ -21,7 +21,7 @@ import {
   Encoder,
   Encryptor,
   Decryptor,
-} from "@orion/lattigo";
+} from "orion-v2-lattigo";
 
 async function main() {
   console.log("=== Lattigo CKKS Roundtrip Example ===\n");

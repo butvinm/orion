@@ -16,7 +16,7 @@ import (
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 	"github.com/tuneinsight/lattigo/v6/utils"
 
-	"github.com/butvinm/orion/evaluator"
+	"github.com/butvinm/orion/v2/evaluator"
 )
 
 func main() {
