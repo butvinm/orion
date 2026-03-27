@@ -22,16 +22,25 @@ _lib_lock = threading.Lock()
 _prototypes_set = False
 
 
+_LIB_FILENAMES: dict[tuple[str, str], str] = {
+    ("Linux", "x86_64"): "orion-evaluator-linux-amd64.so",
+    ("Darwin", "x86_64"): "orion-evaluator-darwin-amd64.dylib",
+    ("Darwin", "arm64"): "orion-evaluator-darwin-arm64.dylib",
+}
+
+
 def _load_library() -> ctypes.CDLL:
-    """Load the Linux shared library. Only Linux x86_64 is supported."""
-    if platform.system() != "Linux":
+    """Load the platform-specific shared library (Linux x86_64, macOS x86_64/ARM64)."""
+    key = (platform.system(), platform.machine())
+    filename = _LIB_FILENAMES.get(key)
+    if filename is None:
         raise EvaluatorError(
-            f"Unsupported platform: {platform.system()}. "
-            "Only Linux x86_64 is supported. See README for building from source."
+            f"Unsupported platform: {key[0]} {key[1]}. "
+            "Supported: Linux x86_64, macOS x86_64, macOS arm64."
         )
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    lib_path = os.path.join(current_dir, "orion-evaluator-linux.so")
+    lib_path = os.path.join(current_dir, filename)
 
     try:
         return ctypes.CDLL(lib_path)

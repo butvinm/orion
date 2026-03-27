@@ -13,10 +13,12 @@ readme = "README.md"
 dependencies = []
 
 [tool.hatch.build]
-artifacts = ["orion_evaluator/*.so", "orion_evaluator/*.h"]
+artifacts = ["orion_evaluator/*.so", "orion_evaluator/*.dylib", "orion_evaluator/*.h"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["orion_evaluator"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
 
 [project.urls]
 Homepage = "https://github.com/butvinm/orion"

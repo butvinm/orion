@@ -45,13 +45,13 @@ Full FHE demo with bootstrap: [`examples/c3ae-demo/`](examples/c3ae-demo/) — a
 
 ## Installation
 
-### From PyPI (Linux only)
+### From PyPI (Linux, macOS)
 
 ```bash
 pip install orion-v2-lattigo orion-v2-compiler orion-v2-evaluator
 ```
 
-Requires Python 3.11+. Wheels include prebuilt CGO shared libraries for Linux x86_64.
+Requires Python 3.11+. Platform-specific wheels with prebuilt CGO shared libraries are available for Linux x86_64, macOS x86_64, and macOS ARM64.
 
 ### From source
 
