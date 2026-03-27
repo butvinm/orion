@@ -3,7 +3,7 @@
 Architecture: 5 Conv2d blocks with SiLU activations, AvgPool2d downsampling,
 AdaptiveAvgPool2d, then 3 FC layers. Input: 3x32x32 (CIFAR-10).
 
-Requires bootstrap (3 operations). Full FHE E2E needs ~130 GB RAM.
+Requires bootstrap (3 operations). Full FHE E2E needs >128 GB RAM.
 """
 
 import orion_compiler.nn as on

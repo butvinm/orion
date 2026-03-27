@@ -32,9 +32,9 @@ python examples/models/run.py lenet        # MNIST LeNet — ~3 GB RAM
 python examples/models/run.py lola         # MNIST LoLa — ~3 GB RAM
 
 # CIFAR-10 models — bootstrap-enabled, need significant RAM for FHE keygen + eval
-python examples/models/run.py alexnet      # AlexNet — ~130 GB RAM
-python examples/models/run.py vgg          # VGG — ~130 GB RAM
-python examples/models/run.py resnet       # ResNet — ~130 GB RAM
+python examples/models/run.py alexnet      # AlexNet — >128 GB RAM
+python examples/models/run.py vgg          # VGG — >128 GB RAM
+python examples/models/run.py resnet       # ResNet — >128 GB RAM
 ```
 
 Use `--cleartext-only` to skip FHE and verify model correctness without memory requirements.
