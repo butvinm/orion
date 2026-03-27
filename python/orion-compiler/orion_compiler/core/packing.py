@@ -105,14 +105,14 @@ def construct_conv2d_toeplitz(conv_layer: Conv2d, weight: torch.Tensor) -> sp.cs
     # Iterate over all positions that the top-left kernel element can touch
     # populating the correct (permuted) rows of our Toeplitz matrix.
     for i, start_idx in enumerate(corner_indices):
-        rows = (row_map[i] + out_channels).reshape(-1, 1)
-        cols = initial_kernel_position + start_idx
-        toeplitz[rows, cols] = kernel_flat
+        rows = (row_map[i] + out_channels).reshape(-1, 1).numpy()
+        cols = (initial_kernel_position + start_idx).numpy()
+        toeplitz[rows, cols] = kernel_flat.numpy()
 
     # Keep only the columns corresponding to the non-padded input image.
     row_idxs = torch.arange(P * iG, P * iG + on_Hi).reshape(-1, 1)
     col_idxs = torch.arange(P * iG, P * iG + on_Wi)
-    image_indices = valid_image_indices[:, row_idxs, col_idxs].flatten()
+    image_indices = valid_image_indices[:, row_idxs, col_idxs].flatten().numpy()
     toeplitz = toeplitz.tocsc()[:, image_indices]
 
     # Support batching
