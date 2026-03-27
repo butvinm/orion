@@ -4,11 +4,11 @@ Architecture: ResNet20 with BasicBlock, [3,3,3] blocks, [16,32,64] channels.
 Uses ReLU activation approximated via minimax sign polynomials (degrees=[15,15,27]).
 Residual connections via on.Add. Input: 3x32x32 (CIFAR-10).
 
-Requires bootstrap (~38 operations). Full FHE E2E needs 64+ GB RAM.
+Requires bootstrap (~38 operations). Full FHE E2E needs >128 GB RAM.
 """
 
-import torch.nn as nn
 import orion_compiler.nn as on
+import torch.nn as nn
 
 CONFIG = {
     "input_shape": (1, 3, 32, 32),

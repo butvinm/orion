@@ -17,16 +17,25 @@ _lib = None
 _lib_lock = threading.Lock()
 
 
+_LIB_FILENAMES: dict[tuple[str, str], str] = {
+    ("Linux", "x86_64"): "orionclient-linux-amd64.so",
+    ("Darwin", "x86_64"): "orionclient-darwin-amd64.dylib",
+    ("Darwin", "arm64"): "orionclient-darwin-arm64.dylib",
+}
+
+
 def _load_library() -> ctypes.CDLL:
-    """Load the Linux shared library. Only Linux x86_64 is supported."""
-    if platform.system() != "Linux":
+    """Load the platform-specific shared library (Linux x86_64, macOS x86_64/ARM64)."""
+    key = (platform.system(), platform.machine())
+    filename = _LIB_FILENAMES.get(key)
+    if filename is None:
         raise FFIError(
-            f"Unsupported platform: {platform.system()}. "
-            "Only Linux x86_64 is supported. See README for building from source."
+            f"Unsupported platform: {key[0]} {key[1]}. "
+            "Supported: Linux x86_64, macOS x86_64, macOS arm64."
         )
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    lib_path = os.path.join(current_dir, "orionclient-linux.so")
+    lib_path = os.path.join(current_dir, filename)
 
     try:
         return ctypes.CDLL(lib_path)

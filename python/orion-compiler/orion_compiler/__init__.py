@@ -1,5 +1,7 @@
 """orion-compiler — Compiles PyTorch neural networks for FHE inference.
 
+Compiler is NOT thread-safe. Do not share instances across threads.
+
 Usage:
     from orion_compiler import Compiler, CKKSParams, CompiledModel, KeyManifest
 """

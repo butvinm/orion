@@ -123,7 +123,7 @@ class CompilerBackend:
         if ckks.btp_logn and ckks.btp_logn > 0:
             log_nth_root = ckks.btp_logn + 1
 
-        self._params_h = lattigo_ffi.new_ckks_params(
+        params_h = lattigo_ffi.new_ckks_params(
             logn=ckks.logn,
             logq=list(ckks.logq),
             logp=list(ckks.logp),
@@ -132,8 +132,20 @@ class CompilerBackend:
             ring_type=ckks.ring_type,
             log_nth_root=log_nth_root,
         )
-        self._encoder_h = lattigo_ffi.new_encoder(self._params_h)
-        self._max_slots = lattigo_ffi.ckks_params_max_slots(self._params_h)
+        try:
+            encoder_h = lattigo_ffi.new_encoder(params_h)
+        except Exception:
+            params_h.close()
+            raise
+        try:
+            max_slots = lattigo_ffi.ckks_params_max_slots(params_h)
+        except Exception:
+            encoder_h.close()
+            params_h.close()
+            raise
+        self._params_h = params_h
+        self._encoder_h = encoder_h
+        self._max_slots = max_slots
 
     # -- Encoder operations --
 

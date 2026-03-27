@@ -6,17 +6,19 @@ build-backend = "hatchling.build"
 name = "orion-v2-evaluator"
 version = "2.1.3"
 description = "Python bindings for the Orion FHE evaluator"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
 readme = "README.md"
 dependencies = []
 
 [tool.hatch.build]
-artifacts = ["orion_evaluator/*.so", "orion_evaluator/*.h"]
+artifacts = ["orion_evaluator/*.so", "orion_evaluator/*.dylib", "orion_evaluator/*.h"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["orion_evaluator"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
 
 [project.urls]
 Homepage = "https://github.com/butvinm/orion"

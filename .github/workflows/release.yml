@@ -10,8 +10,37 @@ permissions:
   id-token: write
 
 jobs:
-  build:
+  build-compiler:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build compiler wheel
+        run: |
+          pip install hatchling build
+          python -m build python/orion-compiler/ --outdir dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiler-dist
+          path: dist/
+
+  build-evaluator:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            wheel_plat: manylinux_2_17_x86_64
+          - os: macos-13
+            wheel_plat: macosx_11_0_x86_64
+          - os: macos-14
+            wheel_plat: macosx_11_0_arm64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,28 +53,27 @@ jobs:
           python-version: "3.11"
 
       - name: Install system dependencies
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libgmp-dev libssl-dev
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
 
       - name: Build CGO bridges
         run: python tools/build_lattigo.py
 
-      - name: Build Python wheels
+      - name: Build evaluator wheel
+        env:
+          ORION_WHEEL_PLAT: ${{ matrix.wheel_plat }}
         run: |
           pip install hatchling build
-          python -m build python/orion-compiler/ --outdir dist/
           python -m build python/orion-evaluator/ --outdir dist/
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: python-dist
+          name: evaluator-dist-${{ matrix.wheel_plat }}
           path: dist/
 
   publish-pypi:
-    needs: build
+    needs: [build-compiler, build-evaluator]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -53,8 +81,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: python-dist
+          pattern: "{compiler-dist,evaluator-dist-*}"
           path: dist/
+          merge-multiple: true
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -63,13 +92,14 @@ jobs:
           verbose: true
 
   github-release:
-    needs: build
+    needs: publish-pypi
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: python-dist
+          pattern: "{compiler-dist,evaluator-dist-*}"
           path: dist/
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

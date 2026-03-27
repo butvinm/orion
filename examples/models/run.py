@@ -2,18 +2,32 @@
 
 Usage:
     python examples/models/run.py mlp
-    python examples/models/run.py alexnet --cleartext-only
+    python examples/models/run.py alexnet
     python examples/models/run.py resnet --cleartext-only
 """
 
 import argparse
 import importlib
+import math
 import os
 import sys
 import tempfile
-import torch
+from contextlib import ExitStack
 
-from orion_compiler import Compiler, CKKSParams
+import torch
+from lattigo.ckks import Encoder, Parameters
+from lattigo.rlwe import (
+    BootstrapParams,
+    Decryptor,
+    Encryptor,
+    KeyGenerator,
+    MemEvaluationKeySet,
+)
+from lattigo.rlwe import (
+    Ciphertext as RLWECiphertext,
+)
+from orion_compiler import CKKSParams, Compiler
+from orion_evaluator import Evaluator, Model
 
 EXAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
 AVAILABLE = ["mlp", "lenet", "lola", "alexnet", "vgg", "resnet"]
@@ -48,24 +62,13 @@ def cleartext_forward(net, test_input):
 
 def compile_and_run(net, config, test_input, cleartext):
     """Compile model and run full FHE pipeline."""
-    from contextlib import ExitStack
-
-    from orion_evaluator import Model, Evaluator
-    from lattigo.ckks import Parameters, Encoder
-    from lattigo.rlwe import (
-        KeyGenerator,
-        Encryptor,
-        Decryptor,
-        MemEvaluationKeySet,
-        Ciphertext as RLWECiphertext,
-    )
-
     # Compile directly to file
     print("Compiling model...")
     ckks_params = CKKSParams(**config["ckks_params"])
     compiler = Compiler(net, ckks_params)
     compiler.fit(test_input)
-    model_path = tempfile.mktemp(suffix=".orion")
+    fd, model_path = tempfile.mkstemp(suffix=".orion")
+    os.close(fd)
     compiler.compile_to_file(model_path)
     print(f"Compiled model size: {os.path.getsize(model_path)} bytes")
 
@@ -94,14 +97,26 @@ def compile_and_run(net, config, test_input, cleartext):
         evk = stack.enter_context(MemEvaluationKeySet(rlk=rlk, galois_keys=gks))
         keys_bytes = evk.marshal_binary()
 
-        # Bootstrap keys check
+        # Bootstrap keys
         btp_keys_bytes = None
         bootstrap_slots = manifest.get("bootstrap_slots", [])
         if bootstrap_slots:
-            print(f"Model requires bootstrap (slots: {bootstrap_slots})")
-            print("Full FHE E2E requires 64+ GB RAM — skipping FHE inference")
-            print("Use --cleartext-only to verify model correctness")
-            return
+            print(f"Generating bootstrap keys (slots: {bootstrap_slots})...")
+            boot_logp = manifest.get("boot_logp", [61] * 8)
+            btp_logn = manifest.get("btp_logn", params_dict.get("logn", 14))
+            min_slots = min(bootstrap_slots)
+            log_slots = int(math.log2(min_slots))
+            with BootstrapParams(
+                params,
+                logn=btp_logn,
+                logp=boot_logp,
+                h=192,
+                log_slots=log_slots,
+            ) as btp:
+                _evk, btp_keys = btp.gen_eval_keys(sk)
+                btp_keys_bytes = btp_keys.marshal_binary()
+                _evk.close()
+                btp_keys.close()
 
         evaluator = stack.enter_context(
             Evaluator(params_dict, keys_bytes, btp_keys_bytes=btp_keys_bytes)

@@ -6,17 +6,19 @@ build-backend = "hatchling.build"
 name = "orion-v2-lattigo"
 version = "6.2.3"
 description = "Python bindings for Lattigo CKKS primitives"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Mikhail Butvin", email = "butvin.mikhail@gmail.com" }]
 readme = "README.md"
 dependencies = []
 
 [tool.hatch.build]
-artifacts = ["lattigo/*.so", "lattigo/*.h"]
+artifacts = ["lattigo/*.so", "lattigo/*.dylib", "lattigo/*.h"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["lattigo"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
 
 [project.urls]
 Homepage = "https://github.com/butvinm/orion"
