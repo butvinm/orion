@@ -4,7 +4,7 @@ An opinionated fork of [baahl-nyu/orion](https://github.com/baahl-nyu/orion) —
 
 The original project is designed as a research tool for demonstrating FHE inference. This fork narrows the scope to production use.
 
-### Changes from the original
+## Changes from the original
 
 - Built exclusively on [Lattigo](https://github.com/tuneinsight/lattigo) with full access to underlying primitives (keygen, encrypt, decrypt)
 - Split into three independent packages: compiler, Lattigo bindings, and evaluator
@@ -21,8 +21,6 @@ The original project is designed as a research tool for demonstrating FHE infere
 | [`orion-v2-evaluator`](python/orion-evaluator/) ([PyPI](https://pypi.org/project/orion-v2-evaluator/)) | Python     | Bindings for the Go evaluator — runs inference on ciphertexts                   |
 | [`evaluator`](evaluator/)                                                                              | Go         | Core FHE evaluator: loads compiled models, executes the computation graph       |
 | [`js/lattigo`](js/lattigo/)                                                                            | TypeScript | Lattigo CKKS via Go→WASM, runs in browser                                       |
-
-The compiler produces a `.orion` file containing the computation graph and model weights. The client uses `lattigo` directly for key generation and encryption. The evaluator loads the compiled model and evaluation keys, then runs `forward()` on ciphertexts.
 
 ## Examples
 
@@ -75,6 +73,7 @@ uv sync
 ## Usage
 
 ```python
+import torch
 import orion_compiler.nn as on
 from orion_compiler import Compiler, CKKSParams
 from lattigo.ckks import Parameters, Encoder
@@ -102,7 +101,7 @@ class MLP(on.Module):
 ckks = CKKSParams(logn=14, logq=[55, 40, 40, 40], logp=[61, 61],
                    log_default_scale=40, ring_type="conjugate_invariant")
 compiler = Compiler(MLP(), ckks)
-compiler.fit(dataloader)
+compiler.fit(torch.randn(1, 1, 28, 28))  # single sample or DataLoader
 compiler.compile_to_file("model.orion")
 
 # 3. Load compiled model and get client params
@@ -121,6 +120,8 @@ rlk = kg.gen_relin_key(sk) if manifest["needs_rlk"] else None
 gks = [kg.gen_galois_key(sk, int(ge)) for ge in manifest["galois_elements"]]
 evk = MemEvaluationKeySet(rlk=rlk, galois_keys=gks)
 
+input_values = torch.randn(1, 1, 28, 28).flatten().double().tolist()
+input_values += [0.0] * (params.max_slots() - len(input_values))  # pad to slot count
 pt = encoder.encode(input_values, level=input_level, scale=params.default_scale())
 ct = encryptor.encrypt_new(pt)
 
