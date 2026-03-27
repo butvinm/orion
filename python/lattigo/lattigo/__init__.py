@@ -1,5 +1,8 @@
 """lattigo — Python bindings for Lattigo CKKS primitives.
 
+All handle-owning classes (Parameters, Encoder, KeyGenerator, Encryptor,
+Decryptor, etc.) are NOT thread-safe. Do not share instances across threads.
+
 Usage:
     from lattigo import ckks, rlwe
     from lattigo.ckks import Parameters, Encoder
