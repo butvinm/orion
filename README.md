@@ -1,8 +1,16 @@
 # Orion
 
-An opinionated fork of [baahl-nyu/orion](https://github.com/baahl-nyu/orion) — a research-grade FHE framework for deep learning inference.
+An opinionated fork of [baahl-nyu/orion](https://github.com/baahl-nyu/orion) — a framework for encrypted deep learning inference. Orion compiles PyTorch neural networks for homomorphic evaluation using the CKKS scheme.
 
-The original Orion is tightly coupled: global state, implicit context, no separation between compilation and evaluation. This fork refactors it for practical use by splitting the system into three independent packages with explicit APIs and full access to underlying [Lattigo](https://github.com/tuneinsight/lattigo) primitives.
+The original project is designed as a research tool for demonstrating FHE inference. This fork narrows the scope to production use.
+
+### Changes from the original
+
+- Built exclusively on [Lattigo](https://github.com/tuneinsight/lattigo) with full access to underlying primitives (keygen, encrypt, decrypt)
+- Split into three independent packages: compiler, Lattigo bindings, and evaluator
+- Instance-based API — no global state
+- Explicit context passing between compilation and evaluation stages
+- Custom binary `.orion` model format (replaces HDF5)
 
 ## Packages
 
