@@ -10,7 +10,7 @@ Based on the C3AE (Compact yet Comprehensive Age Estimation) architecture adapte
 - Python 3.11+ with a venv containing `orion-compiler`, `orion-evaluator`, and `lattigo`
 - Node.js 18+
 - UTKFace dataset (for training)
-- ~20 GB RAM for the Go server during FHE inference (7 GB for compilation alone)
+- ~20 GB RAM for the Go server during FHE inference (14 GB for compilation alone)
 
 ## Quick Start
 
@@ -109,17 +109,17 @@ Browser (WASM)                    Go Server
 
 ## CKKS Parameters
 
-| Parameter | Value                                    |
-| --------- | ---------------------------------------- |
-| LogN      | 14 (ring dim = 16,384)                   |
-| LogQ      | [55, 40, 40, 40, 40, 40, 40, 40, 40, 40] |
-| LogP      | [61, 61, 61]                             |
-| LogScale  | 40                                       |
-| H         | 192                                      |
-| Ring type | Standard (bootstrap-compatible)          |
-| Bootstrap | LogP=[61]x8                              |
+| Parameter | Value                                              |
+| --------- | -------------------------------------------------- |
+| LogN      | 15 (ring dim = 32,768)                             |
+| LogQ      | [51, 40×15] (16 primes = 15 computation levels)    |
+| LogP      | [50, 50, 50]                                       |
+| LogScale  | 40                                                 |
+| Ring type | Standard                                           |
+| LogQP     | 801 (< 881 limit for 128-bit security at logN=15)  |
+| Bootstrap | Not needed (15 levels sufficient for full network) |
 
-Input (64x64x3 = 12,288 values) is split across 2 ciphertexts of 8,192 slots each.
+Input (64×64×3 = 12,288 values) fits in a single ciphertext of 16,384 slots.
 
 ## Measurements
 
@@ -139,33 +139,33 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 ### Compilation
 
-| Metric              | Value                          |
-| ------------------- | ------------------------------ |
-| Fit time            | 0.5s                           |
-| Compile time        | **1.5 min**                    |
-| Model size (.orion) | **427 MB** (447,638,484 bytes) |
-| Peak RSS            | **6.7 GB**                     |
+| Metric              | Value |
+| ------------------- | ----- |
+| Fit time            | TBD   |
+| Compile time        | TBD   |
+| Model size (.orion) | TBD   |
+| Peak RSS            | TBD   |
 
 ### Evaluator Setup
 
-| Metric          | Value                        |
-| --------------- | ---------------------------- |
-| Model load time | 1.3s                         |
-| Key generation  | 28s (334 Galois + bootstrap) |
-| Eval keys size  | 2.26 GB                      |
-| Bootstrap keys  | 1.03 GB                      |
-| Evaluator init  | 6s                           |
-| RSS delta       | 10.4 GB                      |
+| Metric          | Value                          |
+| --------------- | ------------------------------ |
+| Model load time | TBD                            |
+| Key generation  | TBD (183 Galois, no bootstrap) |
+| Eval keys size  | TBD                            |
+| Bootstrap keys  | None                           |
+| Evaluator init  | TBD                            |
+| RSS delta       | TBD                            |
 
 ### FHE Inference
 
-| Metric               | Value              |
-| -------------------- | ------------------ |
-| Encryption time      | 0.067s             |
-| **Inference time**   | **57s per sample** |
-| Decryption time      | 0.008s             |
-| **MAE vs cleartext** | **0.000000**       |
-| Peak server RSS      | 18.5 GB            |
+| Metric               | Value |
+| -------------------- | ----- |
+| Encryption time      | TBD   |
+| **Inference time**   | TBD   |
+| Decryption time      | TBD   |
+| **MAE vs cleartext** | TBD   |
+| Peak server RSS      | TBD   |
 
 ### Cleartext Baseline
 
@@ -175,14 +175,15 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 | FPR      | 6.1%                                 |
 | FNR      | 1.3%                                 |
 
-### Comparison with Previous Results (Old Orion)
+### Comparison with Previous Results
 
-| Metric             | Old Orion        | Orion v2                 |
-| ------------------ | ---------------- | ------------------------ |
-| Compilation time   | ~2 min           | **1.5 min**              |
-| Compilation memory | ~10 GB           | **6.7 GB**               |
-| Model artifact     | ~8 GB (HDF5)     | **427 MB** (.orion)      |
-| FHE inference      | 31.8s per sample | **57s per sample**       |
-| Accuracy           | 93.9%            | **94.2%** (same weights) |
-| FPR                | 18.9%            | **15.9%** (same weights) |
-| Peak server RSS    | 10.19 GB         | **18.5 GB**              |
+| Metric             | Old Orion (logN=14) | Orion v2 (logN=14, insecure) | Orion v2 (logN=15, secure) |
+| ------------------ | ------------------- | ---------------------------- | -------------------------- |
+| Security           | ~33 bits            | ~33 bits                     | **128 bits**               |
+| Bootstrap          | Yes                 | Yes                          | **None**                   |
+| Compilation time   | ~2 min              | 1.5 min                      | TBD                        |
+| Compilation memory | ~10 GB              | 6.7 GB                       | TBD                        |
+| Model artifact     | ~8 GB (HDF5)        | 427 MB (.orion)              | TBD                        |
+| FHE inference      | 31.8s per sample    | 57s per sample               | TBD                        |
+| Accuracy           | 93.9%               | 94.2%                        | TBD                        |
+| Peak server RSS    | 10.19 GB            | 18.5 GB                      | TBD                        |

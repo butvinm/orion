@@ -11,21 +11,20 @@ import time
 import tracemalloc
 
 import torch
-
-from orion_compiler import Compiler, CKKSParams
 from model import C3AE
+from orion_compiler import CKKSParams, Compiler
 
 # CKKS parameters for C3AE.
-# LogN=14 with multi-CT packing (12288 values split across 2 CTs of 8192 slots).
-# Bootstrap for the deep network (6 Quad activations).
+# LogN=15 with single-CT packing (12288 values fit in 16384 slots).
+# 15 computation levels — enough for the full network without bootstrap.
+# LogQP=801 < 881 threshold for 128-bit security at logN=15 (HE Standard,
+# uniform ternary secret).
 PARAMS = CKKSParams(
-    logn=14,
-    logq=[55, 40, 40, 40, 40, 40, 40, 40, 40, 40],
-    logp=[61, 61, 61],
+    logn=15,
+    logq=[51, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40],
+    logp=[50, 50, 50],
     log_default_scale=40,
-    h=192,
     ring_type="standard",
-    boot_logp=[61, 61, 61, 61, 61, 61, 61, 61],
 )
 
 
