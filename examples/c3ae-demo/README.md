@@ -10,7 +10,7 @@ Based on the C3AE (Compact yet Comprehensive Age Estimation) architecture adapte
 - Python 3.11+ with a venv containing `orion-compiler`, `orion-evaluator`, and `lattigo`
 - Node.js 18+
 - UTKFace dataset (for training)
-- ~20 GB RAM for the Go server during FHE inference (14 GB for compilation alone)
+- ~103 GB RAM for the Go evaluator during FHE inference (3.3 GB for compilation alone)
 
 ## Quick Start
 
@@ -139,33 +139,33 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 ### Compilation
 
-| Metric              | Value |
-| ------------------- | ----- |
-| Fit time            | TBD   |
-| Compile time        | TBD   |
-| Model size (.orion) | TBD   |
-| Peak RSS            | TBD   |
+| Metric              | Value                          |
+| ------------------- | ------------------------------ |
+| Fit time            | 0.02s                          |
+| Compile time        | **2.4 min**                    |
+| Model size (.orion) | **838 MB** (878,078,308 bytes) |
+| Peak RSS            | **3.3 GB**                     |
 
 ### Evaluator Setup
 
 | Metric          | Value                          |
 | --------------- | ------------------------------ |
-| Model load time | TBD                            |
-| Key generation  | TBD (183 Galois, no bootstrap) |
-| Eval keys size  | TBD                            |
+| Model load time | ~2s                            |
+| Key generation  | 83s (183 Galois, no bootstrap) |
+| Eval keys size  | 10.24 GB                       |
 | Bootstrap keys  | None                           |
-| Evaluator init  | TBD                            |
-| RSS delta       | TBD                            |
+| Evaluator init  | 18s                            |
+| RSS delta       | 40.4 GB                        |
 
 ### FHE Inference
 
-| Metric               | Value |
-| -------------------- | ----- |
-| Encryption time      | TBD   |
-| **Inference time**   | TBD   |
-| Decryption time      | TBD   |
-| **MAE vs cleartext** | TBD   |
-| Peak server RSS      | TBD   |
+| Metric               | Value               |
+| -------------------- | ------------------- |
+| Encryption time      | 0.092s              |
+| **Inference time**   | **139s per sample** |
+| Decryption time      | 0.005s              |
+| **MAE vs cleartext** | **0.000000**        |
+| Peak server RSS      | 103 GB              |
 
 ### Cleartext Baseline
 
@@ -181,9 +181,9 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 | ------------------ | ------------------- | ---------------------------- | -------------------------- |
 | Security           | ~33 bits            | ~33 bits                     | **128 bits**               |
 | Bootstrap          | Yes                 | Yes                          | **None**                   |
-| Compilation time   | ~2 min              | 1.5 min                      | TBD                        |
-| Compilation memory | ~10 GB              | 6.7 GB                       | TBD                        |
-| Model artifact     | ~8 GB (HDF5)        | 427 MB (.orion)              | TBD                        |
-| FHE inference      | 31.8s per sample    | 57s per sample               | TBD                        |
-| Accuracy           | 93.9%               | 94.2%                        | TBD                        |
-| Peak server RSS    | 10.19 GB            | 18.5 GB                      | TBD                        |
+| Compilation time   | ~2 min              | 1.5 min                      | **2.4 min**                |
+| Compilation memory | ~10 GB              | 6.7 GB                       | **3.3 GB**                 |
+| Model artifact     | ~8 GB (HDF5)        | 427 MB (.orion)              | **838 MB** (.orion)        |
+| FHE inference      | 31.8s per sample    | 57s per sample               | **139s per sample**        |
+| Accuracy           | 93.9%               | 94.2%                        | **97.9%**                  |
+| Peak server RSS    | 10.19 GB            | 18.5 GB                      | **103 GB**                 |
