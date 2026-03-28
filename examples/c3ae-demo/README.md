@@ -2,7 +2,7 @@
 
 Privacy-preserving age verification using CKKS homomorphic encryption. A browser client generates keys, encrypts a face image, and sends the ciphertext to a Go server that runs FHE inference. The secret key and face image never leave the browser.
 
-Based on the C3AE (Compact yet Comprehensive Age Estimation) architecture adapted for FHE: ReLU replaced with Quad (x^2), BatchNorm fused, binary classification (18+ adult/minor).
+Based on the C3AE architecture adapted for FHE: ReLU replaced with Quad (x²), BatchNorm fused, binary classification (18+ adult/minor).
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ Based on the C3AE (Compact yet Comprehensive Age Estimation) architecture adapte
 - Python 3.11+ with a venv containing `orion-compiler`, `orion-evaluator`, and `lattigo`
 - Node.js 18+
 - UTKFace dataset (for training)
-- ~103 GB RAM for the Go evaluator during FHE inference (3.3 GB for compilation alone)
+- 128 GB RAM for FHE inference
 
 ## Quick Start
 
@@ -82,7 +82,6 @@ Browser (WASM)                    Go Server
   |                                  |
   |-- POST /keys/relin ------------->|  Upload RLK
   |-- POST /keys/galois/{el} ------->|  Stream Galois keys (one at a time)
-  |-- POST /keys/bootstrap --------->|  Upload bootstrap keys (if needed)
   |-- POST /keys/finalize ---------->|  Validate + create evaluator
   |                                  |
   |  [User uploads face image]       |
@@ -98,14 +97,14 @@ Browser (WASM)                    Go Server
 
 ## Model
 
-| Property     | Value                                                    |
-| ------------ | -------------------------------------------------------- |
-| Architecture | C3AE with stride-2 optimization                          |
-| Input        | 64x64x3 RGB face image                                   |
-| Output       | Binary (adult/minor)                                     |
-| Parameters   | 31,393                                                   |
-| Activations  | Quad (x^2) instead of ReLU                               |
-| Classifier   | Conv blocks -> Flatten -> FC(128,12) -> Quad -> FC(12,1) |
+| Property     | Value                                                |
+| ------------ | ---------------------------------------------------- |
+| Architecture | C3AE with stride-2 optimization                      |
+| Input        | 64×64×3 RGB face image                               |
+| Output       | Binary (adult/minor)                                 |
+| Parameters   | 31,393                                               |
+| Activations  | Quad (x²) instead of ReLU                            |
+| Classifier   | Conv blocks → Flatten → FC(128,12) → Quad → FC(12,1) |
 
 ## CKKS Parameters
 
@@ -115,7 +114,6 @@ Browser (WASM)                    Go Server
 | LogQ      | [51, 40×15] (16 primes = 15 computation levels)    |
 | LogP      | [50, 50, 50]                                       |
 | LogScale  | 40                                                 |
-| Ring type | Standard                                           |
 | LogQP     | 801 (< 881 limit for 128-bit security at logN=15)  |
 | Bootstrap | Not needed (15 levels sufficient for full network) |
 
@@ -125,65 +123,14 @@ Input (64×64×3 = 12,288 values) fits in a single ciphertext of 16,384 slots.
 
 Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
-### Training
-
-| Metric        | Value                                   |
-| ------------- | --------------------------------------- |
-| Dataset       | UTKFace, 23,708 images (70/15/15 split) |
-| Epochs        | 60                                      |
-| Training time | 27.5 min (27.4s/epoch)                  |
-| Test accuracy | **94.2%**                               |
-| Test FPR      | 15.9%                                   |
-| Test FNR      | 3.7%                                    |
-| Peak RSS      | 880 MB                                  |
-
-### Compilation
-
-| Metric              | Value                          |
-| ------------------- | ------------------------------ |
-| Fit time            | 0.02s                          |
-| Compile time        | **2.4 min**                    |
-| Model size (.orion) | **838 MB** (878,078,308 bytes) |
-| Peak RSS            | **3.3 GB**                     |
-
-### Evaluator Setup
-
-| Metric          | Value                          |
-| --------------- | ------------------------------ |
-| Model load time | ~2s                            |
-| Key generation  | 83s (183 Galois, no bootstrap) |
-| Eval keys size  | 10.24 GB                       |
-| Bootstrap keys  | None                           |
-| Evaluator init  | 18s                            |
-| RSS delta       | 40.4 GB                        |
-
-### FHE Inference
-
-| Metric               | Value               |
-| -------------------- | ------------------- |
-| Encryption time      | 0.092s              |
-| **Inference time**   | **139s per sample** |
-| Decryption time      | 0.005s              |
-| **MAE vs cleartext** | **0.000000**        |
-| Peak server RSS      | 103 GB              |
-
-### Cleartext Baseline
-
-| Metric   | Value                                |
-| -------- | ------------------------------------ |
-| Accuracy | 97.9% (full test set, 3,557 samples) |
-| FPR      | 6.1%                                 |
-| FNR      | 1.3%                                 |
-
-### Comparison with Previous Results
-
-| Metric             | Old Orion (logN=14) | Orion v2 (logN=14, insecure) | Orion v2 (logN=15, secure) |
-| ------------------ | ------------------- | ---------------------------- | -------------------------- |
-| Security           | ~33 bits            | ~33 bits                     | **128 bits**               |
-| Bootstrap          | Yes                 | Yes                          | **None**                   |
-| Compilation time   | ~2 min              | 1.5 min                      | **2.4 min**                |
-| Compilation memory | ~10 GB              | 6.7 GB                       | **3.3 GB**                 |
-| Model artifact     | ~8 GB (HDF5)        | 427 MB (.orion)              | **838 MB** (.orion)        |
-| FHE inference      | 31.8s per sample    | 57s per sample               | **139s per sample**        |
-| Accuracy           | 93.9%               | 94.2%                        | **97.9%**                  |
-| Peak server RSS    | 10.19 GB            | 18.5 GB                      | **103 GB**                 |
+| Metric             | Value               |
+| ------------------ | ------------------- |
+| Compilation time   | 2.4 min             |
+| Model size         | 838 MB              |
+| Compilation memory | 3.3 GB              |
+| Key generation     | 83s (183 Galois)    |
+| Eval keys size     | 10.24 GB            |
+| **Inference time** | **139s per sample** |
+| MAE vs cleartext   | 0.000000            |
+| Peak server RSS    | 103 GB              |
+| Cleartext accuracy | 97.9%               |
