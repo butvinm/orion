@@ -129,7 +129,7 @@ Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 | Model size         | 838 MB              |
 | Compilation memory | 3.3 GB              |
 | Key generation     | 83s (183 Galois)    |
-| Eval keys size     | 10.24 GB            |
+| Eval keys size     | 7.19 GB             |
 | **Inference time** | **139s per sample** |
 | MAE vs cleartext   | 0.000000            |
 | Peak server RSS    | 103 GB              |
