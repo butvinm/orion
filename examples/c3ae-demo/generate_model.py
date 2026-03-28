@@ -17,12 +17,13 @@ from orion_compiler import CKKSParams, Compiler
 # CKKS parameters for C3AE.
 # LogN=15 with single-CT packing (12288 values fit in 16384 slots).
 # 15 computation levels — enough for the full network without bootstrap.
-# LogQP=801 < 881 threshold for 128-bit security at logN=15 (HE Standard,
-# uniform ternary secret).
+# LogQP=851 < 881 threshold for 128-bit security at logN=15 (HE Standard,
+# uniform ternary secret). 4 P primes gives dnum=4 (vs 6 with 3 P primes),
+# reducing Galois key size by ~30%.
 PARAMS = CKKSParams(
     logn=15,
     logq=[51, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40],
-    logp=[50, 50, 50],
+    logp=[50, 50, 50, 50],
     log_default_scale=40,
     ring_type="standard",
 )

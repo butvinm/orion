@@ -112,9 +112,9 @@ Browser (WASM)                    Go Server
 | --------- | -------------------------------------------------- |
 | LogN      | 15 (ring dim = 32,768)                             |
 | LogQ      | [51, 40×15] (16 primes = 15 computation levels)    |
-| LogP      | [50, 50, 50]                                       |
+| LogP      | [50, 50, 50, 50]                                   |
 | LogScale  | 40                                                 |
-| LogQP     | 801 (< 881 limit for 128-bit security at logN=15)  |
+| LogQP     | 851 (< 881 limit for 128-bit security at logN=15)  |
 | Bootstrap | Not needed (15 levels sufficient for full network) |
 
 Input (64×64×3 = 12,288 values) fits in a single ciphertext of 16,384 slots.
