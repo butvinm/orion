@@ -13,12 +13,12 @@ import torch.nn as nn
 CONFIG = {
     "input_shape": (1, 3, 32, 32),
     "dataset": "cifar",
+    # Bootstrap LogQP=1764 ≤ 1770 (128-bit secure at logN=16, HE Standard).
     "ckks_params": dict(
         logn=16,
         logq=[55] + [40] * 10,
         logp=[61, 61, 61],
         log_default_scale=40,
-        h=192,
         ring_type="standard",
         boot_logp=[61] * 8,
     ),

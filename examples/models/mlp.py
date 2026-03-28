@@ -8,12 +8,13 @@ import orion_compiler.nn as on
 CONFIG = {
     "input_shape": (1, 1, 28, 28),
     "dataset": "mnist",
+    # LogQP=217 ≤ 218 (128-bit secure at logN=13, HE Standard).
+    # 5 computation levels = exact depth of this network.
     "ckks_params": dict(
         logn=13,
-        logq=[29, 26, 26, 26, 26, 26, 26, 26, 26, 26],
+        logq=[29, 26, 26, 26, 26, 26],
         logp=[29, 29],
         log_default_scale=26,
-        h=8192,
         ring_type="conjugate_invariant",
     ),
 }

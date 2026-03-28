@@ -11,12 +11,13 @@ import orion_compiler.nn as on
 CONFIG = {
     "input_shape": (1, 3, 32, 32),
     "dataset": "cifar",
+    # Bootstrap LogQP=1642 ≤ 1770 (128-bit secure at logN=16, HE Standard).
+    # Needs logN=16 (not 15) and ≤11 Q primes for bootstrap LogQP to fit.
     "ckks_params": dict(
-        logn=15,
-        logq=[55] + [40] * 20,
+        logn=16,
+        logq=[55] + [40] * 10,
         logp=[61, 61, 61],
         log_default_scale=40,
-        h=192,
         ring_type="standard",
         boot_logp=[61] * 6,
     ),
