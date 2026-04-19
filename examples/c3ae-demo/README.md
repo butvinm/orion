@@ -121,7 +121,7 @@ Input (64×64×3 = 12,288 values) fits in a single ciphertext of 16,384 slots.
 
 ## Measurements
 
-Run on immers.cloud VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
+Run on VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
 
 | Metric             | Value               |
 | ------------------ | ------------------- |
