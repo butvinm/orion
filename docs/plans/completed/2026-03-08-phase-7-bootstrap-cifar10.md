@@ -17,7 +17,7 @@ Key deliverables:
 - **Compiler side ready:** `Bootstrap` class (nn/operations.py), `BootstrapSolver`/`BootstrapPlacer` (core/auto_bootstrap.py), `BootstrapConfig` in format.go all exist
 - **Go evaluator stub:** evaluator.go line ~119 returns "op not yet implemented" for bootstrap
 - **Missing:** `btp_logn` field in `CKKSParams`, `KeyManifest`, `HeaderParams`, `HeaderManifest`; Go bridge `LogNthRoot` enforcement; full `evalBootstrap` implementation; bootstrap key parameters in Python evaluator and WASM demo
-- **Reference implementation:** `~/Dev/3rd-party/orion/orion/backend/lattigo/bootstrapper.go` (Go bootstrap), `orion/nn/operations.py` (Python Bootstrap class)
+- **Reference implementation:** upstream `baahl-nyu/orion` — `orion/backend/lattigo/bootstrapper.go` (Go bootstrap), `orion/nn/operations.py` (Python Bootstrap class)
 - **CIFAR-10 models exist in old API:** `models/alexnet.py`, `models/vgg.py`, `models/resnet.py` — need porting to `orion_compiler.nn`
 - **Phase 5 template:** `examples/mlp/` (model.py, train.py, run.py, README.md)
 
