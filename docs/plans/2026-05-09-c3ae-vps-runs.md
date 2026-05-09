@@ -296,15 +296,9 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** none
 
-- [ ] rent with the user-approved flavor — substitute `<FLAVOR>` with what was decided:
-  ```
-  vps create --name orion-c3ae-fhe-logn16 --flavor <FLAVOR>
-  ```
-- [ ] **manual verify**:
-  ```sh
-  openstack --os-cloud immers server show orion-c3ae-fhe-logn16 -f json | jq '.status, .flavor.original_name, .addresses'
-  ```
-- [ ] record rental start time.
+- [x] rented with `cpu.16.128.240` (user-approved flavor) via `openstack --os-cloud immers server create --flavor cpu.16.128.240 --image "Ubuntu 22.04 (Apr 2026) [BIOS]" --network immers --key-name butvinm --wait orion-c3ae-fhe-logn16`.
+- [x] **manual verify**: status `ACTIVE`, addresses `{'immers': ['195.209.214.105']}` (IP recycled again from the deleted logn15 VPS — host key already cleared).
+- [x] rental start: 2026-05-09T22:26:49+03:00.
 
 ### Task 15: Bootstrap FHE `logn16` VPS environment
 
