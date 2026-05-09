@@ -318,26 +318,22 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** outputs at `~/orion/examples/c3ae-demo/experiments/results/logn16/run.jsonl` and `out/logn16/`
 
-- [ ] in a tmux session on the VPS:
-  ```sh
-  cd ~/orion/examples/c3ae-demo/experiments
-  source ../../../.venv/bin/activate
-  bash scripts/run_fhe.sh logn16 2>&1 | tee results/logn16/run_fhe.log
+- [x] launched via `nohup bash scripts/run_fhe.sh logn16` (not tmux — same pattern used for logn15) on `orion-c3ae-fhe-logn16`. **First attempt failed at prep_input** with `ValueError: No samples found in data/UTKFace`: `setup-fhe.sh` symlinked UTKFace at `examples/c3ae-demo/data/UTKFace`, but the script (`cd`s to `experiments/`) expects it at `experiments/data/UTKFace`. Created the missing symlink (`ln -s /home/ubuntu/.cache/kagglehub/datasets/jangedoo/utkface-new/versions/1/UTKFace data/UTKFace`) and re-ran. Compile (already done in attempt 1) was correctly skipped on the second pass.
+- [x] **expected duration**: planned 30-45 min. Actual: compile 6.4 min (attempt 1) + keygen 68s + 3× inference (797 / 420 / 414 s) ≈ ~36 min total wall clock end-to-end.
+- [x] **memory ceiling check**: max peak_rss_mb = 117,179 MB (~114.4 GB) — vs the 125 GB usable RAM on `cpu.16.128.240`. **Tight but no OOM** (free dropped to 836 MiB at peak; ~10 GB headroom). dmesg shows no OOM kills. logn15 was 54.4 GB peak → ~2.1× ratio matches the expected ring-degree doubling.
+- [x] **manual verify**:
   ```
-- [ ] **expected duration**: at the same multiplicative depth, logn=16 has ~2× the per-step cost of logn=15. Plan ~30-45 min total.
-- [ ] **memory ceiling check**: watch `peak_rss_mb`. Compare against the rented flavor's RAM ceiling. If OOM:
-  - capture `dmesg | tail -50` and the partial `run.jsonl`
-  - mark this task `⚠️` with the failure point
-  - tear down the VPS and report back to the user — do not silently retry on a larger box
-- [ ] **manual verify**:
-  ```sh
-  wc -l results/logn16/run.jsonl
-  cat results/logn16/run.jsonl
-  ls -la out/logn16/keys/ out/logn16/compile.json
-  free -h
-  dmesg | tail -10
+  wc -l results/logn16/run.jsonl    -> 3
+  run.jsonl: {12: forward_s=797.010, peak_rss_mb=117133, result_ct=1048894}
+             {35: forward_s=420.200, peak_rss_mb=117039, result_ct=1048894}
+             {44: forward_s=413.768, peak_rss_mb=117179, result_ct=1048894}
+  compile.json: compile_s=386.67, compile_peak_rss_mb=26383.5, model_bytes=1,753,901,352
+  keygen.json:  keygen_s=68.06, evk_bytes=13,633,829,414 (~12.7 GB)
+  keygen_time.log: Exit status: 0
+  free post-run: 299 MiB used, 124 GiB available
+  dmesg: no OOM, no kill messages
   ```
-  jsonl has 3 lines; no OOM messages.
+  Sample 12 is ~1.9× slower than samples 35/44 — likely cold key/disk cache on the first inference (evk is 12.7 GB; subsequent samples reuse warm pages). Steady-state per-sample is ~417 s (mean of 35+44).
 
 ### Task 17: Run FHE-vs-cleartext correctness check for `logn16`
 
