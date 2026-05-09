@@ -31,73 +31,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader
 
 from models.c3ae import C3AE as C3AE_ReLU
 from models.c3ae_fhe import C3AE as C3AE_Quad
-
-AGE_MAX = 100
-
-
-# NOTE: UTKFaceDataset is re-defined here (rather than imported from
-# ``models.train`` or ``models.prep_input``) so this evaluator is independent
-# of those modules' imports. It mirrors the dataset used during training and
-# preprocessing exactly so the test split is identical.
-class UTKFaceDataset(Dataset):
-    """UTKFace image+label loader. Mirrors ``models.train.UTKFaceDataset`` exactly.
-
-    File-name format: ``<age>_<gender>_<race>_<timestamp>.jpg``.
-    """
-
-    def __init__(self, data_dir, img_size=64, age_threshold=18):
-        self.img_size = img_size
-        self.samples = []
-
-        for img_path in Path(data_dir).glob("*.jpg*"):
-            try:
-                age = min(max(int(img_path.name.split("_")[0]), 0), AGE_MAX)
-                is_adult = 1.0 if age >= age_threshold else 0.0
-                self.samples.append((img_path, age, is_adult))
-            except (ValueError, IndexError):
-                continue
-
-        if not self.samples:
-            raise ValueError(f"No samples found in {data_dir}")
-
-        ages = [s[1] for s in self.samples]
-        minors = sum(1 for s in self.samples if s[2] == 0.0)
-        adults = len(self.samples) - minors
-        print(
-            f"[Dataset] {len(self.samples)} samples: "
-            f"{minors} minors ({minors / len(self.samples) * 100:.0f}%), "
-            f"{adults} adults, ages {min(ages)}-{max(ages)}"
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        img_path, age, is_adult = self.samples[idx]
-        img = Image.open(img_path).convert("RGB").resize((self.img_size, self.img_size))
-        img = np.array(img, dtype=np.float32) / 255.0
-        img = (img - 0.5) / 0.5  # Normalize to [-1, 1]
-        img = torch.from_numpy(img).permute(2, 0, 1)
-        return img, torch.tensor([is_adult], dtype=torch.float32), age
-
-
-def build_test_split(data_dir: Path):
-    """Reproduce the 70/15/15 split with ``manual_seed(42)`` and return the test Subset."""
-    dataset = UTKFaceDataset(data_dir, img_size=64)
-    train_size = int(0.70 * len(dataset))
-    val_size = int(0.15 * len(dataset))
-    test_size = len(dataset) - train_size - val_size
-    _, _, test_set = random_split(
-        dataset,
-        [train_size, val_size, test_size],
-        generator=torch.Generator().manual_seed(42),
-    )
-    return test_set
+from models.utkface import build_test_split
 
 
 def compute_metrics(probs: np.ndarray, targets: np.ndarray) -> dict:

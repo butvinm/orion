@@ -20,55 +20,16 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from PIL import Image
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, random_split
 
 from models.c3ae import C3AE as C3AE_ReLU
 from models.c3ae_fhe import C3AE as C3AE_FHE
-
-AGE_MAX = 100
+from models.utkface import UTKFaceDataset
 
 VARIANTS = {
     "relu": C3AE_ReLU,
     "fhe": C3AE_FHE,
 }
-
-
-class UTKFaceDataset(Dataset):
-    def __init__(self, data_dir, img_size=64, age_threshold=18):
-        self.img_size = img_size
-        self.samples = []
-
-        for img_path in Path(data_dir).glob("*.jpg*"):
-            try:
-                age = min(max(int(img_path.name.split("_")[0]), 0), AGE_MAX)
-                is_adult = 1.0 if age >= age_threshold else 0.0
-                self.samples.append((img_path, age, is_adult))
-            except (ValueError, IndexError):
-                continue
-
-        if not self.samples:
-            raise ValueError(f"No samples found in {data_dir}")
-
-        ages = [s[1] for s in self.samples]
-        minors = sum(1 for s in self.samples if s[2] == 0.0)
-        adults = len(self.samples) - minors
-        print(
-            f"[Dataset] {len(self.samples)} samples: "
-            f"{minors} minors ({minors / len(self.samples) * 100:.0f}%), "
-            f"{adults} adults, ages {min(ages)}-{max(ages)}"
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        img_path, age, is_adult = self.samples[idx]
-        img = Image.open(img_path).convert("RGB").resize((self.img_size, self.img_size))
-        img = np.array(img, dtype=np.float32) / 255.0
-        img = (img - 0.5) / 0.5  # Normalize to [-1, 1]
-        img = torch.from_numpy(img).permute(2, 0, 1)
-        return img, torch.tensor([is_adult], dtype=torch.float32), age
 
 
 def asymmetric_loss(pred, target, fpr_weight):

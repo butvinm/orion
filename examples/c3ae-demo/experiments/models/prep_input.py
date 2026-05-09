@@ -24,103 +24,55 @@ from __future__ import annotations
 
 import argparse
 import csv
+import sys
 from pathlib import Path
 
 import numpy as np
-import torch
-from PIL import Image
-from torch.utils.data import Dataset, random_split
 
-# NOTE: We re-define UTKFaceDataset here (rather than import from
-# ``models.train``) because ``train.py`` is meant to be run as ``__main__``
-# and importing it triggers its module-level imports (including of the FHE
-# variant which pulls in orion_compiler). This script intentionally has no
-# orion_compiler dependency so it can run on minimal client-side environments.
+from models.utkface import build_test_split
 
-AGE_MAX = 100
-
-
-class UTKFaceDataset(Dataset):
-    """UTKFace image+label loader. Mirrors ``models.train.UTKFaceDataset`` exactly.
-
-    File-name format: ``<age>_<gender>_<race>_<timestamp>.jpg``.
-    """
-
-    def __init__(self, data_dir, img_size=64, age_threshold=18):
-        self.img_size = img_size
-        self.samples = []
-
-        for img_path in Path(data_dir).glob("*.jpg*"):
-            try:
-                age = min(max(int(img_path.name.split("_")[0]), 0), AGE_MAX)
-                is_adult = 1.0 if age >= age_threshold else 0.0
-                self.samples.append((img_path, age, is_adult))
-            except (ValueError, IndexError):
-                continue
-
-        if not self.samples:
-            raise ValueError(f"No samples found in {data_dir}")
-
-        ages = [s[1] for s in self.samples]
-        minors = sum(1 for s in self.samples if s[2] == 0.0)
-        adults = len(self.samples) - minors
-        print(
-            f"[Dataset] {len(self.samples)} samples: "
-            f"{minors} minors ({minors / len(self.samples) * 100:.0f}%), "
-            f"{adults} adults, ages {min(ages)}-{max(ages)}"
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        img_path, age, is_adult = self.samples[idx]
-        img = Image.open(img_path).convert("RGB").resize((self.img_size, self.img_size))
-        img = np.array(img, dtype=np.float32) / 255.0
-        img = (img - 0.5) / 0.5  # Normalize to [-1, 1]
-        img = torch.from_numpy(img).permute(2, 0, 1)
-        return img, torch.tensor([is_adult], dtype=torch.float32), age
-
-
-def build_test_split(data_dir: Path):
-    """Reproduce the 70/15/15 split from train.py with manual_seed(42).
-
-    Returns the test ``Subset`` so callers can iterate it in order.
-    """
-    dataset = UTKFaceDataset(data_dir, img_size=64)
-    train_size = int(0.70 * len(dataset))
-    val_size = int(0.15 * len(dataset))
-    test_size = len(dataset) - train_size - val_size
-    _, _, test_set = random_split(
-        dataset,
-        [train_size, val_size, test_size],
-        generator=torch.Generator().manual_seed(42),
-    )
-    return test_set
+BOUNDARY_BAND_TARGET = 3
 
 
 def select_indices(test_set, args) -> list[int]:
     """Return the list of test-set positions to dump.
 
     For ``--idx N`` returns ``[N]``. For ``--boundary-band`` returns the first
-    3 positions whose age is in ``[16, 20]`` in iteration order.
+    ``BOUNDARY_BAND_TARGET`` positions whose age is in ``[16, 20]`` in
+    iteration order.
+
+    Behavior on insufficient samples in ``--boundary-band``:
+      - 0 samples found  → raise (the original strict failure mode)
+      - 1 or 2 samples   → emit a clear ``[warn]`` to stderr and return the
+        partial list. Downstream tooling expects exactly ``BOUNDARY_BAND_TARGET``
+        samples, so a partial result is operator-visible — but we don't refuse
+        outright because tiny synthetic datasets (e.g. CI fixtures) may
+        legitimately have fewer than 3 samples in the band.
     """
     if args.idx is not None:
         if not (0 <= args.idx < len(test_set)):
             raise ValueError(f"--idx {args.idx} out of range for test set of size {len(test_set)}")
         return [args.idx]
 
-    # boundary band: first 3 samples with 16 <= age <= 20
+    # boundary band: first BOUNDARY_BAND_TARGET samples with 16 <= age <= 20
     picked: list[int] = []
     for i in range(len(test_set)):
         _, _, age = test_set[i]
         if 16 <= int(age) <= 20:
             picked.append(i)
-            if len(picked) >= 3:
+            if len(picked) >= BOUNDARY_BAND_TARGET:
                 break
     if not picked:
         raise RuntimeError(
             "No samples with 16 <= age <= 20 found in test set; cannot satisfy --boundary-band."
+        )
+    if len(picked) < BOUNDARY_BAND_TARGET:
+        print(
+            f"[warn] --boundary-band requested {BOUNDARY_BAND_TARGET} samples but only "
+            f"{len(picked)} found in [16, 20] (test set size {len(test_set)}); "
+            f"writing the partial result. Downstream may expect "
+            f"exactly {BOUNDARY_BAND_TARGET} samples — verify before running the FHE pipeline.",
+            file=sys.stderr,
         )
     return picked
 
