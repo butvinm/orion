@@ -152,17 +152,9 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** none
 
-- [ ] rent the 128 GB CPU VPS (matches existing demo sizing):
-  ```
-  vps create --name orion-c3ae-fhe-logn15 --flavor cpu.16.128.240
-  ```
-  (auto-selects `Ubuntu 22.04 (Aug 2024) [BIOS]` image because the flavor starts with `cpu`)
-- [ ] **manual verify**:
-  ```sh
-  openstack --os-cloud immers server show orion-c3ae-fhe-logn15 -f json | jq '.status, .flavor.original_name, .addresses'
-  ```
-  Status `ACTIVE`, flavor `cpu.16.128.240`, IP recorded.
-- [ ] record rental start time.
+- [x] rented the 128 GB CPU VPS via `openstack --os-cloud immers server create --flavor cpu.16.128.240 --image "Ubuntu 22.04 (Apr 2026) [BIOS]" --network immers --key-name butvinm --wait orion-c3ae-fhe-logn15`. Image name corrected from the plan's draft `Ubuntu 22.04 (Aug 2024) [BIOS]` to `Ubuntu 22.04 (Apr 2026) [BIOS]` (current image catalog).
+- [x] **manual verify**: status `ACTIVE`, addresses `{'immers': ['195.209.214.105']}` (IP recycled from the just-deleted training VPS — cleared old SSH host key with `ssh-keygen -R`).
+- [x] rental start: 2026-05-09T21:43:26+03:00.
 
 ### Task 7: Bootstrap FHE `logn15` VPS environment
 
