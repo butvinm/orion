@@ -37,6 +37,7 @@ func runInfer(args []string) error {
 	outPath := fs.String("out", "", "output ciphertext file path (required)")
 	metricsPath := fs.String("metrics", "", "JSONL metrics file (append+create) (required)")
 	sampleIdx := fs.Int("sample-idx", -1, "sample index for metrics tagging (required)")
+	profilePath := fs.String("profile", "", "optional per-op JSONL profile output path; sets ORION_PROFILE_OUT for the evaluator")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -97,6 +98,16 @@ func runInfer(args []string) error {
 	eval, err := evaluator.NewEvaluatorFromKeySet(params, evk, nil)
 	if err != nil {
 		return fmt.Errorf("constructing evaluator: %w", err)
+	}
+
+	// Activate per-op profiler if requested. The evaluator reads
+	// ORION_PROFILE_OUT inside Forward; setting it here scopes profiling to
+	// this single bench invocation.
+	if *profilePath != "" {
+		if err := os.Setenv("ORION_PROFILE_OUT", *profilePath); err != nil {
+			return fmt.Errorf("setting ORION_PROFILE_OUT: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "infer: per-op profile -> %s\n", *profilePath)
 	}
 
 	// --- Measured section ---

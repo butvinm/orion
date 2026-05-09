@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
+	"time"
 
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/lintrans"
@@ -76,12 +77,19 @@ func (e *Evaluator) Forward(model *Model, inputs []*rlwe.Ciphertext) ([]*rlwe.Ci
 		}
 	}
 
+	// Per-op profiler — gated by ORION_PROFILE_OUT env var.
+	// nil when unset, so the disabled path costs one env-var read + nil checks.
+	prof := newOpProfilerFromEnv()
+	defer prof.close()
+	prof.startForward()
+
 	results := make(map[string][]*rlwe.Ciphertext)
 
 	// Make the raw inputs available under a virtual key.
 	const virtualInput = "__input__"
 	results[virtualInput] = inputs
 
+	opIdx := 0
 	// Walk the graph in topological order.
 	for _, name := range model.graph.Order {
 		node := model.graph.Nodes[name]
@@ -96,6 +104,7 @@ func (e *Evaluator) Forward(model *Model, inputs []*rlwe.Ciphertext) ([]*rlwe.Ci
 		var err error
 		var result []*rlwe.Ciphertext
 
+		opStart := time.Now()
 		switch node.Op {
 		case "flatten":
 			if len(predNames) != 1 {
@@ -142,12 +151,25 @@ func (e *Evaluator) Forward(model *Model, inputs []*rlwe.Ciphertext) ([]*rlwe.Ci
 		default:
 			return nil, fmt.Errorf("unknown op %q for node %q", node.Op, name)
 		}
+		opDur := time.Since(opStart)
 
 		if err != nil {
 			return nil, fmt.Errorf("evaluating node %q (op=%s): %w", name, node.Op, err)
 		}
 
 		results[name] = result
+
+		// Profiler is nil unless ORION_PROFILE_OUT is set; recordOp handles
+		// that case. We compute inCT here so we don't shadow err / disturb
+		// the existing control flow.
+		if prof != nil {
+			inCT := 0
+			for _, pn := range predNames {
+				inCT += len(results[pn])
+			}
+			prof.recordOp(opIdx, name, node.Op, inCT, len(result), opDur, results, e.params)
+		}
+		opIdx++
 	}
 
 	out, ok := results[model.graph.Output]
