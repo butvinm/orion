@@ -92,6 +92,12 @@ func runKeygen(args []string) error {
 	if err := os.WriteFile(skPath, skBytes, 0o600); err != nil {
 		return fmt.Errorf("writing %q: %w", skPath, err)
 	}
+	// os.WriteFile only applies the permission mode on *creation*; if
+	// sk.bin pre-existed (e.g. from an earlier interrupted run) with looser
+	// perms, those would persist. Force the permissions to match.
+	if err := os.Chmod(skPath, 0o600); err != nil {
+		return fmt.Errorf("chmod %q: %w", skPath, err)
+	}
 
 	evkBytes, err := evk.MarshalBinary()
 	if err != nil {

@@ -6,12 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 )
-
-// vmHWMWarnOnce ensures we only emit the "/proc/self/status unavailable"
-// warning a single time per process.
-var vmHWMWarnOnce sync.Once
 
 // readVmHWM parses /proc/self/status and returns the VmHWM value in kB.
 //
@@ -20,14 +15,15 @@ var vmHWMWarnOnce sync.Once
 //
 //	VmHWM:	   12345 kB
 //
-// Returns 0 on platforms where /proc/self/status does not exist (e.g. macOS)
-// or when the file cannot be parsed. A warning is emitted at most once.
+// This experiment harness targets Linux only (the dependent CGO Lattigo
+// build is Linux-only at logn=15+ scales); /proc/self/status is therefore
+// expected to exist. If it doesn't, we return 0 and emit a single warning
+// to stderr — non-Linux callers get a sentinel rather than a panic so the
+// rest of the bench remains usable for unit-style sanity checks.
 func readVmHWM() int64 {
 	f, err := os.Open("/proc/self/status")
 	if err != nil {
-		vmHWMWarnOnce.Do(func() {
-			fmt.Fprintf(os.Stderr, "warning: /proc/self/status unavailable (%v); peak_rss_mb will be 0\n", err)
-		})
+		fmt.Fprintf(os.Stderr, "warning: /proc/self/status unavailable (%v); peak_rss_mb will be 0\n", err)
 		return 0
 	}
 	defer f.Close()
@@ -41,24 +37,18 @@ func readVmHWM() int64 {
 		fields := strings.Fields(line)
 		// Expected: ["VmHWM:", "<number>", "kB"]
 		if len(fields) < 2 {
-			vmHWMWarnOnce.Do(func() {
-				fmt.Fprintf(os.Stderr, "warning: malformed VmHWM line %q; peak_rss_mb will be 0\n", line)
-			})
+			fmt.Fprintf(os.Stderr, "warning: malformed VmHWM line %q; peak_rss_mb will be 0\n", line)
 			return 0
 		}
 		v, err := strconv.ParseInt(fields[1], 10, 64)
 		if err != nil {
-			vmHWMWarnOnce.Do(func() {
-				fmt.Fprintf(os.Stderr, "warning: cannot parse VmHWM value %q: %v; peak_rss_mb will be 0\n", fields[1], err)
-			})
+			fmt.Fprintf(os.Stderr, "warning: cannot parse VmHWM value %q: %v; peak_rss_mb will be 0\n", fields[1], err)
 			return 0
 		}
 		return v
 	}
 	if err := scanner.Err(); err != nil {
-		vmHWMWarnOnce.Do(func() {
-			fmt.Fprintf(os.Stderr, "warning: scanning /proc/self/status: %v; peak_rss_mb will be 0\n", err)
-		})
+		fmt.Fprintf(os.Stderr, "warning: scanning /proc/self/status: %v; peak_rss_mb will be 0\n", err)
 	}
 	return 0
 }

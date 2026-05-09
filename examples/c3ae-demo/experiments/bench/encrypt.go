@@ -24,6 +24,13 @@ import (
 // SK-mode encryption is intentional: bench is a single-party local
 // simulator, so there is no client/server boundary inside the process
 // (see plan, "Why SK-mode encryption?").
+//
+// expectedInputSize is the exact number of float64 values C3AE consumes
+// per sample: 3 channels x 64 x 64 pixels = 12288. We hard-fail on any
+// mismatch to prevent silent zero-padding of a wrong-shape input from
+// producing a syntactically-valid but garbage inference.
+const expectedInputSize = 12288
+
 func runEncrypt(args []string) error {
 	fs := flag.NewFlagSet("encrypt", flag.ExitOnError)
 	modelPath := fs.String("model", "", "path to compiled .orion model (required)")
@@ -83,6 +90,16 @@ func runEncrypt(args []string) error {
 		)
 	}
 	nVals := len(inputBytes) / 8
+	// Strict shape check: C3AE expects exactly 3*64*64 = 12288 values.
+	// Without this check a wrong-shape input gets silently zero-padded and
+	// produces a syntactically-valid but semantically-garbage inference.
+	if nVals != expectedInputSize {
+		return fmt.Errorf(
+			"input has %d float64 values, want exactly %d (C3AE 3x64x64); "+
+				"refusing to silently zero-pad a wrong-shape input",
+			nVals, expectedInputSize,
+		)
+	}
 	maxSlots := params.MaxSlots()
 	if nVals > maxSlots {
 		return fmt.Errorf(

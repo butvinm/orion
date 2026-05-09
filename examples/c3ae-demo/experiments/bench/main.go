@@ -4,8 +4,6 @@
 // to perform the parts of the FHE pipeline that we want to measure end-to-end
 // in a single Go process — eliminating Python wrapper overhead from RSS
 // accounting (see docs/plans/2026-05-08-c3ae-experiments.md, Task 8 ff.).
-//
-// The handlers are stubbed in Task 8 and implemented in Tasks 9–12.
 package main
 
 import (
@@ -26,32 +24,15 @@ Run 'bench <subcommand> --help' for per-subcommand flags.
 `)
 }
 
-func cmdKeygen(args []string) {
-	if err := runKeygen(args); err != nil {
-		fmt.Fprintf(os.Stderr, "bench keygen: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func cmdEncrypt(args []string) {
-	if err := runEncrypt(args); err != nil {
-		fmt.Fprintf(os.Stderr, "bench encrypt: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func cmdInfer(args []string) {
-	if err := runInfer(args); err != nil {
-		fmt.Fprintf(os.Stderr, "bench infer: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func cmdDecrypt(args []string) {
-	if err := runDecrypt(args); err != nil {
-		fmt.Fprintf(os.Stderr, "bench decrypt: %v\n", err)
-		os.Exit(1)
-	}
+// subcommands dispatches a subcommand name to its implementation. Each
+// implementation lives in a per-file ``run*`` function; this map exists
+// solely to remove a redundant cmd*-wrapper layer that simply called
+// run* and printed an error prefix.
+var subcommands = map[string]func([]string) error{
+	"keygen":  runKeygen,
+	"encrypt": runEncrypt,
+	"infer":   runInfer,
+	"decrypt": runDecrypt,
 }
 
 func main() {
@@ -63,20 +44,19 @@ func main() {
 	sub := os.Args[1]
 	args := os.Args[2:]
 
-	switch sub {
-	case "keygen":
-		cmdKeygen(args)
-	case "encrypt":
-		cmdEncrypt(args)
-	case "infer":
-		cmdInfer(args)
-	case "decrypt":
-		cmdDecrypt(args)
-	case "-h", "--help", "help":
+	if sub == "-h" || sub == "--help" || sub == "help" {
 		usage(os.Stdout)
-	default:
+		return
+	}
+
+	fn, ok := subcommands[sub]
+	if !ok {
 		fmt.Fprintf(os.Stderr, "bench: unknown subcommand %q\n\n", sub)
 		usage(os.Stderr)
 		os.Exit(2)
+	}
+	if err := fn(args); err != nil {
+		fmt.Fprintf(os.Stderr, "bench %s: %v\n", sub, err)
+		os.Exit(1)
 	}
 }
