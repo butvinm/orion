@@ -389,32 +389,7 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** none — operates against GitHub.
 
-- [ ] decide whether to merge `experiments` into `main` or leave as-is.
-- [ ] if merging: open a PR from `experiments` to `main`:
-
-  ```sh
-  gh pr create --title "C3AE experiments + VPS results" --body "$(cat <<'EOF'
-  ## Summary
-  - Self-contained C3AE experiment harness under examples/c3ae-demo/experiments/
-  - Cleartext FPR/FNR/Acc comparison: ReLU vs Quad on UTKFace 16-20 boundary band
-  - FHE timing/RSS benchmarks: logn15 (and possibly logn16) at fixed 15-level depth (no bootstrap)
-  - Final report at examples/c3ae-demo/experiments/results/results.md
-
-  ## Test plan
-  - [x] all manual-verify commands in plan executed
-  - [x] pytest python/tests/ passes (215/1)
-  - [x] go test ./evaluator/... passes
-  - [x] cleartext run on rented training VPS (orion-c3ae-train, rtx4090-1.8.16.40)
-  - [x] FHE logn15 run on rented VPS (orion-c3ae-fhe-logn15, cpu.16.128.240)
-  - [ ] FHE logn16 run (status: <ran on flavor X / skipped because Y>)
-  - [x] FHE-vs-cleartext MAE check passed for each completed config
-
-  🤖 Generated with [Claude Code](https://claude.com/claude-code)
-  EOF
-  )"
-  ```
-
-- [ ] **manual verify**: PR URL printed, CI green if any.
+- [x] **decision**: user chose to leave the work on `experiments` branch — no PR opened. Branch can be merged manually later.
 
 ## Technical Details
 
