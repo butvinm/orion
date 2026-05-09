@@ -28,13 +28,14 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from torch.utils.data import Subset
 
 from models.utkface import build_test_split
 
 BOUNDARY_BAND_TARGET = 3
 
 
-def select_indices(test_set, args) -> list[int]:
+def select_indices(test_set: Subset, args: argparse.Namespace) -> list[int]:
     """Return the list of test-set positions to dump.
 
     For ``--idx N`` returns ``[N]``. For ``--boundary-band`` returns the first
