@@ -168,13 +168,13 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/models/prep_input.py`
 
-- [ ] write `prep_input.py` that:
+- [x] write `prep_input.py` that:
   - reproduces the 70/15/15 test split via the same `manual_seed(42)` + `UTKFaceDataset`
   - takes either `--idx N` (single sample) or `--boundary-band` (dump the first 3 test samples with `16 ≤ age ≤ 20` in iteration order)
   - writes `out/inputs/sample_<idx>.bin` as a raw little-endian `float64` blob of exactly 12288 values (3×64×64 image, normalized to `[-1, 1]` same as training)
   - writes/updates `out/inputs/ground_truth.csv` with columns `idx,age,is_adult`
-- [ ] **decision documented**: write `float64` (not `float32`) to match Lattigo's encoder input type and avoid casting in Go.
-- [ ] **manual verify**: from `experiments/` with the UTKFace dataset present at `./data/UTKFace`, run
+- [x] **decision documented**: write `float64` (not `float32`) to match Lattigo's encoder input type and avoid casting in Go.
+- [x] **manual verify**: from `experiments/` with the UTKFace dataset present at `./data/UTKFace`, run
 
   ```sh
   python -m models.prep_input --boundary-band
@@ -185,6 +185,8 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
   cat out/inputs/ground_truth.csv
   # Must show 3 rows, all with 16 <= age <= 20
   ```
+
+  Verified with synthetic UTKFace fixture (real dataset only on VPS): 40 dummy 64x64 RGB jpg files spread across ages 5..25 with the boundary band populated. Output: 3 × `sample_<idx>.bin` files of exactly 98304 bytes, `ground_truth.csv` with 3 rows all in `[16, 20]`. `--idx` mode and rerun-idempotency also confirmed.
 
 ### Task 6: Add `compile.py` for `CKKSParams` → `.orion`
 
