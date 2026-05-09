@@ -103,7 +103,7 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/models/params.py`
 
-- [ ] write `params.py` with `PARAMS: dict[str, CKKSParams] = {...}` containing exactly two entries:
+- [x] write `params.py` with `PARAMS: dict[str, CKKSParams] = {...}` containing exactly two entries:
   - `"logn15"` — copy from `/home/butvinm/Dev/orion/examples/c3ae-demo/generate_model.py:23-29`:
     ```python
     CKKSParams(
@@ -126,8 +126,8 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
     )
     ```
     LogQ=655, LogP=330, LogQP=985 ≤ 1770 (128-bit @ logn=16). **Same depth (15 levels) as `logn15`** for direct ring-degree comparison.
-- [ ] add a module-level docstring documenting the LogQ/LogP arithmetic and the security bound for each config.
-- [ ] **manual verify**: from `experiments/`, run
+- [x] add a module-level docstring documenting the LogQ/LogP arithmetic and the security bound for each config.
+- [x] **manual verify**: from `experiments/`, run
 
   ```sh
   python -c "
