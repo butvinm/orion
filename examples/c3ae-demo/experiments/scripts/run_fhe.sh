@@ -100,12 +100,24 @@ RUN_JSONL="results/${CFG}/run.jsonl"
 INFER_LOG="results/${CFG}/infer_time.log"
 touch "${RUN_JSONL}"
 
+# Pre-flight: ground_truth.csv must exist before we feed it into the loop.
+# Process substitution (`done < <(awk ...)`) silently swallows awk's
+# nonzero exit code, so a missing CSV would produce an empty iteration —
+# the script would "succeed" without doing anything. Fail loudly here.
+if [ ! -f out/inputs/ground_truth.csv ]; then
+    echo "[run_fhe:${CFG}] ERROR: out/inputs/ground_truth.csv missing — prep_input did not produce it." >&2
+    exit 1
+fi
+
 # Iterate idx values from ground_truth.csv (skip header).
 while IFS= read -r idx; do
     [ -z "${idx}" ] && continue
 
     # Idempotency: skip if this sample is already in run.jsonl.
-    if grep -q "\"sample_idx\":${idx}\b" "${RUN_JSONL}" 2>/dev/null; then
+    # Use a non-digit boundary class instead of GNU-specific '\b' so the
+    # pattern is portable to other greps. The line shape we're matching is
+    # `..."sample_idx":N,...` so '[^0-9]' after the digits is sufficient.
+    if grep -qE "\"sample_idx\":${idx}([^0-9]|\$)" "${RUN_JSONL}" 2>/dev/null; then
         echo "[run_fhe:${CFG}] sample_idx=${idx} already in run.jsonl, skipping"
         continue
     fi
