@@ -162,24 +162,25 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 - Create: `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh` (provisioning script — committed for reproducibility, reused for Phase 3)
 
-- [ ] write `setup-fhe.sh` that, on a fresh CPU Ubuntu 22.04 VPS, does the same as `setup-train.sh` minus the GPU bits:
+- [x] write `setup-fhe.sh` that, on a fresh CPU Ubuntu 22.04 VPS, does the same as `setup-train.sh` minus the GPU bits:
   - apt installs: `build-essential libgmp-dev libssl-dev pkg-config python3.12 python3.12-venv git curl jq`
   - install Go 1.24+ same way (Ubuntu 22.04's stock golang is too old)
   - install `uv`
   - `git clone` and `git checkout experiments`
   - `python tools/build_lattigo.py` then `uv sync`
   - download UTKFace via kagglehub (needed by `prep_input.py --boundary-band`)
-- [ ] scp the trained weights from local to the FHE VPS:
+- [x] scp the trained weights from local to the FHE VPS:
   ```sh
   FHE_IP=$(openstack --os-cloud immers server show orion-c3ae-fhe-logn15 -f json | jq -r '.addresses | to_entries[0].value[0].addr')
   ssh ubuntu@${FHE_IP} mkdir -p ~/orion/examples/c3ae-demo/experiments/out
   scp examples/c3ae-demo/experiments/out/weights_fhe.pth ubuntu@${FHE_IP}:~/orion/examples/c3ae-demo/experiments/out/
   ```
-- [ ] build the bench Go binary on the FHE VPS:
+- [x] build the bench Go binary on the FHE VPS:
   ```sh
   ssh ubuntu@${FHE_IP} 'cd ~/orion/examples/c3ae-demo/experiments/bench && go build'
   ```
-- [ ] **manual verify** (on the VPS over SSH):
+- [x] **manual verify** (on the VPS over SSH):
+
   ```sh
   cd ~/orion && source .venv/bin/activate
   python -c "import torch, orion_compiler; print('python ok')"
@@ -188,7 +189,10 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
   ls -la examples/c3ae-demo/experiments/out/weights_fhe.pth
   free -h | head -2
   ```
+
   Expected: python ok, go 1.24.0, bench binary executable, weights present, free shows ~128 GB total.
+
+  Verified on `orion-c3ae-fhe-logn15` (195.209.214.105, cpu.16.128.240): `torch ok 2.10.0+cu128` (cu128 wheel imports fine on the CPU box — no CUDA hardware needed for FHE bench), 3 jpg files in `data/UTKFace/`, `go version go1.24.0 linux/amd64`, bench binary 11940695 bytes, weights 136347 bytes, free shows 125 GB total. Provisioning wall clock: ~4 min (faster than the training VPS because no torch CUDA wheels were retrieved any larger this time — same uv cache pattern).
 
 ### Task 8: Run FHE benchmark for `logn15`
 
