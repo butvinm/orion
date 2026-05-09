@@ -34,8 +34,10 @@ func cmdKeygen(args []string) {
 }
 
 func cmdEncrypt(args []string) {
-	_ = args
-	panic("not implemented")
+	if err := runEncrypt(args); err != nil {
+		fmt.Fprintf(os.Stderr, "bench encrypt: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func cmdInfer(args []string) {

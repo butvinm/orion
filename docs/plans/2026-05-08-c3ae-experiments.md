@@ -289,18 +289,20 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 - Modify: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/main.go`
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/encrypt.go`
 
-- [ ] implement `cmdEncrypt`. Flags: `--model <path>`, `--sk <path>`, `--input <path>`, `--out <path>`. Behavior:
+- [x] implement `cmdEncrypt`. Flags: `--model <path>`, `--sk <path>`, `--input <path>`, `--out <path>`. Behavior:
   - load model + params + manifest (same path as keygen)
   - read `sk`: `sk := &rlwe.SecretKey{}; sk.UnmarshalBinary(skBytes)`
   - read input file as `[]float64` of exactly 12288 values; pad with zeros to `params.MaxSlots()`
   - construct `encoder := ckks.NewEncoder(params)`, `encryptor := rlwe.NewEncryptor(params, sk)` (SK-mode)
   - encode at `manifest.InputLevel` with `params.DefaultScale()`; encrypt → write `ct.MarshalBinary()` to output
-- [ ] **manual verify**: build only (full E2E in Task 13):
+- [x] **manual verify**: build only (full E2E in Task 13):
 
   ```sh
   go build ./...                # must succeed
   ./bench encrypt               # must print missing-flag error
   ```
+
+  Output: `go build ./...` exits 0; `go vet ./...` exits 0; `./bench encrypt` prints `bench encrypt: --model is required` and exits with status 1. Note: `input_level` is the third return value of `model.ClientParams()` — not a manifest field as the task description suggested (manifest only has `GaloisElements`, `BootstrapSlots`, `BootLogP`, `BtpLogN`, `NeedsRLK` — see `/home/butvinm/Dev/orion/keys.go`).
 
 ### Task 11: Bench `infer` subcommand (the measured one)
 
