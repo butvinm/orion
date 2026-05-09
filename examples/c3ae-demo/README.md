@@ -6,7 +6,7 @@ Based on the C3AE architecture adapted for FHE: ReLU replaced with Quad (x²), B
 
 ## Prerequisites
 
-- Go 1.22+
+- Go 1.24+
 - Python 3.11+ with a venv containing `orion-compiler`, `orion-evaluator`, and `lattigo`
 - Node.js 18+
 - UTKFace dataset (for training)

@@ -24,7 +24,7 @@ pip install orion-v2-lattigo orion-v2-compiler orion-v2-evaluator
 
 ### From source
 
-**System prerequisites:** Go 1.22+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.11–3.12, Node.js 18+.
+**System prerequisites:** Go 1.24+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.11–3.12, Node.js 18+.
 
 ```bash
 # Build the Python CGO shared library (required before installing Python packages)

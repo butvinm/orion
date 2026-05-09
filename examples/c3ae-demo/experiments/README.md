@@ -69,7 +69,7 @@ experiments/
 │   ├── inputs/ground_truth.csv
 │   └── <config>/
 │       ├── model.orion
-│       ├── compile.json           # {compile_s, compile_peak_rss_mb, model_bytes}
+│       ├── compile.json           # {compile_s, compile_peak_python_mb, compile_peak_rss_mb, compile_baseline_rss_mb, model_bytes}
 │       └── keys/
 │           ├── sk.bin
 │           ├── evk.bin
