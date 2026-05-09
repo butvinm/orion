@@ -251,22 +251,15 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/out/logn15/compile.json` (kept locally, gitignored)
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/out/logn15/keys/keygen.json` (kept locally, gitignored)
 
-- [ ] from local machine, rsync the entire `results/logn15/` and `out/logn15/` (minus the multi-GB key files):
-  ```sh
-  FHE_IP=$(openstack --os-cloud immers server show orion-c3ae-fhe-logn15 -f json | jq -r '.addresses | to_entries[0].value[0].addr')
-  cd /home/butvinm/Dev/orion/examples/c3ae-demo/experiments
-  rsync -av "ubuntu@${FHE_IP}:~/orion/examples/c3ae-demo/experiments/results/logn15/" results/logn15/
-  rsync -av --exclude '*.bin' "ubuntu@${FHE_IP}:~/orion/examples/c3ae-demo/experiments/out/logn15/" out/logn15/
-  ```
-  (the `--exclude '*.bin'` keeps multi-GB sk.bin / evk.bin off the local machine; we keep only the small JSON metadata files)
-- [ ] **manual verify** (local):
+- [x] rsync'd `results/logn15/` and `out/logn15/` (excluding multi-GB key bins via `--exclude '*.bin'`) to local. Key files (sk.bin/evk.bin) deliberately NOT transferred.
+- [x] **manual verify** (local) — all artifacts present:
   ```sh
   cat results/logn15/run.jsonl
   cat results/logn15/cleartext_vs_fhe.csv
   cat out/logn15/compile.json
   cat out/logn15/keys/keygen.json
   ```
-  All four present and well-formed.
+  All four present and well-formed. **⚠️ Note**: `run.jsonl` has 4 rows instead of 3 — sample 44 was inserted twice because run_fhe.sh's idempotency `grep` evidently raced with a partial earlier run. All four measurements are consistent (forward_s 153-159s, peak_rss_mb 55148-55680). Will be deduped by build_results.py averaging or addressed manually before publishing the table.
 
 ### Task 11: Generate intermediate report on local
 
