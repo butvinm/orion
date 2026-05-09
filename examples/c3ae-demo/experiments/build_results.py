@@ -207,12 +207,38 @@ def _format_seconds(s: Any, decimals: int = 1) -> str:
         return _NA
 
 
+def _known_config_names() -> set[str]:
+    """Whitelist of recognized FHE config names.
+
+    Sourced from :mod:`models.params` so adding a new entry there is the only
+    place to update. Falls back to the historical hard-coded set when
+    ``models.params`` cannot be imported (e.g. when ``build_results.py`` is run
+    against a results dir on a machine without orion_compiler installed).
+    """
+    try:
+        # Local import: build_results.py may be invoked from a results dir
+        # without orion_compiler available. Falling back keeps the report
+        # generator standalone.
+        from models.params import PARAMS  # noqa: PLC0415
+
+        return set(PARAMS.keys())
+    except Exception:
+        return {"logn15", "logn16"}
+
+
 def _discover_configs(results_dir: Path) -> list[str]:
+    """List config-named subdirs of ``results_dir``.
+
+    Filtered against the whitelist returned by :func:`_known_config_names` so
+    a stray scratch directory (e.g. ``results/scratch/``) doesn't accidentally
+    appear as a row in the FHE cost table.
+    """
     if not results_dir.is_dir():
         return []
+    allowed = _known_config_names()
     cfgs: list[str] = []
     for child in sorted(results_dir.iterdir()):
-        if child.is_dir():
+        if child.is_dir() and child.name in allowed:
             cfgs.append(child.name)
     return cfgs
 

@@ -4,8 +4,16 @@ Two no-bootstrap configurations with **identical multiplicative depth (15
 levels)** so the experiment isolates the cost of doubling the ring degree from
 ``logn=15`` to ``logn=16``.
 
-Security bounds come from the Homomorphic Encryption Standard (128-bit
-security, dense / uniform-ternary secret).
+Security bound caveat: the bounds quoted below are the **dense / uniform-ternary**
+HE Standard 128-bit limits, which are the *more conservative* of the two common
+choices (dense vs. sparse-ternary with Hamming weight ``h=192``). The Lattigo
+``CKKSParams`` default at the time of writing uses ``h=192`` (sparse), whose
+permitted ``LogQP`` is **strictly larger** at the same logn (e.g. ~1232 vs. 881
+at logn=15 in the HE Standard tables). Reporting against the dense bound is
+therefore a safe upper-envelope: any config that satisfies the dense bound also
+satisfies the sparse bound at ``h=192``. We report the dense bound for
+documentation simplicity; the actual encryption uses the Lattigo default
+(sparse, ``h=192``).
 
 Arithmetic per config:
 
@@ -14,7 +22,8 @@ Arithmetic per config:
 
 * ``logq = [51] + [40] * 15``  →  ``sum(logq) = 51 + 15 * 40 = 651``
 * ``logp = [50] * 4``           →  ``sum(logp) = 4 * 50 = 200``
-* ``LogQP = 651 + 200 = 851``  ≤  ``881`` (128-bit dense bound at logn=15)
+* ``LogQP = 651 + 200 = 851``  ≤  ``881`` (128-bit *dense* bound at logn=15;
+  sparse ``h=192`` bound is larger and also satisfied)
 * No bootstrap (``boot_logp = None``).
 
 ``logn16`` (new — same multiplicative depth as ``logn15`` for a clean
@@ -22,7 +31,8 @@ ring-degree comparison):
 
 * ``logq = [55] + [40] * 15``  →  ``sum(logq) = 55 + 15 * 40 = 655``
 * ``logp = [55] * 6``           →  ``sum(logp) = 6 * 55 = 330``
-* ``LogQP = 655 + 330 = 985``  ≤  ``1770`` (128-bit dense bound at logn=16)
+* ``LogQP = 655 + 330 = 985``  ≤  ``1770`` (128-bit *dense* bound at logn=16;
+  sparse ``h=192`` bound is larger and also satisfied)
 * No bootstrap (``boot_logp = None``).
 
 Both configs share ``log_default_scale = 40`` and ``ring_type = "standard"``.
