@@ -312,21 +312,25 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/infer.go`
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/rss.go`
 
-- [ ] implement `readVmHWM()` in `rss.go`: parses `/proc/self/status` for the `VmHWM:` line, returns kB as `int64`. Fallback to `runtime.MemStats.HeapSys` on non-Linux for portability (warn once).
-- [ ] implement `cmdInfer`. Flags: `--model <path>`, `--evk <path>`, `--ct <path>`, `--out <path>`, `--metrics <path>` (jsonl, append mode), `--sample-idx <int>` (for metrics tagging). Behavior:
+- [x] implement `readVmHWM()` in `rss.go`: parses `/proc/self/status` for the `VmHWM:` line, returns kB as `int64`. Returns 0 with a one-shot warning if `/proc/self/status` is unavailable (non-Linux).
+- [x] implement `cmdInfer`. Flags: `--model <path>`, `--evk <path>`, `--ct <path>`, `--out <path>`, `--metrics <path>` (jsonl, append mode), `--sample-idx <int>` (for metrics tagging). Behavior:
   - load model
   - unmarshal `evk` (`MemEvaluationKeySet.UnmarshalBinary`)
-  - construct `evaluator.NewEvaluatorFromKeySet(model, evk)` (no bootstrap keys)
+  - construct `evaluator.NewEvaluatorFromKeySet(params, evk, nil)` (no bootstrap keys; signature is `(ckks.Parameters, *rlwe.MemEvaluationKeySet, *bootstrapping.EvaluationKeys)` per `/home/butvinm/Dev/orion/evaluator/evaluator.go:33`)
   - read input ciphertext from `--ct`
-  - capture `t0 := time.Now()`, run `result := eval.Forward(model, []*rlwe.Ciphertext{ct})`, capture `forward_s := time.Since(t0).Seconds()`
+  - capture `t0 := time.Now()`, run `result, err := eval.Forward(model, []*rlwe.Ciphertext{ct})`, capture `forward_s := time.Since(t0).Seconds()`
   - read `peak_rss_mb := readVmHWM() / 1024`
   - serialize `result[0].MarshalBinary() → <out>`
   - append JSONL line to `--metrics`: `{"sample_idx": N, "forward_s": ..., "peak_rss_mb": ..., "result_ct_bytes": ...}`. Open with `os.O_APPEND | os.O_CREATE | os.O_WRONLY`, write line + `\n`, **call `f.Sync()` before close** for crash resilience.
-- [ ] **manual verify** (deferred to Task 13). Build only:
+- [x] **manual verify** (full E2E deferred to Task 13). Build only:
 
   ```sh
   go build ./...                # must succeed
+  go vet ./...                  # must succeed
+  ./bench infer                 # must print missing-flag error and exit 1
   ```
+
+  Output: `go build ./...` exits 0; `go vet ./...` exits 0; `./bench infer` prints `bench infer: --model is required` and exits with status 1. Note: the actual `NewEvaluatorFromKeySet` signature takes `(ckks.Parameters, *rlwe.MemEvaluationKeySet, *bootstrapping.EvaluationKeys)` — not `(model, evk)` as the task description suggested. We pass `nil` for bootstrap keys since both supported configs are no-bootstrap. `input_level` from `model.ClientParams()` is the third return value (consistent with Task 10's note).
 
 ### Task 12: Bench `decrypt` subcommand
 

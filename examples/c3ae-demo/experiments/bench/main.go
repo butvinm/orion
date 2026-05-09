@@ -41,8 +41,10 @@ func cmdEncrypt(args []string) {
 }
 
 func cmdInfer(args []string) {
-	_ = args
-	panic("not implemented")
+	if err := runInfer(args); err != nil {
+		fmt.Fprintf(os.Stderr, "bench infer: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func cmdDecrypt(args []string) {
