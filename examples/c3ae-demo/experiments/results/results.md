@@ -1,6 +1,6 @@
 # C3AE Experiment Results
 
-_Generated: 2026-05-09 22:20:24_
+_Generated: 2026-05-09 23:21:35_
 
 ## Cleartext quality
 
@@ -13,6 +13,7 @@ _Generated: 2026-05-09 22:20:24_
 
 ## FHE cost
 
-| config | compile_s | compile_peak_rss_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB  |
-| ------ | --------- | ------------------- | -------- | ------ | -------------- | ------------ |
-| logn15 | 160.2     | 12.87               | 44.1     | 7.19   | 157.0 ± 2.9    | 54.19 ± 0.29 |
+| config | compile_s | compile_peak_rss_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB   |
+| ------ | --------- | ------------------- | -------- | ------ | -------------- | ------------- |
+| logn15 | 160.2     | 12.87               | 44.1     | 7.19   | 157.0 ± 2.9    | 54.19 ± 0.29  |
+| logn16 | 386.7     | 25.77               | 68.1     | 12.70  | 543.7 ± 219.4  | 114.37 ± 0.07 |
