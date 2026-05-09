@@ -198,16 +198,17 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** outputs land on the VPS at `~/orion/examples/c3ae-demo/experiments/results/logn15/run.jsonl` and `out/logn15/`
 
-- [ ] SSH into the FHE VPS, start a `tmux`/`screen` session (long-running) and run:
+- [x] SSH into the FHE VPS, start a `tmux`/`screen` session (long-running) and run:
   ```sh
   cd ~/orion/examples/c3ae-demo/experiments
   source ../../../.venv/bin/activate
   bash scripts/run_fhe.sh logn15 2>&1 | tee results/logn15/run_fhe.log
   ```
-  This compiles the `logn15` model, generates keys, runs encrypt+infer+decrypt for the 3 boundary samples, streaming results to `results/logn15/run.jsonl`.
-- [ ] **expected duration**: existing demo reported 2.4 min compile + 83 s keygen + 3 × ~139 s inference ≈ 9-10 minutes total. Add encryption + decryption overhead. Plan ~15 min wall clock.
-- [ ] watch `peak_rss_mb` in the streaming JSONL — must stay below 128 GB (131072 MB). Existing demo measured 103 GB; Go-only inference should be lower.
-- [ ] **manual verify** (on the VPS):
+  This compiles the `logn15` model, generates keys, runs encrypt+infer+decrypt for the 3 boundary samples, streaming results to `results/logn15/run.jsonl`. Used `nohup ... &` instead of tmux so SSH disconnects don't kill the run.
+- [x] **expected duration**: existing demo reported 2.4 min compile + 83 s keygen + 3 × ~139 s inference ≈ 9-10 minutes total. Add encryption + decryption overhead. Plan ~15 min wall clock. Actual: compile 160 s, keygen 44 s, 3 × ~155 s inference ≈ 11 min wall clock.
+- [x] watch `peak_rss_mb` in the streaming JSONL — must stay below 128 GB (131072 MB). Existing demo measured 103 GB; Go-only inference should be lower. **Measured: 55-56 GB peak RSS during inference (≈45% drop vs 103 GB Python-wrapper baseline).** Compile peaked at ~13 GB.
+- [x] **manual verify** (on the VPS):
+
   ```sh
   wc -l results/logn15/run.jsonl
   cat results/logn15/run.jsonl
@@ -215,7 +216,10 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
   free -h
   dmesg | tail -10  # confirm no OOM kills
   ```
+
   jsonl has exactly 3 lines, each valid JSON with `forward_s`, `peak_rss_mb`, `result_ct_bytes`, `sample_idx`. compile.json + keygen_time.log present. No OOM.
+
+  Verified: run.jsonl has 3 lines (samples 12/35/44 with forward_s 158.5/153.6/154.7s, peak_rss_mb 55148/55680/55488, result_ct_bytes 524606 each). compile.json: `compile_s=160.20s, compile_peak_rss_mb=13183MB, model_bytes=878078308`. keygen.json: `keygen_s=44.06s, evk_bytes=7717797550 (≈7.2 GB)`. keygen_time.log present with `Exit status: 0`. dmesg shows no OOM kills. Free post-run: 41 GiB used / 125 GiB total.
 
 ### Task 9: Run FHE-vs-cleartext correctness check for `logn15`
 
