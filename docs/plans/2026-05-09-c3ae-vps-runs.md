@@ -267,22 +267,9 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 - Modify: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/results/results.md` (committed; will be regenerated again after Phase 3 if Phase 3 runs)
 
-- [ ] generate `results.md` with `logn15` row only — Phase 3 tasks haven't run yet so `logn16` row will be absent or `n/a`:
-  ```sh
-  cd /home/butvinm/Dev/orion/examples/c3ae-demo/experiments
-  source /home/butvinm/Dev/orion/.venv/bin/activate
-  python build_results.py
-  cat results/results.md
-  ```
-- [ ] **manual verify**: tables show:
-  - Cleartext quality: 4 rows (relu × {overall, boundary} + fhe × {overall, boundary})
-  - FHE cost: 1 row (logn15) with all columns populated
-- [ ] commit the partial `results.md`:
-  ```sh
-  cd /home/butvinm/Dev/orion
-  git add examples/c3ae-demo/experiments/results/results.md
-  git commit -m "results: add logn15 FHE cost row to results.md"
-  ```
+- [x] deduped `results/logn15/run.jsonl` from 4 to 3 rows (kept the later sample_idx=44 measurement) and regenerated `results.md` via `python build_results.py`.
+- [x] **manual verify**: tables show 4 cleartext rows and 1 logn15 FHE-cost row with `mean_forward_s 157.0 ± 2.9 s`, `peak_rss_GB 54.19 ± 0.29`.
+- [x] committed `results.md` (commit `3a01b7b`).
 
 ### Task 12: Tear down FHE `logn15` VPS
 
