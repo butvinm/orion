@@ -225,18 +225,22 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** outputs at `~/orion/examples/c3ae-demo/experiments/results/logn15/cleartext_vs_fhe.csv`
 
-- [ ] on the FHE VPS:
+- [x] on the FHE VPS:
   ```sh
   cd ~/orion/examples/c3ae-demo/experiments
   source ../../../.venv/bin/activate
   python verify_fhe.py --config logn15
   ```
-- [ ] **manual verify**:
+- [x] **manual verify**:
+
   ```sh
   cat results/logn15/cleartext_vs_fhe.csv
   echo "verify exit: $?"
   ```
+
   CSV has rows for the 3 samples with `idx, cleartext_prob, fhe_prob, abs_diff`. All `abs_diff` must be `< 0.05`. verify_fhe.py exits 0 if all diffs are below tolerance.
+
+  Verified on `orion-c3ae-fhe-logn15` (195.209.214.105): all 3 samples (12, 35, 44) with `fhe_prob=1.000000`, `cleartext_prob=1.000000`, `abs_diff=0.000000` (well under 0.05 tolerance). verify_fhe.py exited 0; max_diff=0.0000. CSV header: `sample_idx,fhe_prob,cleartext_prob,abs_diff,passed`.
 
 ### Task 10: Capture `logn15` artifacts off FHE VPS
 
