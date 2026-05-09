@@ -194,8 +194,8 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/models/compile.py`
 
-- [ ] write `compile.py` adapted from `/home/butvinm/Dev/orion/examples/c3ae-demo/generate_model.py:1-72`. Flags: `--variant fhe`, `--config <name>`, `--weights out/weights_fhe.pth`, `--output out/<config>/model.orion`. Looks up `PARAMS[args.config]`. Uses `tracemalloc` to record peak Python memory. Writes `out/<config>/compile.json` with `{"compile_s": ..., "compile_peak_rss_mb": ..., "model_bytes": ...}`.
-- [ ] **manual verify**: from `experiments/`, run
+- [x] write `compile.py` adapted from `/home/butvinm/Dev/orion/examples/c3ae-demo/generate_model.py:1-72`. Flags: `--variant fhe`, `--config <name>`, `--weights out/weights_fhe.pth`, `--output out/<config>/model.orion`. Looks up `PARAMS[args.config]`. Uses `tracemalloc` to record peak Python memory. Writes `out/<config>/compile.json` with `{"compile_s": ..., "compile_peak_rss_mb": ..., "model_bytes": ...}`.
+- [x] **manual verify**: from `experiments/`, run
 
   ```sh
   python -m models.compile --help
