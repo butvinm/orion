@@ -339,19 +339,21 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 - Modify: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/main.go`
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/decrypt.go`
 
-- [ ] implement `cmdDecrypt`. Flags: `--model <path>`, `--sk <path>`, `--ct <path>`. Behavior:
+- [x] implement `cmdDecrypt`. Flags: `--model <path>`, `--sk <path>`, `--ct <path>`. Behavior:
   - load model + params
   - read sk
   - construct decryptor (`rlwe.NewDecryptor(params, sk)`) and encoder
   - read result ciphertext, decrypt → plaintext, decode → `[]float64`
   - take `decoded[0]` as the binary-classifier logit, compute `prob := 1/(1+math.Exp(-logit))`
   - write JSON `{"logit": ..., "prob": ...}` to stdout
-- [ ] **manual verify**: build only:
+- [x] **manual verify**: build only:
 
   ```sh
   go build ./...                # must succeed
   ./bench decrypt               # must print missing-flag error
   ```
+
+  Output: `go build ./...` exits 0; `go vet ./...` exits 0; `./bench decrypt` prints `bench decrypt: --model is required` and exits with status 1. `encoder.Decode(pt, values)` accepts `interface{}` per `/home/butvinm/go/pkg/mod/github.com/tuneinsight/lattigo/v6@v6.2.0/schemes/ckks/encoder.go:192` so passing `[]float64` is correct.
 
 ### Task 13: End-to-end pipeline smoke test (manual, against `logn15`)
 
