@@ -150,10 +150,10 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/models/train.py`
 
-- [ ] write `train.py` adapted from `/home/butvinm/Dev/orion/examples/c3ae-demo/train.py:1-183`. Same `UTKFaceDataset`, same 70/15/15 split with `manual_seed(42)`, same training loop, same `asymmetric_loss`. Add `--variant {relu,fhe}` selecting `from models.c3ae import C3AE` vs `from models.c3ae_fhe import C3AE`. Default output: `out/weights_<variant>.pth`.
-- [ ] preserve all existing CLI flags (`--epochs`, `--batch-size`, `--lr`, `--fpr-weight`, `--max-grad-norm`, `--data-dir`, `--stride`).
-- [ ] **import-path discipline**: scripts under `models/` are run as `python -m models.train ...` from `experiments/` so `from models.c3ae import ...` resolves. Document this in the README.
-- [ ] **manual verify**: from `experiments/`, run
+- [x] write `train.py` adapted from `/home/butvinm/Dev/orion/examples/c3ae-demo/train.py:1-183`. Same `UTKFaceDataset`, same 70/15/15 split with `manual_seed(42)`, same training loop, same `asymmetric_loss`. Add `--variant {relu,fhe}` selecting `from models.c3ae import C3AE` vs `from models.c3ae_fhe import C3AE`. Default output: `out/weights_<variant>.pth`.
+- [x] preserve all existing CLI flags (`--epochs`, `--batch-size`, `--lr`, `--fpr-weight`, `--max-grad-norm`, `--data-dir`, `--stride`).
+- [x] **import-path discipline**: scripts under `models/` are run as `python -m models.train ...` from `experiments/` so `from models.c3ae import ...` resolves. Document this in the README.
+- [x] **manual verify**: from `experiments/`, run
 
   ```sh
   python -m models.train --help
