@@ -64,10 +64,10 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/.gitignore`
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/results/.gitkeep`
 
-- [ ] create `examples/c3ae-demo/experiments/` directory with subdirs `models/`, `bench/`, `scripts/`, `results/`
-- [ ] write `experiments/.gitignore` ignoring `out/`, `results/*` (except `results/results.md` and `results/.gitkeep`), `__pycache__/`, `*.pyc`, `bench/bench` (the compiled Go binary)
-- [ ] write `experiments/README.md` skeleton: goal, dataset, two experiments summary, how-to-run pointers (filled out fully in the final task)
-- [ ] **manual verify**: `git status` shows only the new directory and skeleton files; no spurious files
+- [x] create `examples/c3ae-demo/experiments/` directory with subdirs `models/`, `bench/`, `scripts/`, `results/`
+- [x] write `experiments/.gitignore` ignoring `out/`, `results/*` (except `results/results.md` and `results/.gitkeep`), `__pycache__/`, `*.pyc`, `bench/bench` (the compiled Go binary)
+- [x] write `experiments/README.md` skeleton: goal, dataset, two experiments summary, how-to-run pointers (filled out fully in the final task)
+- [x] **manual verify**: `git status` shows only the new directory and skeleton files; no spurious files
 
 ### Task 2: Add `c3ae.py` (true-ReLU) and `c3ae_fhe.py` (Quad)
 
@@ -77,10 +77,10 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/models/c3ae_fhe.py`
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/models/__init__.py`
 
-- [ ] write `c3ae.py` as a plain `torch.nn.Module` mirroring the architecture of `/home/butvinm/Dev/orion/examples/c3ae-demo/model.py:13-86` but using `torch.nn.{Conv2d, BatchNorm2d, AvgPool2d, Linear, ReLU(inplace=False), Flatten}`. Same constructor `C3AE(img_size=64, first_stride=2)` and same `forward(x)` shape behavior.
-- [ ] write `c3ae_fhe.py` by copying `/home/butvinm/Dev/orion/examples/c3ae-demo/model.py:13-86` verbatim — already correct (orion_compiler.nn + Quad).
-- [ ] empty `__init__.py` so `from models.c3ae import C3AE` and `from models.c3ae_fhe import C3AE as C3AE_FHE` work.
-- [ ] **manual verify**: from `experiments/`, run
+- [x] write `c3ae.py` as a plain `torch.nn.Module` mirroring the architecture of `/home/butvinm/Dev/orion/examples/c3ae-demo/model.py:13-86` but using `torch.nn.{Conv2d, BatchNorm2d, AvgPool2d, Linear, ReLU(inplace=False), Flatten}`. Same constructor `C3AE(img_size=64, first_stride=2)` and same `forward(x)` shape behavior.
+- [x] write `c3ae_fhe.py` by copying `/home/butvinm/Dev/orion/examples/c3ae-demo/model.py:13-86` verbatim — already correct (orion_compiler.nn + Quad).
+- [x] empty `__init__.py` so `from models.c3ae import C3AE` and `from models.c3ae_fhe import C3AE as C3AE_FHE` work.
+- [x] **manual verify**: from `experiments/`, run
 
   ```sh
   python -c "
