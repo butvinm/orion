@@ -418,12 +418,12 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/scripts/run_cleartext.sh`
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/scripts/run_fhe.sh`
 
-- [ ] write `run_cleartext.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`):
+- [x] write `run_cleartext.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`):
   - assert venv is active (`python -c 'import sys; assert sys.prefix != sys.base_prefix' || { echo "activate venv"; exit 1; }`)
   - if `out/weights_relu.pth` missing: `python -m models.train --variant relu --data-dir ./data/UTKFace --epochs 60`
   - if `out/weights_fhe.pth` missing: `cp ../weights.pth out/weights_fhe.pth`
   - run `python -m models.eval` → `results/cleartext.csv`
-- [ ] write `run_fhe.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`):
+- [x] write `run_fhe.sh` (`#!/usr/bin/env bash`, `set -euo pipefail`):
   - takes `$1 = config name` (one of `logn15`, `logn16`)
   - assert venv is active
   - `python -m models.compile --variant fhe --config "$CFG" --weights out/weights_fhe.pth --output "out/$CFG/model.orion"`
@@ -432,13 +432,15 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
   - keygen once: `/usr/bin/time -v ./bench/bench keygen --model "out/$CFG/model.orion" --out "out/$CFG/keys/" 2> "results/$CFG/keygen_time.log"`
   - per sample-idx in `out/inputs/ground_truth.csv`: encrypt → `/usr/bin/time -v ./bench/bench infer ... 2>> results/$CFG/infer_time.log` → decrypt → append to `results/$CFG/run.jsonl`
   - script must be **idempotent**: skip a sample-idx if its line already exists in `run.jsonl` (grep for `"sample_idx": N`)
-- [ ] **manual verify**:
+- [x] **manual verify**:
 
   ```sh
   bash -n scripts/run_cleartext.sh
   bash -n scripts/run_fhe.sh
   # both must return 0 (syntax OK)
   ```
+
+  Output: both `bash -n` checks exit 0. Scripts marked executable (`chmod +x`). `shellcheck` not available locally (skipped per task instructions).
 
 ### Task 15: Add `build_results.py` aggregator
 
