@@ -254,6 +254,7 @@ def _build_fhe_table(root: Path) -> str:
         [
             "config",
             "compile_s",
+            "compile_peak_rss_GB",
             "keygen_s",
             "evk_GB",
             "mean_forward_s",
@@ -270,6 +271,10 @@ def _build_fhe_table(root: Path) -> str:
             any_data = True
 
         compile_s = compile_meta.get("compile_s") if compile_meta else None
+        # True process RSS via getrusage (CGO/Go-aware). Reported in MB by
+        # ``models/compile.py``; convert to GB for parity with the inference
+        # peak_rss_GB column.
+        compile_peak_rss_mb = compile_meta.get("compile_peak_rss_mb") if compile_meta else None
         keygen_s = keygen.get("keygen_s") if keygen else None
         evk_bytes = keygen.get("evk_bytes") if keygen else None
 
@@ -298,6 +303,7 @@ def _build_fhe_table(root: Path) -> str:
             [
                 cfg,
                 _format_seconds(compile_s, 1),
+                _format_gb_from_mb(compile_peak_rss_mb, 2),
                 _format_seconds(keygen_s, 1),
                 _format_gb_from_bytes(evk_bytes, 2),
                 _format_mean_std(f_mean, f_std, 1),
