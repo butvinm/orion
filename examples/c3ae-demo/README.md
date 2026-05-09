@@ -67,6 +67,16 @@ Navigate to http://localhost:8080.
 python run_fhe.py --weights weights.pth --model model.orion --data-dir ./data/UTKFace --samples 3
 ```
 
+## Experiments harness
+
+A self-contained experiment harness for this demo lives under
+[`experiments/`](experiments/README.md). It produces two comparable
+measurements: cleartext FPR/FNR/Accuracy for the ReLU vs Quad variants,
+and FHE forward time + peak RSS for two CKKS configurations
+(`logn15`, `logn16`) measured by a Go-only `bench` binary. See
+[`experiments/README.md`](experiments/README.md) for the full operator
+runbook.
+
 ## Architecture
 
 ```

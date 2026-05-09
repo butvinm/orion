@@ -20,7 +20,7 @@ contaminated by Python wrapper overhead.
 
 - **Python 3.11+** in the project's `uv` workspace venv at
   `/home/butvinm/Dev/orion/.venv` (run `uv sync` from the repo root).
-- **Go 1.22+** with CGO enabled and the Lattigo CGO shared library built
+- **Go 1.24+** with CGO enabled and the Lattigo CGO shared library built
   (`python tools/build_lattigo.py` from the repo root). Required by the
   parent project, not by this `bench` module directly — `bench` is a pure
   Go consumer of `github.com/butvinm/orion/v2/evaluator`.
@@ -102,12 +102,25 @@ bash scripts/run_cleartext.sh
 bash scripts/run_fhe.sh logn15
 bash scripts/run_fhe.sh logn16
 
+# After FHE runs: cross-check FHE vs cleartext predictions
+python verify_fhe.py --config logn15
+python verify_fhe.py --config logn16
+
 # Aggregate everything in out/ + results/ into a single markdown report
 python build_results.py
 ```
 
 `run_fhe.sh` is idempotent: re-running skips compile / keygen / per-sample
 inference if the corresponding artifacts already exist.
+
+`verify_fhe.py` cross-checks each FHE-decrypted probability against the
+cleartext PyTorch forward pass on the same input blob. It writes
+`results/<cfg>/cleartext_vs_fhe.csv` and exits non-zero if any sample's
+absolute probability difference exceeds `--tol` (default 0.05). This
+satisfies the "decrypt_mae < 0.05" sanity criterion documented in the plan
+and is intentionally a separate post-step rather than an in-line gate of
+`run_fhe.sh` (we don't want to abort a multi-hour FHE run on a marginal
+numerical difference — surface the gap, let the operator decide).
 
 ## Caveat: no bootstrap in either config
 
@@ -124,6 +137,35 @@ multiplicative depth (15 levels)**, so the FHE cost table isolates the
 cost of doubling the ring degree from `logn=15` to `logn=16`. See the
 "Why no bootstrap?" section of the plan for the full derivation:
 `/home/butvinm/Dev/orion/docs/plans/2026-05-08-c3ae-experiments.md`.
+
+## Troubleshooting
+
+### `bench infer` was not exercised on the local machine
+
+The local development box (38 GB RAM) cannot run `bench infer` at logn=15
+— the Lattigo evaluator peaks at ~103 GB RSS per the demo's measurements
+in `examples/c3ae-demo/README.md`. The local smoke test in Task 13 of the
+plan therefore validated only `compile` + `keygen` + `encrypt` + `decrypt`
+round-trip; the first true end-to-end run of `bench infer` happens on the
+128 GB VPS as documented in the plan's Post-Completion section.
+
+If you need to smoke-test the `infer` wiring locally, the cheapest path
+is to compile a tiny throwaway model (e.g. a single `Linear` at
+`logn=12` or `logn=13`) and exercise the full pipeline with that. The
+`bench` binary itself is model-agnostic.
+
+### "missing ground_truth.csv" before the per-sample loop
+
+`run_fhe.sh` now hard-fails if `out/inputs/ground_truth.csv` is missing
+before iterating samples (process substitution would otherwise silently
+make the loop a no-op). Run `python -m models.prep_input --boundary-band`
+first to populate the test inputs.
+
+### Logn=16 keygen has not been validated locally
+
+Local validation covered logn=15 only. The first VPS run is also the
+first time logn=16 keygen is exercised end-to-end; budget for the EVK
+serialization step (~15 GB) and watch for OOM on machines below 64 GB.
 
 ## Plan reference
 

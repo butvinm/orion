@@ -10,7 +10,7 @@ Orion takes PyTorch neural networks, analyzes them, and produces artifacts that 
 
 ## Repository Structure
 
-Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). Model examples under `examples/models/` (`{mlp,lenet,lola,alexnet,vgg,resnet}.py`) with unified `run.py` and `train.py`.
+Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). Model examples under `examples/models/` (`{mlp,lenet,lola,alexnet,vgg,resnet}.py`) with unified `run.py` and `train.py`. The C3AE age-verification demo at `examples/c3ae-demo/` ships with a self-contained experiments harness under `examples/c3ae-demo/experiments/` (cleartext FPR/FNR + FHE timing/RSS benchmarks for `logn15`/`logn16` via a Go-only `bench` binary).
 
 **Dependency graph:** `lattigo` ← `orion-compiler` (+ torch, networkx). `orion-evaluator` is independent. `js/lattigo` depends only on Lattigo (no Orion-specific code).
 
