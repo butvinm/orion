@@ -90,7 +90,7 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 - Create: `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-train.sh` (provisioning script — committed for reproducibility)
 
-- [ ] write `setup-train.sh` that, when run on a fresh Ubuntu 22.04 CUDA VPS:
+- [x] write `setup-train.sh` that, when run on a fresh Ubuntu 22.04 CUDA VPS:
   - installs system deps: `sudo apt-get update && sudo apt-get install -y build-essential libgmp-dev libssl-dev pkg-config python3.12 python3.12-venv git curl jq`
   - installs Go 1.24+ if not present (Ubuntu 22.04 default `golang` is too old): download from `https://go.dev/dl/go1.24.0.linux-amd64.tar.gz`, extract to `/usr/local/go`, add to PATH
   - installs `uv` (Python package manager): `curl -LsSf https://astral.sh/uv/install.sh | sh`
@@ -98,14 +98,18 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
   - runs `python tools/build_lattigo.py` (CGO shared lib for Python lattigo bridge — required even for cleartext train.py because eval.py loads `models.c3ae_fhe` which imports `orion_compiler.nn`)
   - runs `uv sync` from repo root
   - downloads UTKFace via kagglehub: `cd ~/orion/examples/c3ae-demo && python -c "import kagglehub; p = kagglehub.dataset_download('jangedoo/utkface-new'); print(p)"`. Note the path it prints; symlink it to `./data/UTKFace`.
-- [ ] **manual verify** (run on the VPS over SSH):
+- [x] **manual verify** (run on the VPS over SSH):
+
   ```sh
   cd ~/orion && source .venv/bin/activate
   python -c "import torch, orion_compiler; print(torch.__version__, torch.cuda.is_available())"
   ls examples/c3ae-demo/data/UTKFace/ | head -3
   go version
   ```
+
   Expected: torch version printed, `cuda.is_available()` is True (GPU flavor), 3 jpg filenames listed, `go version go1.24.0`.
+
+  Verified on `orion-c3ae-train` (195.209.214.105, RTX 4090): `torch: 2.10.0+cu128 cuda: True`, 23708 jpg files in `data/UTKFace/`, `go version go1.24.0 linux/amd64`, branch `experiments` (529ca6e). Required deviations from the original draft: deadsnakes PPA had to be added before `apt install python3.12` (Ubuntu 22.04 doesn't ship 3.12), and `pip install kagglehub` had to be run explicitly because kagglehub is not a workspace dependency. Both fixes are in `setup-train.sh`.
 
 ### Task 3: Train ReLU variant on training VPS
 
