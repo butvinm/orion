@@ -6,7 +6,8 @@ bench/bench
 __pycache__/
 *.pyc
 
-# Generated experiment results — only the final report is committed
+# Generated experiment results — committed deliverables: results.md and cleartext.csv
 results/*
 !results/.gitkeep
 !results/results.md
+!results/cleartext.csv

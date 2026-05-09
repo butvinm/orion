@@ -115,20 +115,17 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** none on local; outputs land on the VPS
 
-- [ ] SSH into the training VPS and run:
+- [x] SSH into the training VPS and run training + eval. **Note**: the original `run_cleartext.sh` did `cp ../weights.pth out/weights_fhe.pth` but `weights.pth` is gitignored, so on a fresh checkout it doesn't exist. Trained both variants explicitly:
   ```sh
   cd ~/orion/examples/c3ae-demo/experiments
-  source ../../../.venv/bin/activate
-  bash scripts/run_cleartext.sh
+  source ~/orion/.venv/bin/activate
+  python -m models.train --variant relu --data-dir ./data/UTKFace --epochs 60
+  python -m models.train --variant fhe  --data-dir ./data/UTKFace --epochs 60
+  python -m models.eval --data-dir ./data/UTKFace
   ```
-  This script (already in the repo) does: `train --variant relu`, `cp ../weights.pth out/weights_fhe.pth`, then `python -m models.eval`.
-- [ ] **manual verify** (on the VPS):
-  ```sh
-  ls -la out/weights_relu.pth out/weights_fhe.pth
-  cat results/cleartext.csv
-  ```
-  Must show both weight files and a cleartext.csv with 4 rows (`relu × {overall, boundary}` + `fhe × {overall, boundary}`). Sanity-check: boundary-band FPR/FNR substantially worse than overall.
-- [ ] record total wall-clock time of the cleartext run for cost reporting.
+  `run_cleartext.sh` updated in this commit to handle missing `../weights.pth` by training fresh (idempotent).
+- [x] **manual verify** (on the VPS): `out/weights_{relu,fhe}.pth` both ~136 kB; `cleartext.csv` has 4 rows. Boundary-band FPR/FNR confirmed much worse than overall (relu: overall FPR 16.7% vs boundary 65.2%; fhe: overall FPR 20.9% vs boundary 71.2%).
+- [x] total wall clock: ~7 min (3 min ReLU train + 3 min Quad train + ~30s eval) on RTX 4090.
 
 ### Task 4: Capture artifacts off training VPS
 
@@ -136,27 +133,9 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/results/cleartext.csv` (transferred from VPS)
 
-- [ ] from local machine, scp the artifacts:
-  ```sh
-  TRAIN_IP=$(openstack --os-cloud immers server show orion-c3ae-train -f json | jq -r '.addresses | to_entries[0].value[0].addr')
-  mkdir -p /tmp/c3ae-train-artifacts
-  scp ubuntu@${TRAIN_IP}:~/orion/examples/c3ae-demo/experiments/out/weights_relu.pth /tmp/c3ae-train-artifacts/
-  scp ubuntu@${TRAIN_IP}:~/orion/examples/c3ae-demo/experiments/out/weights_fhe.pth /tmp/c3ae-train-artifacts/
-  scp ubuntu@${TRAIN_IP}:~/orion/examples/c3ae-demo/experiments/results/cleartext.csv \
-      /home/butvinm/Dev/orion/examples/c3ae-demo/experiments/results/cleartext.csv
-  ```
-- [ ] commit cleartext.csv to git on branch `experiments`. Use the staging script — never `git add .`:
-  ```sh
-  cd /home/butvinm/Dev/orion
-  git add examples/c3ae-demo/experiments/results/cleartext.csv
-  git commit -m "results: cleartext FPR/FNR/Acc for ReLU and Quad C3AE"
-  ```
-- [ ] **manual verify** (local):
-  ```sh
-  cat /home/butvinm/Dev/orion/examples/c3ae-demo/experiments/results/cleartext.csv
-  ls -la /tmp/c3ae-train-artifacts/
-  ```
-  CSV has 4 data rows; both .pth files are non-empty (~125 kB each).
+- [x] from local machine, scp'd the artifacts to `/tmp/c3ae-train-artifacts/{weights_relu,weights_fhe}.pth` and `examples/c3ae-demo/experiments/results/cleartext.csv`.
+- [x] committed cleartext.csv to git on branch `experiments`. Also updated `experiments/.gitignore` to allowlist `results/cleartext.csv` (was excluded by the `results/*` block).
+- [x] **manual verify** (local): CSV has 4 rows; both `weights_relu.pth` (135805 B) and `weights_fhe.pth` (136347 B) saved at `/tmp/c3ae-train-artifacts/`.
 
 ### Task 5: Tear down training VPS
 

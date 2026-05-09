@@ -2,9 +2,8 @@
 set -euo pipefail
 
 # Cleartext experiment runner.
-# Trains the ReLU variant (if needed), copies the existing Quad weights as the
-# FHE variant baseline (if needed), and runs cleartext eval producing
-# results/cleartext.csv.
+# Trains both the ReLU and FHE-Quad variants (if missing) and runs cleartext
+# eval producing results/cleartext.csv.
 
 # Assert venv is active.
 python -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' || {
@@ -28,12 +27,19 @@ else
     echo "[run_cleartext] out/weights_relu.pth exists, skipping training"
 fi
 
-# 2. Reuse existing Quad weights for the FHE variant.
+# 2. Train FHE (Quad) variant if missing. The c3ae-demo's existing
+#    weights.pth is gitignored, so on a fresh checkout we train fresh
+#    rather than copying.
 if [ ! -f out/weights_fhe.pth ]; then
-    echo "[run_cleartext] copying ../weights.pth -> out/weights_fhe.pth"
-    cp ../weights.pth out/weights_fhe.pth
+    if [ -f ../weights.pth ]; then
+        echo "[run_cleartext] copying ../weights.pth -> out/weights_fhe.pth"
+        cp ../weights.pth out/weights_fhe.pth
+    else
+        echo "[run_cleartext] training FHE (Quad) variant (60 epochs)..."
+        python -m models.train --variant fhe --data-dir ./data/UTKFace --epochs 60
+    fi
 else
-    echo "[run_cleartext] out/weights_fhe.pth exists, skipping copy"
+    echo "[run_cleartext] out/weights_fhe.pth exists, skipping training"
 fi
 
 # 3. Run cleartext eval (writes results/cleartext.csv).

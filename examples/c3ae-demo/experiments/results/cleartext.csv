@@ -1,0 +1,5 @@
+variant,scope,n,fpr,fnr,accuracy
+relu,overall,3557,0.167488,0.018996,0.955581
+relu,boundary,161,0.651515,0.147368,0.645963
+fhe,overall,3557,0.208539,0.026798,0.942086
+fhe,boundary,161,0.712121,0.157895,0.614907
