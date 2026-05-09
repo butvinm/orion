@@ -381,24 +381,9 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 - Move: `/home/butvinm/Dev/orion/docs/plans/2026-05-08-c3ae-experiments.md` → `/home/butvinm/Dev/orion/docs/plans/completed/2026-05-08-c3ae-experiments.md`
 - Move: `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs.md` → `/home/butvinm/Dev/orion/docs/plans/completed/2026-05-09-c3ae-vps-runs.md`
 
-- [ ] move the parent plan and this VPS plan into `completed/`:
-  ```sh
-  cd /home/butvinm/Dev/orion
-  mkdir -p docs/plans/completed
-  git mv docs/plans/2026-05-08-c3ae-experiments.md docs/plans/completed/
-  git mv docs/plans/2026-05-09-c3ae-vps-runs.md docs/plans/completed/
-  git commit -m "docs: move c3ae plans to completed/"
-  ```
-- [ ] append a short cost-and-timing summary at the bottom of `results/results.md` and amend the prior commit:
-  - Training VPS: flavor `<…>`, billed time `<…>`, approximate cost `<…>`
-  - FHE logn15 VPS: flavor `<…>`, billed time `<…>`, approximate cost `<…>`
-  - FHE logn16 VPS: flavor `<…>`, billed time `<…>`, approximate cost `<…>` (or "skipped" with rationale)
-- [ ] **manual verify**:
-  ```sh
-  ls /home/butvinm/Dev/orion/docs/plans/completed/ | grep c3ae
-  git log --oneline -5
-  ```
-  Both plan files in `completed/`; recent commits present.
+- [x] moved both plan files via `git mv` to `docs/plans/completed/` (this commit).
+- [x] appended cost-tracking + notable-findings sections to `results/results.md`. Three rows: train VPS `rtx4090-1.8.16.40` 2h14m, fhe-logn15 `cpu.16.128.240` 38m, fhe-logn16 `cpu.16.128.240` 56m. Total measured compute: ~3h48m. Pricing not captured (immers console required).
+- [x] **manual verify**: both plans now under `docs/plans/completed/`; results.md has cost-log + findings sections.
 
 ### Task 22: Open PR (optional)
 
