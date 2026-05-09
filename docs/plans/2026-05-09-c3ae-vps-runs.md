@@ -275,16 +275,10 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** none
 
-- [ ] verify Task 11 succeeded (results.md committed) before deleting.
-- [ ] delete the VPS:
-  ```
-  vps delete orion-c3ae-fhe-logn15
-  ```
-- [ ] **manual verify**:
-  ```sh
-  openstack --os-cloud immers server list -f value -c Name | grep -q '^orion-c3ae-fhe-logn15$' && echo "STILL EXISTS" || echo "deleted ok"
-  ```
-- [ ] record rental end time. Compute billed time.
+- [x] verified Task 11 succeeded (results.md committed at 3a01b7b).
+- [x] deleted via `openstack --os-cloud immers server delete orion-c3ae-fhe-logn15 --wait`.
+- [x] **manual verify**: `openstack server list` shows no orion VPSes — deleted ok.
+- [x] rental window: 2026-05-09T21:43:26+03:00 → 2026-05-09T22:21:26+03:00. Billed: **38 min (0.63 h)** on `cpu.16.128.240`.
 
 ### Task 13: Report `logn15` results to user — **HARD STOP**
 
