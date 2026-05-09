@@ -27,8 +27,10 @@ Run 'bench <subcommand> --help' for per-subcommand flags.
 }
 
 func cmdKeygen(args []string) {
-	_ = args
-	panic("not implemented")
+	if err := runKeygen(args); err != nil {
+		fmt.Fprintf(os.Stderr, "bench keygen: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func cmdEncrypt(args []string) {

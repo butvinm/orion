@@ -263,7 +263,7 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 - Modify: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/main.go`
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/keygen.go`
 
-- [ ] implement `cmdKeygen`. Flags: `--model <path>`, `--out <dir>`. Behavior:
+- [x] implement `cmdKeygen`. Flags: `--model <path>`, `--out <dir>`. Behavior:
   - load model with `evaluator.LoadModel`
   - extract params + manifest via `model.ClientParams()`
   - construct `ckks.Parameters` from the orion params (use the existing helper if `evaluator` exposes one; else inline `ckks.NewParametersFromLiteral` with the orion fields)
@@ -272,13 +272,15 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
   - **no bootstrap path** — both configs are no-bootstrap, so error out with a clear message if `manifest.BootstrapSlots` is non-empty (defensive; should never trigger)
   - serialize: `sk.MarshalBinary() → <out>/sk.bin`, build `MemEvaluationKeySet`, `evk.MarshalBinary() → <out>/evk.bin`
   - write `<out>/keygen.json` with `{"keygen_s": ..., "evk_bytes": ...}`
-- [ ] **manual verify** (deferred to Task 13 once we have a working `.orion` model end-to-end). For now, just verify build:
+- [x] **manual verify** (deferred to Task 13 once we have a working `.orion` model end-to-end). For now, just verify build:
 
   ```sh
   cd examples/c3ae-demo/experiments/bench
   go build ./...                # must succeed
   ./bench keygen                # must print missing-flag error and exit nonzero
   ```
+
+  Output: `go build ./...` exits 0; `./bench keygen` prints `bench keygen: --model is required` and exits with status 1.
 
 ### Task 10: Bench `encrypt` subcommand (SK-mode)
 
