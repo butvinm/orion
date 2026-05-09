@@ -359,21 +359,9 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 - Modify: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/results/results.md`
 
-- [ ] regenerate the full report (now with both rows):
-  ```sh
-  cd /home/butvinm/Dev/orion/examples/c3ae-demo/experiments
-  source /home/butvinm/Dev/orion/.venv/bin/activate
-  python build_results.py
-  ```
-- [ ] **manual verify**:
-  - FHE cost table now has 2 rows (logn15, logn16) with all columns populated
-  - logn=16 forward_s > logn=15 forward_s; logn=16 evk_GB > logn=15 evk_GB; logn=16 peak_rss_GB > logn=15 peak_rss_GB
-- [ ] commit:
-  ```sh
-  cd /home/butvinm/Dev/orion
-  git add examples/c3ae-demo/experiments/results/results.md
-  git commit -m "results: add logn16 FHE cost row, complete report"
-  ```
+- [x] regenerated full report via `python build_results.py`. FHE cost table now has 2 rows.
+- [x] **manual verify**: logn16 row is `compile_s=386.7, compile_peak_rss_GB=25.77, keygen_s=68.1, evk_GB=12.70, mean_forward_s=543.7±219.4, peak_rss_GB=114.37±0.07`. All metrics strictly higher than logn15 (compile 2.4×, keygen 1.5×, evk 1.9×, forward 2.7× steady-state, peak_rss 2.1×). Mean forward_s is skewed high by sample 12's cold-cache 797s outlier; samples 35+44 alone average 417s.
+- [x] committed full results.md (commit `85202b9`).
 
 ### Task 20: Tear down FHE `logn16` VPS
 
