@@ -479,18 +479,20 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 
 - Modify: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/README.md`
 
-- [ ] expand the README to cover:
+- [x] expand the README to cover:
   - prerequisites (venv, Go 1.22+, UTKFace data dir)
   - end-to-end commands: cleartext (`bash scripts/run_cleartext.sh`) and FHE (`bash scripts/run_fhe.sh logn15`, `bash scripts/run_fhe.sh logn16`)
   - bench binary build (`cd bench && go build`)
   - directory layout of generated `out/` and `results/` artifacts
   - explicit caveat: this experiment runs **without bootstrap** in either config. Bootstrap at the user's externally-fixed Q=415 budget at logn=15 was investigated and dropped due to security-bound violations.
-- [ ] run `npx prettier --write examples/c3ae-demo/experiments/README.md` (per global preference for markdown formatting)
-- [ ] **manual verify**:
+- [x] run `npx prettier --write examples/c3ae-demo/experiments/README.md` (per global preference for markdown formatting)
+- [x] **manual verify**:
   - `pytest python/tests/` — must pass (no regressions in core repo)
   - `go test ./evaluator/...` — must pass (no regressions)
   - `cd examples/c3ae-demo/experiments/bench && go vet ./... && go build ./...` — must pass
   - Tasks 1–15 all marked `[x]`
+
+  Output: `pytest python/tests/` → 215 passed, 1 skipped, 1 warning in 16.46s. `go test ./evaluator/...` → ok in 29.430s. `go vet ./...` and `go build ./...` in `bench/` both exit 0. `grep -nE '^- \[ \]' docs/plans/2026-05-08-c3ae-experiments.md` matches only Task 16's own three lines (now closed by this edit) — Tasks 1–15 are all `[x]`. `npx prettier --write` reported the README unchanged (already well-formatted).
 
 ## Technical Details
 
