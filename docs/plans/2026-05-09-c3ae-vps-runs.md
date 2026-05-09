@@ -304,15 +304,15 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** none (reuses `setup-fhe.sh` from Task 7)
 
-- [ ] run `setup-fhe.sh` on the new VPS (same as Task 7).
-- [ ] scp the weights up:
+- [x] run `setup-fhe.sh` on the new VPS (same as Task 7).
+- [x] scp the weights up:
   ```sh
   FHE16_IP=$(openstack --os-cloud immers server show orion-c3ae-fhe-logn16 -f json | jq -r '.addresses | to_entries[0].value[0].addr')
   ssh ubuntu@${FHE16_IP} mkdir -p ~/orion/examples/c3ae-demo/experiments/out
   scp examples/c3ae-demo/experiments/out/weights_fhe.pth ubuntu@${FHE16_IP}:~/orion/examples/c3ae-demo/experiments/out/
   ```
-- [ ] build bench: `ssh ubuntu@${FHE16_IP} 'cd ~/orion/examples/c3ae-demo/experiments/bench && go build'`
-- [ ] **manual verify**: same set as Task 7's verify, swapping `FHE_IP` → `FHE16_IP`.
+- [x] build bench: `ssh ubuntu@${FHE16_IP} 'cd ~/orion/examples/c3ae-demo/experiments/bench && go build'`
+- [x] **manual verify**: same set as Task 7's verify, swapping `FHE_IP` → `FHE16_IP`. torch 2.10.0+cu128, UTKFace symlinked (23708 entries), Go 1.24, bench 11.4 MB built, weights 136347 bytes uploaded, 125 GiB RAM available.
 
 ### Task 16: Run FHE benchmark for `logn16`
 
