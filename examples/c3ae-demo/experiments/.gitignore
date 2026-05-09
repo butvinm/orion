@@ -1,0 +1,12 @@
+# Build artifacts and outputs
+out/
+bench/bench
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Generated experiment results — only the final report is committed
+results/*
+!results/.gitkeep
+!results/results.md
