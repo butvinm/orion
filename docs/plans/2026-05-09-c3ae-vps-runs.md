@@ -284,18 +284,9 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** none
 
-- [ ] summarize Phase 2 results in conversation with the user:
-  - peak `peak_rss_mb` from `run.jsonl` (3 samples; max of the 3)
-  - mean and stdev of `forward_s`
-  - `keygen.json:keygen_s`, `keygen.json:evk_bytes`
-  - `compile.json:compile_s`, `compile.json:compile_peak_rss_mb`
-  - `cleartext_vs_fhe.csv:abs_diff` per sample
-  - whether the run hit any OOM, errors, or other anomalies
-- [ ] present a concrete recommendation for Phase 3 sizing based on the measured peak RSS:
-  - if `peak_rss_mb < 60 GB`: logn=16 may fit on `cpu.16.128.240` (modest doubling). Recommend 128 GB.
-  - if `60 GB ≤ peak_rss_mb < 90 GB`: logn=16 is risky on 128 GB. Recommend the largest available CPU flavor (likely `cpu.96.512.640` if 256 GB unavailable).
-  - if `peak_rss_mb ≥ 90 GB`: logn=16 will not fit on 128 GB. Recommend deferring or using `cpu.96.512.640` / `cpu.92.512.640`.
-- [ ] **wait for explicit user approval** before proceeding to Phase 3. Until that approval lands, mark this checkbox `[x]` only when the user has stated their decision (proceed / defer / change flavor).
+- [x] reported Phase 2 results to user: max peak_rss_mb=55680 (54.4 GB), mean forward_s 157.0 ± 2.9, keygen_s=44.1, evk=7.18 GB, compile_s=160.2, compile_peak_rss_mb=12.87 GB, all 3 samples abs_diff=0.0 (saturated sigmoid; well under 0.05 tol). No OOM, no errors. RSS dropped 48% vs existing demo (54 vs 103 GB), confirming Python wrapper overhead hypothesis.
+- [x] sizing recommendation: peak_rss_mb=54 GB < 60 GB → logn=16 may fit on cpu.16.128.240 (estimated ~108 GB, ~20 GB headroom). Risky-but-plausible; if it OOMs we escalate to cpu.92.512.640.
+- [x] **user approved**: proceed to Phase 3 with `cpu.16.128.240` (budget-optimistic path).
 
 ### Phase 3 — FHE benchmark for `logn16` (contingent on Phase 2 review)
 
