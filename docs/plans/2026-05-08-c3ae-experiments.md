@@ -448,13 +448,13 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/build_results.py`
 
-- [ ] write `build_results.py` that:
+- [x] write `build_results.py` that:
   - reads `results/cleartext.csv` (if exists), `results/<cfg>/run.jsonl`, `results/<cfg>/keygen_time.log`, `out/<cfg>/keys/keygen.json`, and `out/<cfg>/compile.json` for each `<cfg>` directory under `results/`
   - emits `results/results.md` with two markdown tables:
     - **Cleartext quality**: rows = `variant × scope`, cols = `n, FPR, FNR, Accuracy`
     - **FHE cost**: rows = `config`, cols = `compile_s, keygen_s, evk_GB, mean_forward_s ± std, peak_rss_GB`
   - graceful degradation: if a config has only partial data, emit what's available; mark missing as `n/a`
-- [ ] **manual verify** with synthetic input:
+- [x] **manual verify** with synthetic input:
 
   ```sh
   cd examples/c3ae-demo/experiments
@@ -470,6 +470,8 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
   ```
 
   Inspect: must show 2 tables with correct rows and cells; no traceback.
+
+  Verified: scenario 1 (full synthetic data) produces `results.md` with the **Cleartext quality** table (4 rows: `fhe×{boundary,overall}`, `relu×{boundary,overall}`) and **FHE cost** table (1 row: `logn16` with `compile_s=150.0, keygen_s=80.0, evk_GB=7.17, mean_forward_s=305.0 ± 5.0, peak_rss_GB=49.32 ± 0.49`). Scenario 2 (empty `results/` only) produces `results.md` with `_No cleartext results yet..._` and `_No FHE results yet..._` notices — no traceback. Default `--root` resolves to `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments` via `--help`.
 
 ### Task 16: Verify acceptance criteria + flesh out experiments README
 
