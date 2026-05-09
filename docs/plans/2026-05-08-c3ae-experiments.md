@@ -359,67 +359,57 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 
 **Files:** none (uses files produced by Tasks 1–12 + existing weights)
 
-- [ ] manual end-to-end run against the existing `logn15` config. **Prerequisites**: existing trained Quad weights `/home/butvinm/Dev/orion/examples/c3ae-demo/weights.pth` are copied to `out/weights_fhe.pth`, UTKFace dataset present.
-- [ ] run the full pipeline:
+**Local-machine adaptation:** the local box has 38 GB RAM (~14 GB free) but `bench infer` peaks at ~103 GB RSS at logn=15 per `/home/butvinm/Dev/orion/examples/c3ae-demo/README.md`. We therefore (a) ran compile/keygen/encrypt locally, (b) skipped `bench infer` (deferred to VPS Post-Completion), and (c) substituted a `bench decrypt` round-trip on the **encrypted input ciphertext** as a sanity check that the encrypt/decrypt pair works. UTKFace dataset is not present locally; we use a synthetic input — 12288 random float64 values in `[-1, 1]` (seed=42) written via numpy to `out/inputs/sample_test.bin` (98304 bytes).
+
+- [x] manual end-to-end run against the existing `logn15` config. **Prerequisites**: existing trained Quad weights `/home/butvinm/Dev/orion/examples/c3ae-demo/weights.pth` copied to `out/weights_fhe.pth`; synthetic input generated.
+- [x] compile model with `logn15` — `compile.json`: `compile_s=121.75`, `compile_peak_rss_mb=3322.9`, `model_bytes=878078308`.
+- [x] keygen produces `sk.bin` (5,243,056 B) + `evk.bin` (7,717,797,550 B = ~7.2 GB) + `keygen.json` (`keygen_s=30.13`, `evk_bytes=7717797550`, galois=183, rlk=true).
+- [x] encrypt produces `ct.bin` (8,389,166 B) — input padded from 12288 to 16384 slots at `level=15`.
+- [x] **`bench infer` skipped** — needs ~103 GB peak RSS at logn=15 vs 38 GB local RAM. Deferred to VPS Post-Completion (the existing demo numbers in `examples/c3ae-demo/README.md` already establish the logn=15 cost; this task only proves the pipeline plumbing is correct).
+- [x] decrypt encrypt output round-trips to recover input — `bench decrypt out/logn15/ct_test.bin` decoded `decoded[0]=0.547912`, vs `sample[0]=0.547912`, diff `4.01e-11` (well under the 1e-3 tolerance).
 
   ```sh
   cd examples/c3ae-demo/experiments
 
   # one-time
   cp ../weights.pth out/weights_fhe.pth
+  python -c "
+  import numpy as np
+  rng = np.random.default_rng(42)
+  vals = rng.uniform(-1, 1, 12288).astype(np.float64)
+  vals.tofile('out/inputs/sample_test.bin')
+  "
   python -m models.compile --variant fhe --config logn15 \
       --weights out/weights_fhe.pth --output out/logn15/model.orion
-  python -m models.prep_input --boundary-band
 
   # bench
   cd bench && go build && cd ..
-  ./bench/bench keygen --model out/logn15/model.orion \
-      --out out/logn15/keys/
-
-  IDX=$(ls out/inputs/sample_*.bin | head -1 | sed 's/.*sample_\([0-9]*\)\.bin/\1/')
+  ./bench/bench keygen --model out/logn15/model.orion --out out/logn15/keys/
   ./bench/bench encrypt \
       --model out/logn15/model.orion \
       --sk out/logn15/keys/sk.bin \
-      --input out/inputs/sample_${IDX}.bin \
-      --out out/logn15/ct_${IDX}.bin
-
-  ./bench/bench infer \
-      --model out/logn15/model.orion \
-      --evk out/logn15/keys/evk.bin \
-      --ct out/logn15/ct_${IDX}.bin \
-      --out out/logn15/result_${IDX}.bin \
-      --metrics out/logn15/run.jsonl \
-      --sample-idx ${IDX}
-
+      --input out/inputs/sample_test.bin \
+      --out out/logn15/ct_test.bin
   ./bench/bench decrypt \
       --model out/logn15/model.orion \
       --sk out/logn15/keys/sk.bin \
-      --ct out/logn15/result_${IDX}.bin
+      --ct out/logn15/ct_test.bin
   ```
 
-- [ ] verify outputs:
-  - `keys/sk.bin`, `keys/evk.bin`, `keys/keygen.json` exist
-  - `run.jsonl` has one line with valid JSON containing `forward_s`, `peak_rss_mb`, `result_ct_bytes`, `sample_idx`
-  - `decrypt` stdout JSON has finite `logit` and `prob ∈ [0, 1]`
-  - compute MAE vs cleartext: run the cleartext model on the same input, check `|fhe_prob − clear_prob| < 0.05`
+  Round-trip verification:
 
   ```sh
   python -c "
-  import json, struct, torch
-  from models.c3ae_fhe import C3AE
-  net = C3AE(); net.load_state_dict(torch.load('out/weights_fhe.pth', weights_only=True)); net.eval()
-  with open('out/inputs/sample_${IDX}.bin', 'rb') as f:
-      vals = struct.unpack(f'{12288}d', f.read())
-  x = torch.tensor(vals, dtype=torch.float32).reshape(1,3,64,64)
-  with torch.no_grad():
-      clear = torch.sigmoid(net(x)).item()
-  print(f'cleartext prob: {clear:.6f}')
+  import numpy as np, json
+  sample = np.fromfile('out/inputs/sample_test.bin', dtype=np.float64)
+  with open('out/logn15/roundtrip.json') as f:
+      result = json.load(f)
+  diff = abs(result['logit'] - sample[0])
+  assert diff < 1e-3
   "
   ```
 
-  Manually compare to the bench's decrypted prob; they should match within 0.05.
-
-- [ ] if any step fails, fix at the implementation task level (Tasks 8–12) and re-run the pipeline.
+- [x] **`bench infer` E2E + cleartext-vs-FHE MAE check deferred to VPS Post-Completion** (see Section "Post-Completion → 2. Run FHE `logn15`"). The local smoke test only validates compile + keygen + encrypt + decrypt round-trip; full forward inference and the `|fhe_prob − clear_prob| < 0.05` check require a VPS run.
 
 ### Task 14: Orchestration scripts
 
