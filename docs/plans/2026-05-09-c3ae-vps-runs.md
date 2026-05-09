@@ -133,9 +133,9 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/results/cleartext.csv` (transferred from VPS)
 
-- [x] from local machine, scp'd the artifacts to `/tmp/c3ae-train-artifacts/{weights_relu,weights_fhe}.pth` and `examples/c3ae-demo/experiments/results/cleartext.csv`.
+- [x] from local machine, scp'd the artifacts to `examples/c3ae-demo/experiments/out/{weights_relu,weights_fhe}.pth` and `examples/c3ae-demo/experiments/results/cleartext.csv`.
 - [x] committed cleartext.csv to git on branch `experiments`. Also updated `experiments/.gitignore` to allowlist `results/cleartext.csv` (was excluded by the `results/*` block).
-- [x] **manual verify** (local): CSV has 4 rows; both `weights_relu.pth` (135805 B) and `weights_fhe.pth` (136347 B) saved at `/tmp/c3ae-train-artifacts/`.
+- [x] **manual verify** (local): CSV has 4 rows; both `weights_relu.pth` (135805 B) and `weights_fhe.pth` (136347 B) saved at `examples/c3ae-demo/experiments/out/`.
 
 ### Task 5: Tear down training VPS
 
@@ -189,7 +189,7 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
   ```sh
   FHE_IP=$(openstack --os-cloud immers server show orion-c3ae-fhe-logn15 -f json | jq -r '.addresses | to_entries[0].value[0].addr')
   ssh ubuntu@${FHE_IP} mkdir -p ~/orion/examples/c3ae-demo/experiments/out
-  scp /tmp/c3ae-train-artifacts/weights_fhe.pth ubuntu@${FHE_IP}:~/orion/examples/c3ae-demo/experiments/out/
+  scp examples/c3ae-demo/experiments/out/weights_fhe.pth ubuntu@${FHE_IP}:~/orion/examples/c3ae-demo/experiments/out/
   ```
 - [ ] build the bench Go binary on the FHE VPS:
   ```sh
@@ -354,7 +354,7 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
   ```sh
   FHE16_IP=$(openstack --os-cloud immers server show orion-c3ae-fhe-logn16 -f json | jq -r '.addresses | to_entries[0].value[0].addr')
   ssh ubuntu@${FHE16_IP} mkdir -p ~/orion/examples/c3ae-demo/experiments/out
-  scp /tmp/c3ae-train-artifacts/weights_fhe.pth ubuntu@${FHE16_IP}:~/orion/examples/c3ae-demo/experiments/out/
+  scp examples/c3ae-demo/experiments/out/weights_fhe.pth ubuntu@${FHE16_IP}:~/orion/examples/c3ae-demo/experiments/out/
   ```
 - [ ] build bench: `ssh ubuntu@${FHE16_IP} 'cd ~/orion/examples/c3ae-demo/experiments/bench && go build'`
 - [ ] **manual verify**: same set as Task 7's verify, swapping `FHE_IP` → `FHE16_IP`.
