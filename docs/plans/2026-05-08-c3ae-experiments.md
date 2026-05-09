@@ -209,14 +209,14 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/models/eval.py`
 
-- [ ] write `eval.py` that:
+- [x] write `eval.py` that:
   - loads both `out/weights_relu.pth` and `out/weights_fhe.pth` (skipping any missing variant with a printed warning, not erroring)
   - reproduces test split via `manual_seed(42)`
   - computes FPR/FNR/Accuracy with two scopes: `overall` (full test set) and `boundary` (`16 ≤ age ≤ 20`)
   - writes `results/cleartext.csv` with columns `variant,scope,n,fpr,fnr,accuracy`
   - decision rule: `sigmoid(logit) >= 0.5 → adult`
   - factor metric computation into a helper `compute_metrics(probs: np.ndarray, targets: np.ndarray) -> dict`
-- [ ] **manual verify**: from `experiments/`, run
+- [x] **manual verify**: from `experiments/`, run
 
   ```sh
   python -c "
