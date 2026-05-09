@@ -351,13 +351,7 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/out/logn16/compile.json` (gitignored)
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/out/logn16/keys/keygen.json` (gitignored)
 
-- [ ] from local, rsync results back (same pattern as Task 10, with the `logn16` paths and excluding the multi-GB key bins):
-  ```sh
-  FHE16_IP=$(openstack --os-cloud immers server show orion-c3ae-fhe-logn16 -f json | jq -r '.addresses | to_entries[0].value[0].addr')
-  cd /home/butvinm/Dev/orion/examples/c3ae-demo/experiments
-  rsync -av "ubuntu@${FHE16_IP}:~/orion/examples/c3ae-demo/experiments/results/logn16/" results/logn16/
-  rsync -av --exclude '*.bin' "ubuntu@${FHE16_IP}:~/orion/examples/c3ae-demo/experiments/out/logn16/" out/logn16/
-  ```
+- [x] rsync'd `results/logn16/` and `out/logn16/` (excluding multi-GB key bins via `--exclude '*.bin'` AND the 1.75 GB `model.orion`) to local. run.jsonl has 3 clean rows, cleartext_vs_fhe.csv all `passed=true`, compile.json shows `compile_s=386.7, compile_peak_rss_mb=26.4 GB, model_bytes=1.75 GB`, keygen.json shows `keygen_s=68.06, evk_bytes=12.70 GB`.
 
 ### Task 19: Regenerate full results.md and commit
 
