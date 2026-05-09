@@ -24,10 +24,7 @@ Run 'bench <subcommand> --help' for per-subcommand flags.
 `)
 }
 
-// subcommands dispatches a subcommand name to its implementation. Each
-// implementation lives in a per-file ``run*`` function; this map exists
-// solely to remove a redundant cmd*-wrapper layer that simply called
-// run* and printed an error prefix.
+// subcommands maps a subcommand name to its implementation.
 var subcommands = map[string]func([]string) error{
 	"keygen":  runKeygen,
 	"encrypt": runEncrypt,

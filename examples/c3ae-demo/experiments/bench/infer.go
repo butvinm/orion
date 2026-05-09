@@ -136,16 +136,15 @@ func runInfer(args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening metrics %q: %w", *metricsPath, err)
 	}
+	// Defer Close so it runs on every exit path. The explicit Sync below
+	// flushes data to disk before we return; Close at defer time still
+	// reports any error from kernel-side close (e.g. NFS write-back errors).
+	defer func() { _ = mf.Close() }()
 	if _, err := mf.Write(append(metricsLine, '\n')); err != nil {
-		mf.Close()
 		return fmt.Errorf("writing metrics: %w", err)
 	}
 	if err := mf.Sync(); err != nil {
-		mf.Close()
 		return fmt.Errorf("syncing metrics: %w", err)
-	}
-	if err := mf.Close(); err != nil {
-		return fmt.Errorf("closing metrics: %w", err)
 	}
 
 	fmt.Fprintf(os.Stdout,
