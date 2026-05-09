@@ -141,18 +141,10 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** none
 
-- [ ] verify Task 4 succeeded (both weights and cleartext.csv local) before deleting.
-- [ ] delete the training VPS:
-  ```
-  vps delete orion-c3ae-train
-  ```
-  The skill will prompt for confirmation. Confirm.
-- [ ] **manual verify**:
-  ```sh
-  openstack --os-cloud immers server list -f value -c Name | grep -q '^orion-c3ae-train$' && echo "STILL EXISTS" || echo "deleted ok"
-  ```
-  Must print `deleted ok`.
-- [ ] record rental end time. Compute total billed time for the training VPS.
+- [x] verified Task 4 succeeded (both weights local at `examples/c3ae-demo/experiments/out/`, cleartext.csv committed).
+- [x] deleted the training VPS via `openstack --os-cloud immers server delete orion-c3ae-train --wait`.
+- [x] **manual verify**: `openstack server list | grep orion-c3ae-train` returns nothing → confirmed deleted.
+- [x] rental end: 2026-05-09T21:41:09+03:00. Total billed: ~2h 14m (rented 19:27, deleted 21:41) on rtx4090-1.8.16.40.
 
 ### Phase 2 — FHE benchmark for `logn15` (gated by user before Phase 3)
 
