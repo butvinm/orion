@@ -244,9 +244,9 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/go.mod`
 - Create: `/home/butvinm/Dev/orion/examples/c3ae-demo/experiments/bench/main.go`
 
-- [ ] write `bench/go.mod` modeled on `/home/butvinm/Dev/orion/examples/c3ae-demo/server/go.mod`: module path `github.com/butvinm/orion/v2/examples/c3ae-demo/experiments/bench`, requires `github.com/butvinm/orion/v2` with `replace github.com/butvinm/orion/v2 => ../../../..` (point at repo root for in-tree development), and `github.com/tuneinsight/lattigo/v6 v6.2.0`.
-- [ ] write `bench/main.go` with `main()` dispatching on `os.Args[1]` to `cmdKeygen|cmdEncrypt|cmdInfer|cmdDecrypt`. Each handler uses `flag.NewFlagSet(name, flag.ExitOnError)`. Stub each handler with `panic("not implemented")` for now. Print a usage message on unknown/missing subcommand and exit nonzero.
-- [ ] **manual verify**:
+- [x] write `bench/go.mod` modeled on `/home/butvinm/Dev/orion/examples/c3ae-demo/server/go.mod`: module path `github.com/butvinm/orion/v2/examples/c3ae-demo/experiments/bench`, requires `github.com/butvinm/orion/v2` with `replace github.com/butvinm/orion/v2 => ../../../..` (point at repo root for in-tree development), and `github.com/tuneinsight/lattigo/v6 v6.2.0`.
+- [x] write `bench/main.go` with `main()` dispatching on `os.Args[1]` to `cmdKeygen|cmdEncrypt|cmdInfer|cmdDecrypt`. Each handler uses `flag.NewFlagSet(name, flag.ExitOnError)`. Stub each handler with `panic("not implemented")` for now. Print a usage message on unknown/missing subcommand and exit nonzero.
+- [x] **manual verify**:
 
   ```sh
   cd examples/c3ae-demo/experiments/bench
