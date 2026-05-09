@@ -215,13 +215,13 @@ Final deliverable: `examples/c3ae-demo/experiments/results/results.md` with two 
   - computes FPR/FNR/Accuracy with two scopes: `overall` (full test set) and `boundary` (`16 ≤ age ≤ 20`)
   - writes `results/cleartext.csv` with columns `variant,scope,n,fpr,fnr,accuracy`
   - decision rule: `sigmoid(logit) >= 0.5 → adult`
-  - factor metric computation into a helper `compute_metrics(probs: np.ndarray, targets: np.ndarray) -> dict`
+  - factor metric computation into a helper `compute_metrics(probs: np.ndarray, targets: np.ndarray) -> dict` (canonical home: `models/metrics.py`, also imported by `models/train.py`)
 - [x] **manual verify**: from `experiments/`, run
 
   ```sh
   python -c "
   import numpy as np
-  from models.eval import compute_metrics
+  from models.metrics import compute_metrics
   # all correct
   m = compute_metrics(np.array([0.1, 0.9]), np.array([0., 1.]))
   assert m['accuracy'] == 1.0 and m['fpr'] == 0.0 and m['fnr'] == 0.0, m

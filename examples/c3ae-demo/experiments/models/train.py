@@ -24,6 +24,7 @@ from torch.utils.data import DataLoader, random_split
 
 from models.c3ae import C3AE as C3AE_ReLU
 from models.c3ae_fhe import C3AE as C3AE_FHE
+from models.metrics import compute_metrics
 from models.utkface import UTKFaceDataset
 
 VARIANTS = {
@@ -55,17 +56,13 @@ def evaluate(model, loader, device, fpr_weight):
             all_probs.extend(probs.cpu().squeeze().tolist())
             all_targets.extend(targets.cpu().squeeze().tolist())
 
-    probs = np.array(all_probs)
-    targets = np.array(all_targets)
-    pred_adult = probs >= 0.5
-    true_adult = targets >= 0.5
-    minors_mask = ~true_adult
-
-    fpr = pred_adult[minors_mask].mean() if minors_mask.sum() > 0 else 0
-    fnr = (~pred_adult[true_adult]).mean() if true_adult.sum() > 0 else 0
-    accuracy = (pred_adult == true_adult).mean()
-
-    return {"loss": total_loss / n, "accuracy": accuracy, "fpr": fpr, "fnr": fnr}
+    metrics = compute_metrics(np.array(all_probs), np.array(all_targets))
+    return {
+        "loss": total_loss / n,
+        "accuracy": metrics["accuracy"],
+        "fpr": metrics["fpr"],
+        "fnr": metrics["fnr"],
+    }
 
 
 def load_variant(variant: str):
