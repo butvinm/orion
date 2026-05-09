@@ -339,11 +339,8 @@ Final deliverable committed to the repo: `/home/butvinm/Dev/orion/examples/c3ae-
 
 **Files:** outputs at `~/orion/examples/c3ae-demo/experiments/results/logn16/cleartext_vs_fhe.csv`
 
-- [ ] same as Task 9 but for `logn16`:
-  ```sh
-  python verify_fhe.py --config logn16
-  ```
-- [ ] **manual verify**: all `abs_diff < 0.05`. Otherwise pipeline bug.
+- [x] ran `python verify_fhe.py --config logn16` on the VPS (exit 0).
+- [x] **manual verify**: all 3 samples (12/35/44) `fhe_prob=1.0000 cleartext=1.0000 abs_diff=0.0000` (saturated sigmoid; max_diff=0.0 well under 0.05 tol). Same outcome as logn=15 — boundary samples are confidently classified by both pipelines.
 
 ### Task 18: Capture `logn16` artifacts off FHE VPS
 
