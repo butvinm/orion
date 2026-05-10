@@ -111,7 +111,7 @@ Reads `results/cleartext.csv` and `results/<cfg>/run.jsonl` files, emits `result
 
 ### Provisioning a fresh VPS for benchmarking
 
-We provisioned three VPSes on immers.cloud during the 2026-05-09 run. The provisioning script at `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh` captures the apt deps + Go 1.24 + uv + UTKFace download in one shot; total provisioning takes ~5 min on a fresh `cpu.16.128.240`. Use it as a reference rather than copy-pasting commands. The plan at `/home/butvinm/Dev/orion/docs/plans/completed/2026-05-09-c3ae-vps-runs.md` documents the full sequence including measured timings and cost.
+The provisioning script at [`../../docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh`](../../docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh) captures the apt deps + Go 1.24 + uv + UTKFace download in one shot; total provisioning takes ~5 min on a fresh 16-vCPU Ubuntu 22.04 VPS. Use it as a reference rather than copy-pasting commands. The plan at [`../../docs/plans/completed/2026-05-09-c3ae-vps-runs.md`](../../docs/plans/completed/2026-05-09-c3ae-vps-runs.md) documents the full sequence including measured timings and cost.
 
 ## Architecture
 
@@ -176,13 +176,15 @@ Input (64×64×3 = 12,288 values) fits in a single ciphertext at both ring degre
 
 The Quad-FHE variant trades ~1–3 percentage points of accuracy for FHE compatibility. The 16–20 boundary band is brutal for both variants — the asymmetric loss (`fpr_weight=40`) doesn't fully overcome the dataset's 18% minor / 82% adult class imbalance.
 
-### FHE inference cost (cpu.16.128.240: 16 vCPUs, 128 GB RAM; Go-only `bench` binary; 3 boundary samples)
+### FHE inference cost
+
+Hardware: 16 vCPUs, 128 GB RAM. Workload: Go-only `bench` binary, mean over 3 boundary samples.
 
 | config | compile_s | compile_peak_rss_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB   |
 | ------ | --------- | ------------------- | -------- | ------ | -------------- | ------------- |
 | logn15 | 160.2     | 12.87               | 44.1     | 7.19   | 157.0 ± 2.9    | 54.19 ± 0.29  |
 | logn16 | 386.7     | 25.77               | 68.1     | 12.70  | 543.7 ± 219.4  | 114.37 ± 0.07 |
 
-**Headline: peak server RSS dropped 47% (54.19 GB vs 103 GB) at `logn=15`** compared to the pre-Go-bench Python-wrapped pipeline measured on the same VPS. Forward time is roughly comparable (~+13%, 157s vs 139s). The RSS reduction confirms the Python wrapper added ~50 GB of overhead at `logn=15`. `logn=16` fits in 128 GB by ~10 GB margin — going larger at this depth requires a 256+ GB box.
+`logn=16` fits in 128 GB with roughly 10 GB of headroom — going larger at this multiplicative depth would require a 256 GB box.
 
-For the full audit trail (per-sample JSONL, VPS rental cost log, cold-cache notes), see [`results/results.md`](results/results.md) and [`/home/butvinm/Dev/orion/docs/plans/completed/2026-05-09-c3ae-vps-runs.md`](../../docs/plans/completed/2026-05-09-c3ae-vps-runs.md).
+For the full audit trail (per-sample JSONL, rental cost log, cold-cache notes), see [`results/results.md`](results/results.md) and [`docs/plans/completed/2026-05-09-c3ae-vps-runs.md`](../../docs/plans/completed/2026-05-09-c3ae-vps-runs.md).
