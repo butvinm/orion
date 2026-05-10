@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import datetime as _dt
+import datetime
 import json
 import math
 import statistics
@@ -330,7 +330,7 @@ def build(root: Path) -> Path:
     cleartext_md = _build_cleartext_table(cleartext_rows)
     fhe_md = _build_fhe_table(root)
 
-    now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     parts = [
         "# C3AE Experiment Results",
         "",

@@ -89,13 +89,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.variant != "fhe":
-        # Defensive — argparse already enforces this, but keep an explicit
-        # message in case the choices ever expand.
-        raise SystemExit(
-            f"--variant {args.variant!r} is not compileable; only 'fhe' is supported."
-        )
-
     output = args.output or os.path.join("out", args.config, "model.orion")
     output_dir = os.path.dirname(output) or "."
     os.makedirs(output_dir, exist_ok=True)
@@ -150,7 +143,6 @@ def main() -> None:
         # can prefer the true RSS while still showing the Python figure.
         "compile_peak_python_mb": compile_peak_python_mb,
         "compile_peak_rss_mb": compile_peak_rss_mb,
-        "compile_baseline_rss_mb": rss_baseline_mb,
         "model_bytes": model_bytes,
     }
     metrics_path = os.path.join(output_dir, "compile.json")

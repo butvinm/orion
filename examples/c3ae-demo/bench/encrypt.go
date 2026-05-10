@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"math"
@@ -41,16 +42,16 @@ func runEncrypt(args []string) error {
 		return err
 	}
 	if *modelPath == "" {
-		return fmt.Errorf("--model is required")
+		return errors.New("--model is required")
 	}
 	if *skPath == "" {
-		return fmt.Errorf("--sk is required")
+		return errors.New("--sk is required")
 	}
 	if *inputPath == "" {
-		return fmt.Errorf("--input is required")
+		return errors.New("--input is required")
 	}
 	if *outPath == "" {
-		return fmt.Errorf("--out is required")
+		return errors.New("--out is required")
 	}
 
 	modelBytes, err := os.ReadFile(*modelPath)

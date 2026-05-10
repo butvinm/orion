@@ -193,10 +193,10 @@ The Quad-FHE variant trades ~1–3 percentage points of accuracy for FHE compati
 
 ### FHE inference cost (cpu.16.128.240: 16 vCPUs, 128 GB RAM; Go-only `bench` binary; 3 boundary samples)
 
-| config | compile_s | compile_peak_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB   |
-| ------ | --------- | --------------- | -------- | ------ | -------------- | ------------- |
-| logn15 | 160.2     | 12.87           | 44.1     | 7.19   | 157.0 ± 2.9    | 54.19 ± 0.29  |
-| logn16 | 386.7     | 25.77           | 68.1     | 12.70  | 543.7 ± 219.4  | 114.37 ± 0.07 |
+| config | compile_s | compile_peak_rss_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB   |
+| ------ | --------- | ------------------- | -------- | ------ | -------------- | ------------- |
+| logn15 | 160.2     | 12.87               | 44.1     | 7.19   | 157.0 ± 2.9    | 54.19 ± 0.29  |
+| logn16 | 386.7     | 25.77               | 68.1     | 12.70  | 543.7 ± 219.4  | 114.37 ± 0.07 |
 
 **Headline: peak server RSS dropped 47% (54.19 GB vs 103 GB) at `logn=15`** compared to the pre-Go-bench Python-wrapped pipeline measured on the same VPS. Forward time is roughly comparable (~+13%, 157s vs 139s). The RSS reduction confirms the Python wrapper added ~50 GB of overhead at `logn=15`. `logn=16` fits in 128 GB by ~10 GB margin — going larger at this depth requires a 256+ GB box.
 

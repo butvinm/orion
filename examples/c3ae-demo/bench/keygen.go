@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -30,10 +31,10 @@ func runKeygen(args []string) error {
 		return err
 	}
 	if *modelPath == "" {
-		return fmt.Errorf("--model is required")
+		return errors.New("--model is required")
 	}
 	if *outDir == "" {
-		return fmt.Errorf("--out is required")
+		return errors.New("--out is required")
 	}
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {

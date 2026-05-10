@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -41,22 +42,22 @@ func runInfer(args []string) error {
 		return err
 	}
 	if *modelPath == "" {
-		return fmt.Errorf("--model is required")
+		return errors.New("--model is required")
 	}
 	if *evkPath == "" {
-		return fmt.Errorf("--evk is required")
+		return errors.New("--evk is required")
 	}
 	if *ctPath == "" {
-		return fmt.Errorf("--ct is required")
+		return errors.New("--ct is required")
 	}
 	if *outPath == "" {
-		return fmt.Errorf("--out is required")
+		return errors.New("--out is required")
 	}
 	if *metricsPath == "" {
-		return fmt.Errorf("--metrics is required")
+		return errors.New("--metrics is required")
 	}
 	if *sampleIdx < 0 {
-		return fmt.Errorf("--sample-idx is required (must be >= 0)")
+		return errors.New("--sample-idx is required (must be >= 0)")
 	}
 
 	modelBytes, err := os.ReadFile(*modelPath)
@@ -110,7 +111,7 @@ func runInfer(args []string) error {
 	// --- End measured section ---
 
 	if len(result) == 0 {
-		return fmt.Errorf("eval.Forward returned empty result slice")
+		return errors.New("eval.Forward returned empty result slice")
 	}
 
 	resultBytes, err := result[0].MarshalBinary()

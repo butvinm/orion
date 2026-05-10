@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"math"
@@ -30,13 +31,13 @@ func runDecrypt(args []string) error {
 		return err
 	}
 	if *modelPath == "" {
-		return fmt.Errorf("--model is required")
+		return errors.New("--model is required")
 	}
 	if *skPath == "" {
-		return fmt.Errorf("--sk is required")
+		return errors.New("--sk is required")
 	}
 	if *ctPath == "" {
-		return fmt.Errorf("--ct is required")
+		return errors.New("--ct is required")
 	}
 
 	modelBytes, err := os.ReadFile(*modelPath)

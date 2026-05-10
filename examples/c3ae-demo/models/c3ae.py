@@ -76,8 +76,6 @@ class C3AE(nn.Module):
         self.act6 = nn.ReLU(inplace=False)
         self.fc2 = nn.Linear(12, 1)
 
-        self.first_stride = first_stride
-
     def forward(self, x):
         x = self.pool1(self.act1(self.bn1(self.conv1(x))))
         x = self.pool2(self.act2(self.bn2(self.conv2(x))))

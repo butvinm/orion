@@ -39,7 +39,12 @@ from models.metrics import compute_metrics
 from models.utkface import build_test_split
 
 
-def gather_predictions(model, test_set, device, batch_size=64):
+def gather_predictions(
+    model: torch.nn.Module,
+    test_set: torch.utils.data.Dataset,
+    device: torch.device,
+    batch_size: int = 64,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Run the model in eval mode over the test set, returning (probs, targets, ages)."""
     loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=0)
     model.eval()
@@ -74,9 +79,9 @@ VARIANTS: dict[str, type] = {
 def evaluate_variant(
     variant: str,
     weights_path: Path,
-    test_set,
-    device,
-) -> list[tuple[str, str, dict]]:
+    test_set: torch.utils.data.Dataset,
+    device: torch.device,
+) -> list[tuple[str, str, dict[str, float | int]]]:
     """Evaluate a single variant. Returns list of (variant, scope, metrics).
 
     If the weights file is missing, prints a warning and returns ``[]`` so the
@@ -103,7 +108,7 @@ def evaluate_variant(
     ]
 
 
-def write_csv(rows: list[tuple[str, str, dict]], out_path: Path) -> None:
+def write_csv(rows: list[tuple[str, str, dict[str, float | int]]], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", newline="") as f:
         writer = csv.writer(f)
@@ -147,7 +152,7 @@ def main() -> None:
     test_set = build_test_split(args.data_dir)
     print(f"Test set: {len(test_set)} samples on device={device}")
 
-    rows: list[tuple[str, str, dict]] = []
+    rows: list[tuple[str, str, dict[str, float | int]]] = []
     for variant in ("relu", "fhe"):
         weights = args.weights_dir / f"weights_{variant}.pth"
         rows.extend(evaluate_variant(variant, weights, test_set, device))
