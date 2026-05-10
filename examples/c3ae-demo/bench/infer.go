@@ -16,7 +16,7 @@ import (
 // inferMetrics is the JSONL record emitted per `bench infer` invocation.
 //
 // One line is appended to --metrics per call (open with O_APPEND|O_CREATE).
-// The aggregator (build_results.py, Task 15) consumes this file.
+// The aggregator (scripts/build_results.py) consumes this file.
 type inferMetrics struct {
 	SampleIdx     int     `json:"sample_idx"`
 	ForwardS      float64 `json:"forward_s"`

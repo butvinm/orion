@@ -111,7 +111,7 @@ Compiles the model, generates keys, runs encrypt + infer + decrypt for the 3 bou
 ### Verify FHE correctness
 
 ```sh
-python verify_fhe.py --config logn15
+python scripts/verify_fhe.py --config logn15
 ```
 
 Compares each FHE-decrypted probability against the cleartext PyTorch forward of the same input. Writes `results/<cfg>/cleartext_vs_fhe.csv` and exits non-zero if any sample exceeds `--tol` (default 0.05).
@@ -119,7 +119,7 @@ Compares each FHE-decrypted probability against the cleartext PyTorch forward of
 ### Aggregate the report
 
 ```sh
-python build_results.py
+python scripts/build_results.py
 ```
 
 Reads `results/cleartext.csv` and `results/<cfg>/run.jsonl` files, emits `results/results.md` with two markdown tables.

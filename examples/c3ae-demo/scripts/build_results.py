@@ -22,8 +22,16 @@ import datetime
 import json
 import math
 import statistics
+import sys
 from pathlib import Path
 from typing import Any
+
+# Make `from models.params import PARAMS` resolvable when invoked as
+# `python scripts/build_results.py`: sys.path[0] would otherwise be
+# `scripts/`, not the demo root that contains the `models/` package.
+_DEMO_ROOT = Path(__file__).resolve().parent.parent
+if str(_DEMO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_DEMO_ROOT))
 
 # Format strings -----------------------------------------------------------
 
@@ -353,15 +361,12 @@ def build(root: Path) -> Path:
 
 
 def main() -> None:
-    default_root = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument(
         "--root",
         type=Path,
-        default=default_root,
-        help=(
-            f"Root directory containing `results/` and `out/` subdirs (default: {default_root})"
-        ),
+        default=_DEMO_ROOT,
+        help=(f"Root directory containing `results/` and `out/` subdirs (default: {_DEMO_ROOT})"),
     )
     args = parser.parse_args()
     out_path = build(args.root)

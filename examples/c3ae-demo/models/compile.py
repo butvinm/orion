@@ -139,7 +139,7 @@ def main() -> None:
         "compile_s": compile_s,
         # CGO/Go memory is invisible to tracemalloc — the dominant compile
         # memory at logn=15 is several GB on the Lattigo side. Keep both
-        # fields so the operator can see the gap and so build_results.py
+        # fields so the operator can see the gap and so scripts/build_results.py
         # can prefer the true RSS while still showing the Python figure.
         "compile_peak_python_mb": compile_peak_python_mb,
         "compile_peak_rss_mb": compile_peak_rss_mb,

@@ -22,8 +22,8 @@ to verify the "decrypt_mae < 0.05" criterion.
 
 Usage (from ``examples/c3ae-demo/``):
 
-    python verify_fhe.py --config logn15
-    python verify_fhe.py --config logn16 --tol 0.05
+    python scripts/verify_fhe.py --config logn15
+    python scripts/verify_fhe.py --config logn16 --tol 0.05
 """
 
 from __future__ import annotations
@@ -34,9 +34,16 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
-import torch
-from models.c3ae_fhe import C3AE
+# Make `from models.c3ae_fhe import ...` resolvable when invoked as
+# `python scripts/verify_fhe.py`: sys.path[0] would otherwise be `scripts/`,
+# not the demo root that contains the `models/` package.
+_DEMO_ROOT = Path(__file__).resolve().parent.parent
+if str(_DEMO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_DEMO_ROOT))
+
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+from models.c3ae_fhe import C3AE  # noqa: E402
 
 
 def load_decrypt_json(path: Path) -> float | None:
@@ -67,8 +74,8 @@ def main() -> None:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(__file__).resolve().parent,
-        help="Experiments root directory.",
+        default=_DEMO_ROOT,
+        help="Demo root directory (contains models/, out/, results/).",
     )
     parser.add_argument(
         "--weights",
