@@ -109,10 +109,6 @@ python scripts/build_results.py
 
 Reads `results/cleartext.csv` and `results/<cfg>/run.jsonl` files, emits `results/results.md` with two markdown tables.
 
-### Provisioning a fresh VPS for benchmarking
-
-The provisioning script at [`../../docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh`](../../docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh) captures the apt deps + Go 1.24 + uv + UTKFace download in one shot; total provisioning takes ~5 min on a fresh 16-vCPU Ubuntu 22.04 VPS. Use it as a reference rather than copy-pasting commands. The plan at [`../../docs/plans/completed/2026-05-09-c3ae-vps-runs.md`](../../docs/plans/completed/2026-05-09-c3ae-vps-runs.md) documents the full sequence including measured timings and cost.
-
 ## Architecture
 
 ```
@@ -187,4 +183,4 @@ Hardware: 16 vCPUs, 128 GB RAM. Each row averages 3 boundary samples.
 
 `logn=16` fits in 128 GB with roughly 10 GB of headroom — going larger at this multiplicative depth would require a 256 GB box.
 
-For the full audit trail (per-sample JSONL, rental cost log, cold-cache notes), see [`results/results.md`](results/results.md) and [`docs/plans/completed/2026-05-09-c3ae-vps-runs.md`](../../docs/plans/completed/2026-05-09-c3ae-vps-runs.md).
+Per-sample timings and cold-cache notes are in [`results/results.md`](results/results.md).
