@@ -587,8 +587,8 @@ Steps:
 
 ### Task 6: [Final] Move plan to completed/
 
-- [ ] move this plan: `git mv /home/butvinm/Dev/orion/docs/plans/2026-05-10-c3ae-demo-consolidation.md /home/butvinm/Dev/orion/docs/plans/completed/2026-05-10-c3ae-demo-consolidation.md`
-- [ ] commit:
+- [x] move this plan: `git mv /home/butvinm/Dev/orion/docs/plans/2026-05-10-c3ae-demo-consolidation.md /home/butvinm/Dev/orion/docs/plans/completed/2026-05-10-c3ae-demo-consolidation.md`
+- [x] commit:
   ```sh
   cd /home/butvinm/Dev/orion
   git add docs/plans
