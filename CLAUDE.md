@@ -192,7 +192,7 @@ Each package defines its own exception hierarchy. Use these instead of generic `
 
 ## VPS / Benchmarking
 
-- Canonical benchmarking flavor: `cpu.16.128.240` on immers.cloud. Fits both `logn15` (54 GB peak) and `logn16` (117 GB peak, ~10 GB margin). Larger CPU flavors (256 GB) not currently available.
+- Canonical benchmarking flavor: `cpu.16.128.240` on immers.cloud. Fits both `logn15` (54 GB peak) and `logn16` (114.37 GB peak, ~14 GB margin). Larger CPU flavors (256 GB) not currently available.
 - Provisioning script: `docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh` (and `setup-train.sh` for GPU training). Takes ~5 min on a fresh `cpu.16.128.240`. Handles: apt build deps, `python3.12` from deadsnakes PPA (NOT in default Ubuntu 22.04 repos), Go 1.24 from upstream tarball (Ubuntu ships 1.18), uv install, repo clone + `git checkout experiments`, build_lattigo CGO, `uv sync` (kagglehub is now a workspace dev-dep), kagglehub UTKFace download, symlink `data/UTKFace` under `examples/c3ae-demo/`. The double-symlink hack for the legacy nested experiments subdir is obsolete after the 2026-05-10 consolidation.
 - **Pattern for SSH-resilient long-running work**: `nohup bash work.sh > log 2>&1 < /dev/null &` then poll the log every 30-60s in a `timeout 600` loop. SSH disconnects don't kill detached work. Don't use shell `set -euxo pipefail` together with `ls | head` — SIGPIPE on `ls` triggers pipefail and aborts the script silently.
 - **Branch must be on `origin` for VPS provisioning to work** — `setup-fhe.sh` does `git checkout experiments` from the cloned-from-origin repo. Local-only branches require an explicit `git push -u origin experiments` first.

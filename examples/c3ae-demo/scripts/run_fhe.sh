@@ -36,18 +36,23 @@ python -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' || {
     exit 1
 }
 
-# Normalize working directory to experiments/ regardless of where the user
-# invoked the script from.
+# Normalize working directory to the c3ae-demo root regardless of where
+# the user invoked the script from.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-EXPERIMENTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-cd "${EXPERIMENTS_DIR}"
+DEMO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${DEMO_DIR}"
 
 mkdir -p "out/${CFG}/keys" "out/inputs" "results/${CFG}"
 
 # Ensure FHE weights are in place (compile needs them).
+# The pre-consolidation `c3ae-demo/weights.pth` fallback is gone — training
+# is the only way to obtain Quad weights from a fresh checkout.
 if [ ! -f out/weights_fhe.pth ]; then
-    echo "[run_fhe] copying ../weights.pth -> out/weights_fhe.pth"
-    cp ../weights.pth out/weights_fhe.pth
+    echo "[run_fhe:${CFG}] ERROR: out/weights_fhe.pth missing." >&2
+    echo "  Run \`bash scripts/run_cleartext.sh\` first to train both" >&2
+    echo "  variants (or \`python -m models.train --variant fhe" >&2
+    echo "  --data-dir ./data/UTKFace --epochs 60\` to train just this one)." >&2
+    exit 1
 fi
 
 # 1. Compile.

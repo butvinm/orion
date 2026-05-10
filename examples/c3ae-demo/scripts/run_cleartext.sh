@@ -11,11 +11,11 @@ python -c 'import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 1)' || {
     exit 1
 }
 
-# Normalize working directory to experiments/ regardless of where the user
-# invoked the script from.
+# Normalize working directory to the c3ae-demo root regardless of where
+# the user invoked the script from.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-EXPERIMENTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-cd "${EXPERIMENTS_DIR}"
+DEMO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${DEMO_DIR}"
 
 mkdir -p out results
 

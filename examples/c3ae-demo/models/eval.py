@@ -18,7 +18,7 @@ Output: ``results/cleartext.csv`` with header
 combination that was actually evaluated. Missing weight files are SKIPPED
 with a printed warning (not an error) so partial runs still produce a CSV.
 
-Usage (from ``examples/c3ae-demo/experiments/``):
+Usage (from ``examples/c3ae-demo/``):
 
     python -m models.eval --data-dir ./data/UTKFace --output results/cleartext.csv
 """

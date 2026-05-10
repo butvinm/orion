@@ -31,8 +31,23 @@ python tools/build_lattigo.py             # build the CGO shared library
 cd examples/c3ae-demo
 source ../../.venv/bin/activate
 
-# Download UTKFace dataset
-python -c "import kagglehub; kagglehub.dataset_download('jangedoo/utkface-new')"
+# Download UTKFace dataset and symlink ./data/UTKFace to the
+# kagglehub cache (kagglehub extracts to ~/.cache/kagglehub/...).
+mkdir -p data
+python -c "
+import kagglehub, os
+p = kagglehub.dataset_download('jangedoo/utkface-new')
+for sub in ('UTKFace', 'utkface_aligned_cropped/UTKFace', 'utkface_aligned_cropped/crop_part1'):
+    cand = os.path.join(p, sub)
+    if os.path.isdir(cand) and any(f.endswith('.jpg') for f in os.listdir(cand)):
+        target = 'data/UTKFace'
+        if not os.path.islink(target) and not os.path.isdir(target):
+            os.symlink(cand, target)
+        print('symlinked:', cand, '->', target)
+        break
+else:
+    raise SystemExit('UTKFace jpg directory not found inside ' + p)
+"
 
 # 1. Train the FHE (Quad) variant
 python -m models.train --variant fhe --data-dir ./data/UTKFace --epochs 60
@@ -69,7 +84,7 @@ Reproduce the cleartext quality + FHE inference cost measurements yourself.
 ### Prerequisites
 
 - Project venv (`uv sync` from repo root) with `kagglehub` installed.
-- Go 1.24+ (note: above the demo's stated Go 1.22+ minimum, due to the `bench/go.mod` directive).
+- Go 1.24+ (the `bench/go.mod` requires it).
 - UTKFace dataset (downloaded via `kagglehub`, see Quick Start).
 - For FHE: at least 64 GB RAM for `logn=15`, 128 GB for `logn=16` (smaller boxes will OOM mid-inference).
 

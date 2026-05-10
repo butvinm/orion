@@ -20,7 +20,7 @@ an in-line gate that aborts a multi-hour FHE run on a marginal numerical
 difference. The Post-Completion runbook documents this script as the place
 to verify the "decrypt_mae < 0.05" criterion.
 
-Usage (from ``examples/c3ae-demo/experiments/``):
+Usage (from ``examples/c3ae-demo/``):
 
     python verify_fhe.py --config logn15
     python verify_fhe.py --config logn16 --tol 0.05

@@ -6,7 +6,7 @@ as ``models/train.py`` (and the original ``examples/c3ae-demo/train.py``) so
 the test indices match exactly across runs and across cleartext eval and the
 FHE bench.
 
-Usage (from ``examples/c3ae-demo/experiments/``):
+Usage (from ``examples/c3ae-demo/``):
 
     # Single sample by test-set index
     python -m models.prep_input --idx 0

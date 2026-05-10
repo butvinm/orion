@@ -7,7 +7,7 @@ Selectable architecture variant:
 - ``relu``: plain torch.nn C3AE with ReLU activations (cleartext baseline)
 - ``fhe``:  orion_compiler.nn C3AE with Quad (x^2) activations (FHE-compatible)
 
-Usage (from ``examples/c3ae-demo/experiments/``):
+Usage (from ``examples/c3ae-demo/``):
 
     python -m models.train --variant relu --data-dir ./data/UTKFace --epochs 60
     python -m models.train --variant fhe  --data-dir ./data/UTKFace --epochs 60

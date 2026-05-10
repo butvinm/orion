@@ -1,4 +1,4 @@
-module github.com/butvinm/orion/v2/examples/c3ae-demo/experiments/bench
+module github.com/butvinm/orion/v2/examples/c3ae-demo/bench
 
 go 1.24.0
 

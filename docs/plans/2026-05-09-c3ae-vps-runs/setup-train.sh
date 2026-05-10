@@ -74,13 +74,10 @@ else:
     raise SystemExit('UTKFace jpg directory not found inside ' + p)
 "
 
-# experiments/ scripts (train.py, eval.py, prep_input.py) are run from the
-# experiments dir and look for data/UTKFace there. Make a sibling symlink so
-# that ./data/UTKFace resolves correctly from BOTH c3ae-demo/ and
-# c3ae-demo/experiments/.
-mkdir -p ~/orion/examples/c3ae-demo/experiments
-cd ~/orion/examples/c3ae-demo/experiments
-[ ! -e data ] && ln -s ../data data
+# Demo scripts (train.py, eval.py, prep_input.py) are run from the
+# c3ae-demo dir and look for ./data/UTKFace there. The kagglehub block
+# above already created that symlink.
+cd ~/orion/examples/c3ae-demo
 ls -la data/UTKFace/ 2>&1 | head -2
 
 echo 'PROVISIONING DONE'

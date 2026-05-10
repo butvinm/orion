@@ -5,7 +5,7 @@ Adapted from ``examples/c3ae-demo/generate_model.py``. The CKKS configuration
 is selected by name from :mod:`models.params` so the same script can produce
 both ``logn15`` and ``logn16`` artifacts.
 
-Usage (from ``experiments/``)::
+Usage (from ``examples/c3ae-demo/``)::
 
     python -m models.compile --config logn15 \
         --weights out/weights_fhe.pth \
