@@ -178,7 +178,7 @@ The Quad-FHE variant trades ~1–3 percentage points of accuracy for FHE compati
 
 ### FHE inference cost
 
-Hardware: 16 vCPUs, 128 GB RAM. Workload: Go-only `bench` binary, mean over 3 boundary samples.
+Hardware: 16 vCPUs, 128 GB RAM. Each row averages 3 boundary samples.
 
 | config | compile_s | compile_peak_rss_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB   |
 | ------ | --------- | ------------------- | -------- | ------ | -------------- | ------------- |
