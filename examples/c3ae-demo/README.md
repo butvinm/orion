@@ -6,76 +6,112 @@ Based on the C3AE architecture adapted for FHE: ReLU replaced with Quad (x²), B
 
 ## Prerequisites
 
-- Go 1.24+
-- Python 3.11+ with a venv containing `orion-compiler`, `orion-evaluator`, and `lattigo`
-- Node.js 18+
-- UTKFace dataset (for training)
-- 128 GB RAM for FHE inference
+- Go 1.24+ (the `bench/` module's `go.mod` declares 1.24)
+- Python 3.11+
+- **Python deps via `uv sync` from the repo root.** The workspace pulls in `orion-v2-lattigo`, `orion-v2-compiler`, `orion-v2-evaluator`, `kagglehub`, `torchvision`, etc. The demo lives inside the workspace — there is no separate pip-install file at this layer.
+- Node.js 18+ (for the WASM browser client)
+- UTKFace dataset (downloaded once via `kagglehub`, see Quick Start)
+- For FHE benchmarks: at least **64 GB RAM** for `logn=15`, **128 GB** for `logn=16` (smaller boxes will OOM mid-inference).
 
-## Quick Start
-
-### 1. Train the model
+### PyPI install (alternative — using Orion as a library)
 
 ```bash
+pip install orion-v2-lattigo orion-v2-compiler orion-v2-evaluator
+```
+
+This gives you the libraries to use in your own code. It does **not** ship the c3ae-demo files (model defs, bench, scripts, server, browser client) — those live in this repo. Anyone running this demo must clone the repo and `uv sync`.
+
+## Quick Start (browser demo)
+
+```bash
+# From the repo root
+uv sync                                   # install all Python deps incl. kagglehub
+python tools/build_lattigo.py             # build the CGO shared library
+
 cd examples/c3ae-demo
+source ../../.venv/bin/activate
 
 # Download UTKFace dataset
 python -c "import kagglehub; kagglehub.dataset_download('jangedoo/utkface-new')"
 
-python train.py --data-dir ./data/UTKFace --epochs 60 --output weights.pth
-```
+# 1. Train the FHE (Quad) variant
+python -m models.train --variant fhe --data-dir ./data/UTKFace --epochs 60
 
-### 2. Compile to .orion format
+# 2. Compile to .orion
+python -m models.compile --variant fhe --config logn15 \
+    --weights out/weights_fhe.pth \
+    --output out/logn15/model.orion
 
-```bash
-python generate_model.py --weights weights.pth --output model.orion
-```
-
-### 3. Build the WASM binary (once or after Go bridge changes)
-
-```bash
-# From repo root
+# 3. Build the WASM binary (from repo root)
+cd ../..
 python tools/build_lattigo_wasm.py
-```
 
-### 4. Build the browser client
-
-```bash
+# 4. Build the browser client
 cd examples/c3ae-demo/client
 npm install
 npm run build
+
+# 5. Run the server
+cd ../server
+go run . ../out/logn15/model.orion ../client :8080
 ```
 
-### 5. Run the server
+Open <http://localhost:8080> and:
 
-```bash
-cd examples/c3ae-demo/server
-go run . ../model.orion ../client :8080
+1. Click **Initialize Keys** — generates CKKS keys in browser, uploads to server.
+2. Upload a face image (JPEG/PNG).
+3. Click **Encrypt & Infer** — encrypts the image in the browser, server runs FHE inference, browser decrypts the result.
+
+## Benchmarking guide
+
+Reproduce the cleartext quality + FHE inference cost measurements yourself.
+
+### Prerequisites
+
+- Project venv (`uv sync` from repo root) with `kagglehub` installed.
+- Go 1.24+ (note: above the demo's stated Go 1.22+ minimum, due to the `bench/go.mod` directive).
+- UTKFace dataset (downloaded via `kagglehub`, see Quick Start).
+- For FHE: at least 64 GB RAM for `logn=15`, 128 GB for `logn=16` (smaller boxes will OOM mid-inference).
+
+### Cleartext
+
+```sh
+bash scripts/run_cleartext.sh
 ```
 
-### 6. Open browser
+Trains the ReLU variant if missing (~30 min on CPU, ~3 min on GPU), trains the Quad variant if missing (same), then evaluates both via `python -m models.eval` on the test split. Writes `results/cleartext.csv`.
 
-Navigate to http://localhost:8080.
+### FHE inference
 
-1. Click **Initialize Keys** — generates CKKS keys in browser, uploads to server
-2. Upload a face image (JPEG/PNG)
-3. Click **Encrypt & Infer** — encrypts image in browser, server runs FHE inference, browser decrypts result
+```sh
+# Build the bench binary once
+cd bench && go build && cd ..
 
-## Standalone FHE Benchmark
-
-```bash
-python run_fhe.py --weights weights.pth --model model.orion --data-dir ./data/UTKFace --samples 3
+# Run for a config
+bash scripts/run_fhe.sh logn15  # or logn16
 ```
 
-## Experiments harness
+Compiles the model, generates keys, runs encrypt + infer + decrypt for the 3 boundary samples (idx 12, 35, 44). Streams metrics to `results/<cfg>/run.jsonl` (one line per sample) so a crashed/OOM-killed run still preserves what completed. Idempotent — re-runs skip already-completed samples.
 
-A self-contained experiment harness for this demo lives under
-[`experiments/`](experiments/README.md). It produces two comparable
-measurements: cleartext FPR/FNR/Accuracy for the ReLU vs Quad variants,
-and FHE forward time + peak RSS for two CKKS configurations
-(`logn15`, `logn16`) measured by a Go-only `bench` binary. See
-[`experiments/README.md`](experiments/README.md) for the full operator
-runbook.
+### Verify FHE correctness
+
+```sh
+python verify_fhe.py --config logn15
+```
+
+Compares each FHE-decrypted probability against the cleartext PyTorch forward of the same input. Writes `results/<cfg>/cleartext_vs_fhe.csv` and exits non-zero if any sample exceeds `--tol` (default 0.05).
+
+### Aggregate the report
+
+```sh
+python build_results.py
+```
+
+Reads `results/cleartext.csv` and `results/<cfg>/run.jsonl` files, emits `results/results.md` with two markdown tables.
+
+### Provisioning a fresh VPS for benchmarking
+
+We provisioned three VPSes on immers.cloud during the 2026-05-09 run. The provisioning script at `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh` captures the apt deps + Go 1.24 + uv + UTKFace download in one shot; total provisioning takes ~5 min on a fresh `cpu.16.128.240`. Use it as a reference rather than copy-pasting commands. The plan at `/home/butvinm/Dev/orion/docs/plans/completed/2026-05-09-c3ae-vps-runs.md` documents the full sequence including measured timings and cost.
 
 ## Architecture
 
@@ -118,29 +154,35 @@ Browser (WASM)                    Go Server
 
 ## CKKS Parameters
 
-| Parameter | Value                                              |
-| --------- | -------------------------------------------------- |
-| LogN      | 15 (ring dim = 32,768)                             |
-| LogQ      | [51, 40×15] (16 primes = 15 computation levels)    |
-| LogP      | [50, 50, 50, 50]                                   |
-| LogScale  | 40                                                 |
-| LogQP     | 851 (< 881 limit for 128-bit security at logN=15)  |
-| Bootstrap | Not needed (15 levels sufficient for full network) |
+The two no-bootstrap CKKS configurations live in [`models/params.py`](models/params.py). Both share `log_default_scale = 40`, `ring_type = standard`, and **15 multiplicative levels** so the comparison isolates the effect of doubling the ring degree.
 
-Input (64×64×3 = 12,288 values) fits in a single ciphertext of 16,384 slots.
+| Config   | LogN | LogQ               | LogP       | LogQP | Notes                         |
+| -------- | ---- | ------------------ | ---------- | ----- | ----------------------------- |
+| `logn15` | 15   | `[51] + [40] * 15` | `[50] * 4` | 851   | ≤ 881 dense bound at logn=15  |
+| `logn16` | 16   | `[55] + [40] * 15` | `[55] * 6` | 985   | ≤ 1770 dense bound at logn=16 |
+
+Input (64×64×3 = 12,288 values) fits in a single ciphertext at both ring degrees.
 
 ## Measurements
 
-Run on VPS (cpu.16.128.240: 16 vCPUs, 128 GB RAM, Ubuntu 22.04).
+### Cleartext quality (UTKFace test split, n=3557; boundary band 16–20, n=161)
 
-| Metric             | Value               |
-| ------------------ | ------------------- |
-| Compilation time   | 2.4 min             |
-| Model size         | 838 MB              |
-| Compilation memory | 3.3 GB              |
-| Key generation     | 83s (183 Galois)    |
-| Eval keys size     | 7.19 GB             |
-| **Inference time** | **139s per sample** |
-| MAE vs cleartext   | 0.000000            |
-| Peak server RSS    | 103 GB              |
-| Cleartext accuracy | 97.9%               |
+| variant | scope    | n    | FPR    | FNR    | Accuracy |
+| ------- | -------- | ---- | ------ | ------ | -------- |
+| relu    | overall  | 3557 | 0.1675 | 0.0190 | 0.9556   |
+| relu    | boundary | 161  | 0.6515 | 0.1474 | 0.6460   |
+| fhe     | overall  | 3557 | 0.2085 | 0.0268 | 0.9421   |
+| fhe     | boundary | 161  | 0.7121 | 0.1579 | 0.6149   |
+
+The Quad-FHE variant trades ~1–3 percentage points of accuracy for FHE compatibility. The 16–20 boundary band is brutal for both variants — the asymmetric loss (`fpr_weight=40`) doesn't fully overcome the dataset's 18% minor / 82% adult class imbalance.
+
+### FHE inference cost (cpu.16.128.240: 16 vCPUs, 128 GB RAM; Go-only `bench` binary; 3 boundary samples)
+
+| config | compile_s | compile_peak_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB   |
+| ------ | --------- | --------------- | -------- | ------ | -------------- | ------------- |
+| logn15 | 160.2     | 12.87           | 44.1     | 7.19   | 157.0 ± 2.9    | 54.19 ± 0.29  |
+| logn16 | 386.7     | 25.77           | 68.1     | 12.70  | 543.7 ± 219.4  | 114.37 ± 0.07 |
+
+**Headline: peak server RSS dropped 47% (54.19 GB vs 103 GB) at `logn=15`** compared to the pre-Go-bench Python-wrapped pipeline measured on the same VPS. Forward time is roughly comparable (~+13%, 157s vs 139s). The RSS reduction confirms the Python wrapper added ~50 GB of overhead at `logn=15`. `logn=16` fits in 128 GB by ~10 GB margin — going larger at this depth requires a 256+ GB box.
+
+For the full audit trail (per-sample JSONL, VPS rental cost log, cold-cache notes), see [`results/results.md`](results/results.md) and [`/home/butvinm/Dev/orion/docs/plans/completed/2026-05-09-c3ae-vps-runs.md`](../../docs/plans/completed/2026-05-09-c3ae-vps-runs.md).
