@@ -104,11 +104,11 @@ type opProfileRecord struct {
 	// derived from runtime.MemStats.TotalAlloc (a monotonic counter, so
 	// always >= 0). Reflects allocator pressure introduced by this op.
 	//
-	// HeapFreedDeltaMB: bytes freed by Go's GC during this op, signed.
-	// Derived as (heap_alloc_delta - net_heap_growth) using monotonic
-	// counters: if 100 MB was allocated and the heap grew 60 MB, then
-	// 40 MB was freed. Casts to int64 first to avoid uint64 underflow
-	// (HeapAlloc is non-monotonic — it shrinks when GC runs).
+	// HeapFreedDeltaMB: bytes the Go runtime returned to the OS since the
+	// previous snapshot, derived from runtime.MemStats.HeapReleased. Note
+	// this is the OS-level release counter, not the in-process free
+	// counter — releases happen lazily and only after GC, so this can be
+	// 0 for many ops in a row and then jump.
 	//
 	// NumGCDelta: number of completed GC cycles since the previous
 	// snapshot.
@@ -295,15 +295,11 @@ func (p *opProfiler) recordOp(
 		// >= 0 in practice (and uint64 underflow would only happen if we
 		// ran for ~years).
 		heapAllocDeltaMB = int64((ms.TotalAlloc - p.prevMS.TotalAlloc) / (1024 * 1024))
-		// "Freed" derived from monotonic counters: bytes allocated this op
-		// minus the net heap-size change. If allocations were 100 MB and
-		// the heap grew 60 MB, then 40 MB must have been freed. This is
-		// signed because the heap can also grow without proportional GC.
-		// Cast to int64 BEFORE subtracting to avoid uint64 underflow when
-		// HeapAlloc shrinks (which is common — that's why GC happened).
-		heapNetGrowthBytes := int64(ms.HeapAlloc) - int64(p.prevMS.HeapAlloc)
-		heapAllocDeltaBytes := int64(ms.TotalAlloc - p.prevMS.TotalAlloc)
-		heapFreedDeltaMB = (heapAllocDeltaBytes - heapNetGrowthBytes) / (1024 * 1024)
+		// HeapReleased is also monotonic. This reflects bytes returned
+		// to the OS, not bytes "freed" inside the Go heap (those go back
+		// into the free pool and may be re-used without an OS-level
+		// release). Documented in the field's comment above.
+		heapFreedDeltaMB = int64((ms.HeapReleased - p.prevMS.HeapReleased) / (1024 * 1024))
 		numGCDelta = ms.NumGC - p.prevMS.NumGC
 		vmRSSDeltaMB = curVmRSSMB - p.prevVmRSSMB
 	}
