@@ -347,16 +347,16 @@ documents the full sequence including measured timings and cost.
 
 Steps:
 
-- [ ] verify branch state — should be 3 commits ahead of `origin/experiments` (the revert commits) with a clean working tree.
-- [ ] `git mv` each models/* file individually (NOT a single bulk `mv`, so per-file history stays clean).
-- [ ] `git mv` the three subdirs (bench/, scripts/, results/) — these can be moved as directories since the per-file history follows.
-- [ ] `git mv` verify_fhe.py and build_results.py.
-- [ ] edit `/home/butvinm/Dev/orion/examples/c3ae-demo/bench/go.mod` to fix the `replace` path arithmetic (`../../../..` → `../../..`).
-- [ ] merge the gitignores: read both, write the consolidated content to `/home/butvinm/Dev/orion/examples/c3ae-demo/.gitignore` per the "Technical Details / .gitignore consolidation" section above, then `git rm /home/butvinm/Dev/orion/examples/c3ae-demo/experiments/.gitignore`.
-- [ ] `git rm /home/butvinm/Dev/orion/examples/c3ae-demo/experiments/README.md`.
-- [ ] verify `examples/c3ae-demo/experiments/` directory is now empty: `ls -la /home/butvinm/Dev/orion/examples/c3ae-demo/experiments/` should show nothing tracked. Use `find /home/butvinm/Dev/orion/examples/c3ae-demo/experiments -type f` to confirm.
-- [ ] `rmdir /home/butvinm/Dev/orion/examples/c3ae-demo/experiments` (untracked, just removes the empty directory).
-- [ ] **manual verify** (build/import sanity post-move):
+- [x] verify branch state — should be 3 commits ahead of `origin/experiments` (the revert commits) with a clean working tree.
+- [x] `git mv` each models/* file individually (NOT a single bulk `mv`, so per-file history stays clean).
+- [x] `git mv` the three subdirs (bench/, scripts/, results/) — these can be moved as directories since the per-file history follows.
+- [x] `git mv` verify_fhe.py and build_results.py.
+- [x] edit `/home/butvinm/Dev/orion/examples/c3ae-demo/bench/go.mod` to fix the `replace` path arithmetic (`../../../..` → `../../..`).
+- [x] merge the gitignores: read both, write the consolidated content to `/home/butvinm/Dev/orion/examples/c3ae-demo/.gitignore` per the "Technical Details / .gitignore consolidation" section above, then `git rm /home/butvinm/Dev/orion/examples/c3ae-demo/experiments/.gitignore`.
+- [x] `git rm /home/butvinm/Dev/orion/examples/c3ae-demo/experiments/README.md`.
+- [x] verify `examples/c3ae-demo/experiments/` directory is now empty: `ls -la /home/butvinm/Dev/orion/examples/c3ae-demo/experiments/` should show nothing tracked. Use `find /home/butvinm/Dev/orion/examples/c3ae-demo/experiments -type f` to confirm.
+- [x] `rmdir /home/butvinm/Dev/orion/examples/c3ae-demo/experiments` (untracked, just removes the empty directory). Migrated user-local untracked artifacts (`out/`, `profiles/`) to the new layout first, then removed the now-empty stale `__pycache__`/`.mypy_cache` and rmdir'd the parent.
+- [x] **manual verify** (build/import sanity post-move):
 
   ```sh
   cd /home/butvinm/Dev/orion
@@ -374,7 +374,7 @@ Steps:
 
 All of these must succeed. The Python imports (`from models.utkface import ...` etc.) must resolve from the new `examples/c3ae-demo/models/` location.
 
-- [ ] commit:
+- [x] commit:
   ```sh
   bash /home/butvinm/.claude/plugins/cache/umputun-cc-thingz/planning/3.6.0/skills/exec/scripts/stage-and-commit.sh \
       "refactor: move c3ae-demo/experiments tree up one level (no content changes)" \
