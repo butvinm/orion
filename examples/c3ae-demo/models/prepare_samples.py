@@ -9,10 +9,10 @@ FHE bench.
 Usage (from ``examples/c3ae-demo/``):
 
     # Single sample by test-set index
-    python -m models.prep_input --idx 0
+    python -m models.prepare_samples --idx 0
 
     # First 3 boundary-band samples (16 <= age <= 20) in test-iteration order
-    python -m models.prep_input --boundary-band
+    python -m models.prepare_samples --boundary-band
 
 Outputs:
     out/inputs/sample_<idx>.bin   raw little-endian float64, 12288 values

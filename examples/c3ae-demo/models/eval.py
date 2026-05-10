@@ -3,7 +3,7 @@
 
 Loads ``out/weights_relu.pth`` (true-ReLU) and ``out/weights_fhe.pth`` (Quad)
 and evaluates each variant on the UTKFace test split (reproduced via the same
-``manual_seed(42)`` as ``models/train.py`` and ``models/prep_input.py``).
+``manual_seed(42)`` as ``models/train.py`` and ``models/prepare_samples.py``).
 
 Two scopes are reported per variant:
 

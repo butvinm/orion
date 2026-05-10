@@ -54,12 +54,12 @@ python tools/build_lattigo.py
 uv sync
 
 # UTKFace dataset via kagglehub (installed by `uv sync` as a workspace
-# dev-dependency).  Needed by models/prep_input.py --boundary-band to
+# dev-dependency).  Needed by models/prepare_samples.py --boundary-band to
 # dump the 3 boundary samples the FHE pipeline encrypts.
 cd ~/orion/examples/c3ae-demo
 python -m models.utkface
 
-# Demo scripts (prep_input.py, train.py, eval.py) are run from the
+# Demo scripts (prepare_samples.py, train.py, eval.py) are run from the
 # c3ae-demo dir and look for ./data/UTKFace there.
 ls -la data/UTKFace/ 2>&1 | head -2
 

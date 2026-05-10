@@ -76,9 +76,9 @@ elif [ "$(wc -l < out/inputs/ground_truth.csv)" -le 1 ]; then
 fi
 if [ "${NEED_PREP}" -eq 1 ]; then
     echo "[run_fhe:${CFG}] preparing boundary-band inputs..."
-    python -m models.prep_input --boundary-band --data-dir ./data/UTKFace
+    python -m models.prepare_samples --boundary-band --data-dir ./data/UTKFace
 else
-    echo "[run_fhe:${CFG}] out/inputs/ground_truth.csv populated, skipping prep_input"
+    echo "[run_fhe:${CFG}] out/inputs/ground_truth.csv populated, skipping prepare_samples"
 fi
 
 # 3. Build bench binary if missing.
@@ -110,7 +110,7 @@ touch "${RUN_JSONL}"
 # nonzero exit code, so a missing CSV would produce an empty iteration —
 # the script would "succeed" without doing anything. Fail loudly here.
 if [ ! -f out/inputs/ground_truth.csv ]; then
-    echo "[run_fhe:${CFG}] ERROR: out/inputs/ground_truth.csv missing — prep_input did not produce it." >&2
+    echo "[run_fhe:${CFG}] ERROR: out/inputs/ground_truth.csv missing — prepare_samples did not produce it." >&2
     exit 1
 fi
 

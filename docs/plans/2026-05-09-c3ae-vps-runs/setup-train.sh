@@ -58,7 +58,7 @@ uv sync
 cd ~/orion/examples/c3ae-demo
 python -m models.utkface
 
-# Demo scripts (train.py, eval.py, prep_input.py) are run from the
+# Demo scripts (train.py, eval.py, prepare_samples.py) are run from the
 # c3ae-demo dir and look for ./data/UTKFace there.
 cd ~/orion/examples/c3ae-demo
 ls -la data/UTKFace/ 2>&1 | head -2

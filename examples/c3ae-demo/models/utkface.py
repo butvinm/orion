@@ -2,7 +2,7 @@
 
 This module owns the canonical implementation of ``UTKFaceDataset`` and the
 70/15/15 train/val/test split used by ``models/train.py``, ``models/eval.py``,
-and ``models/prep_input.py``. Centralizing the implementation prevents drift
+and ``models/prepare_samples.py``. Centralizing the implementation prevents drift
 between the three call sites — historically the same class was duplicated in
 each script and had to be kept in sync by hand.
 
@@ -13,7 +13,7 @@ order is also stable; filesystem ``readdir`` order varies between filesystems
 and after add/remove/rename operations.
 
 This module intentionally has no ``orion_compiler`` dependency so it can be
-imported from client-side / minimal environments (e.g. ``prep_input``).
+imported from client-side / minimal environments (e.g. ``prepare_samples``).
 """
 
 from __future__ import annotations
