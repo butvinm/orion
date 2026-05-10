@@ -1,6 +1,7 @@
 # Build artifacts and outputs
 out/
 bench/bench
+server/server
 
 # Python cache
 __pycache__/
