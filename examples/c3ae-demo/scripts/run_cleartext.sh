@@ -27,17 +27,12 @@ else
     echo "[run_cleartext] out/weights_relu.pth exists, skipping training"
 fi
 
-# 2. Train FHE (Quad) variant if missing. The c3ae-demo's existing
-#    weights.pth is gitignored, so on a fresh checkout we train fresh
-#    rather than copying.
+# 2. Train FHE (Quad) variant if missing. The pre-consolidation
+#    `c3ae-demo/weights.pth` fallback is gone — training is the only way
+#    to obtain Quad weights from a fresh checkout.
 if [ ! -f out/weights_fhe.pth ]; then
-    if [ -f ../weights.pth ]; then
-        echo "[run_cleartext] copying ../weights.pth -> out/weights_fhe.pth"
-        cp ../weights.pth out/weights_fhe.pth
-    else
-        echo "[run_cleartext] training FHE (Quad) variant (60 epochs)..."
-        python -m models.train --variant fhe --data-dir ./data/UTKFace --epochs 60
-    fi
+    echo "[run_cleartext] training FHE (Quad) variant (60 epochs)..."
+    python -m models.train --variant fhe --data-dir ./data/UTKFace --epochs 60
 else
     echo "[run_cleartext] out/weights_fhe.pth exists, skipping training"
 fi

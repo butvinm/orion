@@ -53,8 +53,8 @@ python tools/build_lattigo.py
 # uv sync — installs all workspace packages
 uv sync
 
-# UTKFace dataset via kagglehub (kagglehub not a workspace dep — install separately)
-pip install kagglehub
+# UTKFace dataset via kagglehub (installed by `uv sync` as a workspace
+# dev-dependency).
 cd ~/orion/examples/c3ae-demo
 mkdir -p data
 python -c "

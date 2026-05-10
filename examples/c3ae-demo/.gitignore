@@ -11,8 +11,3 @@ results/*
 !results/.gitkeep
 !results/results.md
 !results/cleartext.csv
-
-# Legacy paths from the pre-consolidation layout (kept until any
-# user-local files are migrated):
-weights.pth
-model.orion

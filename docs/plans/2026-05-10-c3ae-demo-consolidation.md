@@ -403,17 +403,17 @@ All of these must succeed. The Python imports (`from models.utkface import ...` 
 
 Steps:
 
-- [ ] verify the four originals are referenced ONLY by README content + the gitignore lines being dropped. Use `grep -rn 'model\.py\|generate_model\|run_fhe\.py\|c3ae-demo/train\.py' /home/butvinm/Dev/orion/ --include='*.go' --include='*.py' --include='*.sh' --include='*.md' 2>/dev/null` and verify that any matches are either (a) in `docs/plans/completed/...` (historical, leave alone) or (b) in the README (will be rewritten in Task 3).
-- [ ] verify `requirements.txt` is referenced ONLY by README/CLAUDE.md (also fine to leave — they get updated in Task 3/4): `grep -rn 'c3ae-demo/requirements\.txt\|requirements\.txt' /home/butvinm/Dev/orion/ --include='*.go' --include='*.py' --include='*.sh' --include='*.md' 2>/dev/null | grep -v 'docs/plans/completed/'`. The remaining matches MUST be only README/CLAUDE.md text — no script imports or build-system references.
-- [ ] `git rm` the five obsolete files (4 originals + requirements.txt).
-- [ ] edit `/home/butvinm/Dev/orion/pyproject.toml`: add `"kagglehub>=0.3.0"` to the `[tool.uv]` `dev-dependencies` list (alongside `pytest`, `ruff`, `mypy`, `torchvision`).
-- [ ] from repo root, run `uv sync` to regenerate `uv.lock`. The `.lock` file should pick up kagglehub + its transitive deps.
-- [ ] verify import works: `cd /home/butvinm/Dev/orion && source .venv/bin/activate && python -c "import kagglehub; print(kagglehub.__version__)"`.
-- [ ] edit `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh`: remove the `pip install kagglehub` line (keep everything else — `uv sync` will install it as part of the workspace setup the script already runs).
-- [ ] edit `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-train.sh`: same edit.
-- [ ] edit `/home/butvinm/Dev/orion/examples/c3ae-demo/scripts/run_cleartext.sh`: in the `if [ ! -f out/weights_fhe.pth ]` block, drop the `if [ -f ../weights.pth ]; then cp ...` branch and just always train. Keep the existing always-train branch as the only path. Verify with `bash -n` after.
-- [ ] update `/home/butvinm/Dev/orion/examples/c3ae-demo/.gitignore`: remove the `weights.pth` and `model.orion` lines (the files no longer exist; the `out/` rule covers any new artifacts). Optional — can leave for grace period.
-- [ ] **manual verify**:
+- [x] verify the four originals are referenced ONLY by README content + the gitignore lines being dropped. Use `grep -rn 'model\.py\|generate_model\|run_fhe\.py\|c3ae-demo/train\.py' /home/butvinm/Dev/orion/ --include='*.go' --include='*.py' --include='*.sh' --include='*.md' 2>/dev/null` and verify that any matches are either (a) in `docs/plans/completed/...` (historical, leave alone) or (b) in the README (will be rewritten in Task 3).
+- [x] verify `requirements.txt` is referenced ONLY by README/CLAUDE.md (also fine to leave — they get updated in Task 3/4): `grep -rn 'c3ae-demo/requirements\.txt\|requirements\.txt' /home/butvinm/Dev/orion/ --include='*.go' --include='*.py' --include='*.sh' --include='*.md' 2>/dev/null | grep -v 'docs/plans/completed/'`. The remaining matches MUST be only README/CLAUDE.md text — no script imports or build-system references.
+- [x] `git rm` the five obsolete files (4 originals + requirements.txt).
+- [x] edit `/home/butvinm/Dev/orion/pyproject.toml`: add `"kagglehub>=0.3.0"` to the `[tool.uv]` `dev-dependencies` list (alongside `pytest`, `ruff`, `mypy`, `torchvision`).
+- [x] from repo root, run `uv sync` to regenerate `uv.lock`. The `.lock` file should pick up kagglehub + its transitive deps.
+- [x] verify import works: `cd /home/butvinm/Dev/orion && source .venv/bin/activate && python -c "import kagglehub; print(kagglehub.__version__)"`.
+- [x] edit `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh`: remove the `pip install kagglehub` line (keep everything else — `uv sync` will install it as part of the workspace setup the script already runs).
+- [x] edit `/home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-train.sh`: same edit.
+- [x] edit `/home/butvinm/Dev/orion/examples/c3ae-demo/scripts/run_cleartext.sh`: in the `if [ ! -f out/weights_fhe.pth ]` block, drop the `if [ -f ../weights.pth ]; then cp ...` branch and just always train. Keep the existing always-train branch as the only path. Verify with `bash -n` after.
+- [x] update `/home/butvinm/Dev/orion/examples/c3ae-demo/.gitignore`: remove the `weights.pth` and `model.orion` lines (the files no longer exist; the `out/` rule covers any new artifacts). Optional — can leave for grace period.
+- [x] **manual verify**:
 
   ```sh
   cd /home/butvinm/Dev/orion
@@ -436,7 +436,7 @@ Steps:
   bash -n /home/butvinm/Dev/orion/docs/plans/2026-05-09-c3ae-vps-runs/setup-train.sh
   ```
 
-- [ ] commit. Stage explicitly — never `git add .`:
+- [x] commit. Stage explicitly — never `git add .`:
   ```sh
   bash /home/butvinm/.claude/plugins/cache/umputun-cc-thingz/planning/3.6.0/skills/exec/scripts/stage-and-commit.sh \
       "refactor: delete obsolete c3ae-demo originals + requirements.txt; add kagglehub to workspace" \
