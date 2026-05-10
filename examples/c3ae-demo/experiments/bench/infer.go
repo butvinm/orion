@@ -38,7 +38,6 @@ func runInfer(args []string) error {
 	metricsPath := fs.String("metrics", "", "JSONL metrics file (append+create) (required)")
 	sampleIdx := fs.Int("sample-idx", -1, "sample index for metrics tagging (required)")
 	profilePath := fs.String("profile", "", "optional per-op JSONL profile output path; sets ORION_PROFILE_OUT for the evaluator")
-	heapProfileDir := fs.String("heap-profile-dir", "", "optional directory for per-op pprof heap snapshots; sets ORION_HEAP_PROFILE_DIR for the evaluator. WARNING: forces runtime.GC() before each snapshot, adding significant per-op latency. Debugging only — do not enable for normal runs.")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -109,19 +108,6 @@ func runInfer(args []string) error {
 			return fmt.Errorf("setting ORION_PROFILE_OUT: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "infer: per-op profile -> %s\n", *profilePath)
-	}
-
-	// Activate per-op pprof heap snapshots if requested. Evaluator reads
-	// ORION_HEAP_PROFILE_DIR inside Forward. This is a separate gate
-	// from --profile so the user can enable just one or both. The
-	// runtime.GC() call before each snapshot adds significant latency;
-	// loud warning so nobody enables this in a "normal" run by accident.
-	if *heapProfileDir != "" {
-		if err := os.Setenv("ORION_HEAP_PROFILE_DIR", *heapProfileDir); err != nil {
-			return fmt.Errorf("setting ORION_HEAP_PROFILE_DIR: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "infer: per-op heap pprof -> %s/op_<idx>_<name>.pprof\n", *heapProfileDir)
-		fmt.Fprintf(os.Stderr, "infer: WARNING heap profiling forces runtime.GC() per op; expect significant slowdown\n")
 	}
 
 	// --- Measured section ---

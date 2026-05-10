@@ -7,19 +7,11 @@ set -euo pipefail
 # where <config> is one of: logn15, logn16
 #
 # Optional env vars:
-#   PROFILE_DIR        If set, per-op JSONL profiles are written to
-#                      "$PROFILE_DIR/$CFG/profile_<idx>.jsonl" — one file
-#                      per sample. The evaluator gates this on
-#                      ORION_PROFILE_OUT, set indirectly via
-#                      `bench infer --profile`. Useful for the logn16
-#                      117 GB peak post-mortem.
-#   HEAP_PROFILE_DIR   If set, per-op pprof heap snapshots are written to
-#                      "$HEAP_PROFILE_DIR/$CFG/sample_<idx>/op_NNNN_*.pprof"
-#                      (one subdir per sample so files don't collide).
-#                      The evaluator gates this on ORION_HEAP_PROFILE_DIR,
-#                      set indirectly via `bench infer --heap-profile-dir`.
-#                      WARNING: forces runtime.GC() per op — significant
-#                      slowdown. Debugging only.
+#   PROFILE_DIR  If set, per-op JSONL profiles are written to
+#                "$PROFILE_DIR/$CFG/profile_<idx>.jsonl" — one file per
+#                sample. The evaluator gates this on ORION_PROFILE_OUT, set
+#                indirectly via `bench infer --profile`. Useful for the
+#                logn16 117 GB peak post-mortem.
 #
 # Pipeline (each step idempotent — skipped if outputs already exist):
 #   1. Compile model with the chosen CKKS params -> out/<cfg>/model.orion
@@ -63,15 +55,6 @@ mkdir -p "out/${CFG}/keys" "out/inputs" "results/${CFG}"
 if [ -n "${PROFILE_DIR:-}" ]; then
     mkdir -p "${PROFILE_DIR}/${CFG}"
     echo "[run_fhe:${CFG}] per-op profiles will be written to ${PROFILE_DIR}/${CFG}/profile_<idx>.jsonl"
-fi
-
-# If HEAP_PROFILE_DIR is set, the per-sample subdirs are created inside
-# the loop (one per sample idx, so per-op .pprof files don't collide
-# across samples).
-if [ -n "${HEAP_PROFILE_DIR:-}" ]; then
-    mkdir -p "${HEAP_PROFILE_DIR}/${CFG}"
-    echo "[run_fhe:${CFG}] per-op heap pprof snapshots will be written to ${HEAP_PROFILE_DIR}/${CFG}/sample_<idx>/op_NNNN_<name>.pprof"
-    echo "[run_fhe:${CFG}] WARNING: heap profiling forces runtime.GC() per op — expect significant slowdown"
 fi
 
 # Ensure FHE weights are in place (compile needs them).
@@ -167,15 +150,7 @@ while IFS= read -r idx; do
     echo "[run_fhe:${CFG}] sample_idx=${idx}: infer (measured)"
     PROFILE_ARGS=()
     if [ -n "${PROFILE_DIR:-}" ]; then
-        PROFILE_ARGS+=(--profile "${PROFILE_DIR}/${CFG}/profile_${idx}.jsonl")
-    fi
-    if [ -n "${HEAP_PROFILE_DIR:-}" ]; then
-        # One subdir per sample — per-op pprof file names are
-        # `op_<idx>_<name>.pprof` and would collide across samples
-        # otherwise.
-        SAMPLE_HEAP_DIR="${HEAP_PROFILE_DIR}/${CFG}/sample_${idx}"
-        mkdir -p "${SAMPLE_HEAP_DIR}"
-        PROFILE_ARGS+=(--heap-profile-dir "${SAMPLE_HEAP_DIR}")
+        PROFILE_ARGS=(--profile "${PROFILE_DIR}/${CFG}/profile_${idx}.jsonl")
     fi
     # ${arr[@]:+"${arr[@]}"} expands to nothing when the array is empty —
     # plain "${arr[@]}" trips `set -u` on bash <4.4 with an empty array.
