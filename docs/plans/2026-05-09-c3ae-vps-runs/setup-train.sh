@@ -58,7 +58,7 @@ pip install kagglehub
 cd ~/orion/examples/c3ae-demo
 mkdir -p data
 python -c "
-import kagglehub, os, shutil
+import kagglehub, os
 p = kagglehub.dataset_download('jangedoo/utkface-new')
 print('downloaded to:', p)
 # kagglehub's dataset structure: <p>/UTKFace/*.jpg or <p>/utkface_aligned_cropped/...
@@ -73,5 +73,14 @@ for sub in ('UTKFace', 'utkface_aligned_cropped/UTKFace', 'utkface_aligned_cropp
 else:
     raise SystemExit('UTKFace jpg directory not found inside ' + p)
 "
+
+# experiments/ scripts (train.py, eval.py, prep_input.py) are run from the
+# experiments dir and look for data/UTKFace there. Make a sibling symlink so
+# that ./data/UTKFace resolves correctly from BOTH c3ae-demo/ and
+# c3ae-demo/experiments/.
+mkdir -p ~/orion/examples/c3ae-demo/experiments
+cd ~/orion/examples/c3ae-demo/experiments
+[ ! -e data ] && ln -s ../data data
+ls -la data/UTKFace/ 2>&1 | head -2
 
 echo 'PROVISIONING DONE'
