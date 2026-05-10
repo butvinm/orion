@@ -57,28 +57,10 @@ uv sync
 # dev-dependency).  Needed by models/prep_input.py --boundary-band to
 # dump the 3 boundary samples the FHE pipeline encrypts.
 cd ~/orion/examples/c3ae-demo
-mkdir -p data
-python -c "
-import kagglehub, os
-p = kagglehub.dataset_download('jangedoo/utkface-new')
-print('downloaded to:', p)
-# kagglehub's dataset structure: <p>/UTKFace/*.jpg or <p>/utkface_aligned_cropped/...
-for sub in ('UTKFace', 'utkface_aligned_cropped/UTKFace', 'utkface_aligned_cropped/crop_part1'):
-    cand = os.path.join(p, sub)
-    if os.path.isdir(cand) and any(f.endswith('.jpg') for f in os.listdir(cand)):
-        target = 'data/UTKFace'
-        if not os.path.islink(target) and not os.path.isdir(target):
-            os.symlink(cand, target)
-        print('symlinked:', cand, '->', target)
-        break
-else:
-    raise SystemExit('UTKFace jpg directory not found inside ' + p)
-"
+python -m models.utkface
 
 # Demo scripts (prep_input.py, train.py, eval.py) are run from the
-# c3ae-demo dir and look for ./data/UTKFace there. The kagglehub block
-# above already created that symlink.
-cd ~/orion/examples/c3ae-demo
+# c3ae-demo dir and look for ./data/UTKFace there.
 ls -la data/UTKFace/ 2>&1 | head -2
 
 echo 'PROVISIONING DONE'

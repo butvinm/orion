@@ -98,3 +98,52 @@ def build_test_split(data_dir: Path, img_size: int = 64) -> Subset:
         generator=torch.Generator().manual_seed(42),
     )
     return test_set
+
+
+def fetch_utkface(target: Path = Path("data/UTKFace")) -> Path:
+    """Download UTKFace via kagglehub and symlink ``target`` → its JPG dir.
+
+    Idempotent — if ``target`` is already a usable directory (or a symlink
+    that resolves to one), returns it unchanged. Refuses to clobber a
+    broken symlink or regular file at ``target``.
+
+    ``kagglehub`` is imported locally so the rest of this module remains
+    importable in minimal environments that don't have it installed.
+    """
+    if target.is_dir():
+        return target
+    if target.is_symlink() or target.exists():
+        raise FileExistsError(
+            f"{target} exists but is not a usable directory; remove it and re-run"
+        )
+    import kagglehub  # noqa: PLC0415
+
+    extracted = Path(kagglehub.dataset_download("jangedoo/utkface-new"))
+    try:
+        jpg_dir = next(extracted.rglob("*.jpg")).parent
+    except StopIteration as e:
+        raise FileNotFoundError(f"No JPGs found under {extracted}") from e
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.symlink_to(jpg_dir)
+    return target
+
+
+def main() -> None:
+    import argparse  # noqa: PLC0415
+
+    parser = argparse.ArgumentParser(
+        description="Download UTKFace via kagglehub and symlink it to a stable local path.",
+    )
+    parser.add_argument(
+        "--target",
+        type=Path,
+        default=Path("data/UTKFace"),
+        help="Symlink path to create (default: ./data/UTKFace).",
+    )
+    args = parser.parse_args()
+    target = fetch_utkface(args.target)
+    print(f"UTKFace ready at {target} -> {target.resolve()}")
+
+
+if __name__ == "__main__":
+    main()

@@ -31,23 +31,8 @@ python tools/build_lattigo.py             # build the CGO shared library
 cd examples/c3ae-demo
 source ../../.venv/bin/activate
 
-# Download UTKFace dataset and symlink ./data/UTKFace to the
-# kagglehub cache (kagglehub extracts to ~/.cache/kagglehub/...).
-mkdir -p data
-python -c "
-import kagglehub, os
-p = kagglehub.dataset_download('jangedoo/utkface-new')
-for sub in ('UTKFace', 'utkface_aligned_cropped/UTKFace', 'utkface_aligned_cropped/crop_part1'):
-    cand = os.path.join(p, sub)
-    if os.path.isdir(cand) and any(f.endswith('.jpg') for f in os.listdir(cand)):
-        target = 'data/UTKFace'
-        if not os.path.islink(target) and not os.path.isdir(target):
-            os.symlink(cand, target)
-        print('symlinked:', cand, '->', target)
-        break
-else:
-    raise SystemExit('UTKFace jpg directory not found inside ' + p)
-"
+# Download UTKFace and symlink ./data/UTKFace to the kagglehub cache.
+python -m models.utkface
 
 # 1. Train the FHE (Quad) variant
 python -m models.train --variant fhe --data-dir ./data/UTKFace --epochs 60
