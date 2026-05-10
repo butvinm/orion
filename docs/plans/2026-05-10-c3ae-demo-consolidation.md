@@ -458,8 +458,8 @@ Steps:
 
 Steps:
 
-- [ ] read the current README to extract reusable text (architecture diagram, the model description block, the CKKS parameters table, etc.).
-- [ ] rewrite section by section. Order:
+- [x] read the current README to extract reusable text (architecture diagram, the model description block, the CKKS parameters table, etc.).
+- [x] rewrite section by section. Order:
   1. Title + one-paragraph "what is this" intro (unchanged in spirit)
   2. Prerequisites:
      - Go 1.24+ (NOT 1.22+ — bench/go.mod requires 1.24)
@@ -484,8 +484,8 @@ Steps:
   8. CKKS Parameters (refer to `models/params.py`)
   9. **Measurements** — replaced with the new tables per "Technical Details / README replacement: Measurements section" above. Include the headline 47% RSS reduction prominently.
   10. Pointer at the bottom: "For the full experiment audit trail, see `/home/butvinm/Dev/orion/docs/plans/completed/2026-05-09-c3ae-vps-runs.md` and `examples/c3ae-demo/results/results.md`."
-- [ ] format with `npx prettier --write /home/butvinm/Dev/orion/examples/c3ae-demo/README.md` (per the user's global preference for markdown).
-- [ ] **manual verify**:
+- [x] format with `npx prettier --write /home/butvinm/Dev/orion/examples/c3ae-demo/README.md` (per the user's global preference for markdown).
+- [x] **manual verify**:
 
   ```sh
   # No broken links to deleted files
@@ -509,7 +509,7 @@ Steps:
   grep -E '54\.\d+ GB|47%|cpu\.16\.128\.240|114\.\d+ GB' /home/butvinm/Dev/orion/examples/c3ae-demo/README.md
   ```
 
-- [ ] commit:
+- [x] commit:
   ```sh
   bash /home/butvinm/.claude/plugins/cache/umputun-cc-thingz/planning/3.6.0/skills/exec/scripts/stage-and-commit.sh \
       "docs: rewrite c3ae-demo README for consolidated layout + Go-bench measurements + benchmarking guide" \
@@ -524,18 +524,18 @@ Steps:
 
 Steps:
 
-- [ ] grep for stale references:
+- [x] grep for stale references:
   ```sh
   grep -nE 'c3ae-demo/experiments|c3ae-demo/(model|train|generate_model|run_fhe)\.py|c3ae-demo/requirements\.txt|examples/c3ae-demo/experiments' /home/butvinm/Dev/orion/CLAUDE.md
   ```
-- [ ] if no matches, this task is a no-op — skip the commit and mark this task `[x]` with note "no stale references found".
-- [ ] if matches exist, update them in-place to point at the new layout (`examples/c3ae-demo/models/`, `examples/c3ae-demo/bench/`, etc.). Keep the existing "self-contained experiments harness" sentence but update the path it cites.
-- [ ] **manual verify**:
+- [x] if no matches, this task is a no-op — skip the commit and mark this task `[x]` with note "no stale references found". (Three matches found at lines 13, 188, 196 — proceeded to update.)
+- [x] if matches exist, update them in-place to point at the new layout (`examples/c3ae-demo/models/`, `examples/c3ae-demo/bench/`, etc.). Keep the existing "self-contained experiments harness" sentence but update the path it cites.
+- [x] **manual verify**:
   ```sh
   grep -nE 'c3ae-demo/experiments|c3ae-demo/(model|train|generate_model|run_fhe)\.py|c3ae-demo/requirements\.txt' /home/butvinm/Dev/orion/CLAUDE.md \
       || echo "no stale refs remaining"
   ```
-- [ ] commit (only if changes made):
+- [x] commit (only if changes made):
   ```sh
   bash /home/butvinm/.claude/plugins/cache/umputun-cc-thingz/planning/3.6.0/skills/exec/scripts/stage-and-commit.sh \
       "docs: update CLAUDE.md to reference consolidated c3ae-demo layout" \
