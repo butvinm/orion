@@ -6,13 +6,6 @@ set -euo pipefail
 # Usage: bash scripts/run_fhe.sh <config>
 # where <config> is one of: logn15, logn16
 #
-# Optional env vars:
-#   PROFILE_DIR  If set, per-op JSONL profiles are written to
-#                "$PROFILE_DIR/$CFG/profile_<idx>.jsonl" — one file per
-#                sample. The evaluator gates this on ORION_PROFILE_OUT, set
-#                indirectly via `bench infer --profile`. Useful for the
-#                logn16 117 GB peak post-mortem.
-#
 # Pipeline (each step idempotent — skipped if outputs already exist):
 #   1. Compile model with the chosen CKKS params -> out/<cfg>/model.orion
 #   2. Prep boundary-band inputs                  -> out/inputs/sample_*.bin
@@ -50,12 +43,6 @@ EXPERIMENTS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${EXPERIMENTS_DIR}"
 
 mkdir -p "out/${CFG}/keys" "out/inputs" "results/${CFG}"
-
-# If PROFILE_DIR is set, ensure the per-config profile dir exists.
-if [ -n "${PROFILE_DIR:-}" ]; then
-    mkdir -p "${PROFILE_DIR}/${CFG}"
-    echo "[run_fhe:${CFG}] per-op profiles will be written to ${PROFILE_DIR}/${CFG}/profile_<idx>.jsonl"
-fi
 
 # Ensure FHE weights are in place (compile needs them).
 if [ ! -f out/weights_fhe.pth ]; then
@@ -148,12 +135,6 @@ while IFS= read -r idx; do
         --out "${CT_BIN}"
 
     echo "[run_fhe:${CFG}] sample_idx=${idx}: infer (measured)"
-    PROFILE_ARGS=()
-    if [ -n "${PROFILE_DIR:-}" ]; then
-        PROFILE_ARGS=(--profile "${PROFILE_DIR}/${CFG}/profile_${idx}.jsonl")
-    fi
-    # ${arr[@]:+"${arr[@]}"} expands to nothing when the array is empty —
-    # plain "${arr[@]}" trips `set -u` on bash <4.4 with an empty array.
     /usr/bin/time -v ./bench/bench infer \
         --model "out/${CFG}/model.orion" \
         --evk "out/${CFG}/keys/evk.bin" \
@@ -161,7 +142,6 @@ while IFS= read -r idx; do
         --out "${RESULT_BIN}" \
         --metrics "${RUN_JSONL}" \
         --sample-idx "${idx}" \
-        ${PROFILE_ARGS[@]:+"${PROFILE_ARGS[@]}"} \
         2>> "${INFER_LOG}"
 
     echo "[run_fhe:${CFG}] sample_idx=${idx}: decrypt"
