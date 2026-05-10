@@ -544,8 +544,8 @@ Steps:
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented: experiments/ subdir gone; 4 obsolete files gone; requirements.txt gone; kagglehub installable via `uv sync`; README updated with new measurements + benchmarking guide + uv-only Python install story; CLAUDE.md consistent.
-- [ ] full repo test sweep:
+- [x] verify all requirements from Overview are implemented: experiments/ subdir gone; 4 obsolete files gone; requirements.txt gone; kagglehub installable via `uv sync`; README updated with new measurements + benchmarking guide + uv-only Python install story; CLAUDE.md consistent.
+- [x] full repo test sweep:
   ```sh
   cd /home/butvinm/Dev/orion
   source .venv/bin/activate
@@ -564,18 +564,18 @@ Steps:
   python verify_fhe.py --help 2>&1 | head -2 || true
   python build_results.py --help 2>&1 | head -2 || true
   ```
-- [ ] verify the deleted files really are gone and not just renamed:
+- [x] verify the deleted files really are gone and not just renamed:
   ```sh
   for f in model.py train.py generate_model.py run_fhe.py requirements.txt; do
       [ ! -f /home/butvinm/Dev/orion/examples/c3ae-demo/$f ] && echo "$f: gone" || echo "$f: STILL THERE — FAIL"
   done
   ```
-- [ ] verify the c3ae-demo HTTP server still vets and builds:
+- [x] verify the c3ae-demo HTTP server still vets and builds:
   ```sh
   cd /home/butvinm/Dev/orion/examples/c3ae-demo/server
   go vet ./... && go build ./...
   ```
-- [ ] verify the README's Quick Start commands are all syntactically valid (don't actually run training — that's hours of compute):
+- [x] verify the README's Quick Start commands are all syntactically valid (don't actually run training — that's hours of compute):
   ```sh
   # The README mentions specific module paths and script paths — confirm they exist
   ls /home/butvinm/Dev/orion/examples/c3ae-demo/models/{c3ae,c3ae_fhe,params,utkface,metrics,train,compile,prep_input,eval}.py
@@ -583,7 +583,7 @@ Steps:
   ls /home/butvinm/Dev/orion/examples/c3ae-demo/bench/{go.mod,main.go,keygen.go,encrypt.go,infer.go,decrypt.go,rss.go}
   ls /home/butvinm/Dev/orion/examples/c3ae-demo/{verify_fhe,build_results}.py
   ```
-- [ ] git log: 3 or 4 new commits on `experiments` branch (Task 1, 2, 3, optional Task 4), each with the expected message.
+- [x] git log: 3 or 4 new commits on `experiments` branch (Task 1, 2, 3, optional Task 4), each with the expected message. (4 task commits + 2 plan-mark commits = 6 total ahead of origin/experiments — exec-script artifact, expected.)
 
 ### Task 6: [Final] Move plan to completed/
 
