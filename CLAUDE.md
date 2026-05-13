@@ -10,7 +10,7 @@ Orion takes PyTorch neural networks, analyzes them, and produces artifacts that 
 
 ## Repository Structure
 
-Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). Model examples under `examples/models/` (`{mlp,lenet,lola,alexnet,vgg,resnet}.py`) with unified `run.py` and `train.py`.
+Three Python packages (`python/lattigo/`, `python/orion-compiler/`, `python/orion-evaluator/`), a Go evaluator (`evaluator/`), a JS/WASM package (`js/lattigo/`), and a browser demo (`examples/wasm-demo/`). Model examples under `examples/models/` (`{mlp,lenet,lola,alexnet,vgg,resnet}.py`) with unified `run.py` and `train.py`. The C3AE age-verification demo at `examples/c3ae-demo/` ships with a self-contained experiments harness flattened directly into the demo dir (`examples/c3ae-demo/{models,bench,scripts,results}/`, with `scripts/{run_cleartext,run_fhe}.sh` orchestrators and `scripts/{verify_fhe,build_results}.py` post-run analysis tools) — cleartext FPR/FNR + FHE timing/RSS benchmarks for `logn15`/`logn16` via a Go-only `bench` binary.
 
 **Dependency graph:** `lattigo` ← `orion-compiler` (+ torch, networkx). `orion-evaluator` is independent. `js/lattigo` depends only on Lattigo (no Orion-specific code).
 
@@ -24,7 +24,7 @@ pip install orion-v2-lattigo orion-v2-compiler orion-v2-evaluator
 
 ### From source
 
-**System prerequisites:** Go 1.22+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.11–3.12, Node.js 18+.
+**System prerequisites:** Go 1.24+, C compiler (CGO), libgmp-dev, libssl-dev, Python 3.11–3.12, Node.js 18+.
 
 ```bash
 # Build the Python CGO shared library (required before installing Python packages)
@@ -181,3 +181,20 @@ Each package defines its own exception hierarchy. Use these instead of generic `
 - No `Client` class — users use Lattigo primitives directly
 - Go evaluator is a subpackage of the root module (`github.com/butvinm/orion/v2/evaluator`)
 - Tests in `python/tests/`, run with `pytest python/tests/`
+
+## FHE Inference Performance Notes
+
+- **`lintrans.Encode` is the dominant allocator on convolution-heavy ops.** For C3AE conv2 at logn=15, a single op allocates ~85 GB transient (mostly GC'd). Top hot spots inside `embedDouble`: `lattigo/ring.Ring.BRedConstants` (51%, fresh slice per call), `lattigo/ring.Ring.ModuliChain` (26%, fresh slice per call), `lattigo/ring.NewPoly` (22%). Both `BRedConstants` and `ModuliChain` are `func (r Ring) ...` value-receiver methods that `make` a fresh slice of immutable per-prime constants on every call — caching them on the Ring would eliminate ~77% of the churn (open upstream PR opportunity). See [issue #21](https://github.com/butvinm/orion/issues/21) for the per-line breakdown.
+- **Go-only inference vs Python wrapper: ~50% less peak RSS** for the same model. Measured at logn=15: 54 GB (Go bench) vs 103 GB (Python wrapper, now removed). Cause: the Python wrapper loads two CGO `.so` files (one for keygen via `lattigo`, one for inference via `orion_evaluator`) which can't share Go heap and forces serialize/deserialize round-trips of the eval keys. Prefer the Go bench path (`examples/c3ae-demo/bench/`) for any benchmarking.
+- **`GOMEMLIMIT < observed_peak` causes allocator deadlock**, not graceful slowdown. Tested at GOMEMLIMIT=20GiB on the C3AE logn=15 forward (which has a transient 85 GB allocation peak in conv2): process throttled to 0% CPU mid-conv2 and made no progress. Lattigo's keyswitch buffers stay live until the op returns — Go GC can't free them, so the allocator backpressure perma-stalls. Don't go below ~110% of the unconstrained peak.
+- **Working-set CT memory is tiny.** The evaluator's `results map[string][]*rlwe.Ciphertext` rarely holds >100 MB total at C3AE scale. The big RSS numbers are from Lattigo internal buffers + the resident evk (~7 GB at logn=15, ~13 GB at logn=16) + transient allocator churn.
+- **Intermediate `results` are never freed during `Forward`** (`evaluator/evaluator.go:79`). For C3AE at end of forward, 19 ciphertexts are still alive (~80 MB). Real win would matter more for ResNet-class networks. Reverse-topological discard after last consumer is an open optimization.
+
+## VPS / Benchmarking
+
+- Canonical benchmarking flavor: `cpu.16.128.240` on immers.cloud. Fits both `logn15` (54 GB peak) and `logn16` (114.37 GB peak, ~14 GB margin). Larger CPU flavors (256 GB) not currently available.
+- Provisioning script: `docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh` (and `setup-train.sh` for GPU training). Takes ~5 min on a fresh `cpu.16.128.240`. Handles: apt build deps, `python3.12` from deadsnakes PPA (NOT in default Ubuntu 22.04 repos), Go 1.24 from upstream tarball (Ubuntu ships 1.18), uv install, repo clone + `git checkout experiments`, build_lattigo CGO, `uv sync` (kagglehub is now a workspace dev-dep), kagglehub UTKFace download, symlink `data/UTKFace` under `examples/c3ae-demo/`. The double-symlink hack for the legacy nested experiments subdir is obsolete after the 2026-05-10 consolidation.
+- **Pattern for SSH-resilient long-running work**: `nohup bash work.sh > log 2>&1 < /dev/null &` then poll the log every 30-60s in a `timeout 600` loop. SSH disconnects don't kill detached work. Don't use shell `set -euxo pipefail` together with `ls | head` — SIGPIPE on `ls` triggers pipefail and aborts the script silently.
+- **Branch must be on `origin` for VPS provisioning to work** — `setup-fhe.sh` does `git checkout experiments` from the cloned-from-origin repo. Local-only branches require an explicit `git push -u origin experiments` first.
+- **C3AE empirical numbers (UTKFace test split, n=3557 / boundary 16-20 n=161, seed 42 split):** ReLU 95.6% overall / 64.6% boundary; Quad (FHE-compatible) 94.2% / 61.5%. Quad costs ~3pp accuracy. Boundary band FPR is ~65-71% — model strongly biases "adult" due to 18%/82% class imbalance + asymmetric loss.
+- **FHE vs cleartext correctness**: at C3AE scale with confident-saturated sigmoid outputs on the boundary samples, `|fhe_prob - cleartext_prob|` measures 0.000000 to 6 decimals across both logn=15 and logn=16. Use `scripts/verify_fhe.py --tol 0.05` as the pipeline-correctness gate.

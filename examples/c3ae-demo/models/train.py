@@ -3,8 +3,14 @@
 
 Uses asymmetric BCE loss to penalize false positives (minors classified as adult).
 
-Usage:
-    python train.py --data-dir ./data/UTKFace --epochs 60
+Selectable architecture variant:
+- ``relu``: plain torch.nn C3AE with ReLU activations (cleartext baseline)
+- ``fhe``:  orion_compiler.nn C3AE with Quad (x^2) activations (FHE-compatible)
+
+Usage (from ``examples/c3ae-demo/``):
+
+    python -m models.train --variant relu --data-dir ./data/UTKFace --epochs 60
+    python -m models.train --variant fhe  --data-dir ./data/UTKFace --epochs 60
 """
 
 import argparse
@@ -14,49 +20,17 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from PIL import Image
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, random_split
 
-from model import C3AE
+from models.c3ae import C3AE as C3AE_ReLU
+from models.c3ae_fhe import C3AE as C3AE_FHE
+from models.metrics import compute_metrics
+from models.utkface import UTKFaceDataset
 
-AGE_MAX = 100
-
-
-class UTKFaceDataset(Dataset):
-    def __init__(self, data_dir, img_size=64, age_threshold=18):
-        self.img_size = img_size
-        self.samples = []
-
-        for img_path in Path(data_dir).glob("*.jpg*"):
-            try:
-                age = min(max(int(img_path.name.split("_")[0]), 0), AGE_MAX)
-                is_adult = 1.0 if age >= age_threshold else 0.0
-                self.samples.append((img_path, age, is_adult))
-            except (ValueError, IndexError):
-                continue
-
-        if not self.samples:
-            raise ValueError(f"No samples found in {data_dir}")
-
-        ages = [s[1] for s in self.samples]
-        minors = sum(1 for s in self.samples if s[2] == 0.0)
-        adults = len(self.samples) - minors
-        print(
-            f"[Dataset] {len(self.samples)} samples: "
-            f"{minors} minors ({minors / len(self.samples) * 100:.0f}%), "
-            f"{adults} adults, ages {min(ages)}-{max(ages)}"
-        )
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        img_path, age, is_adult = self.samples[idx]
-        img = Image.open(img_path).convert("RGB").resize((self.img_size, self.img_size))
-        img = np.array(img, dtype=np.float32) / 255.0
-        img = (img - 0.5) / 0.5  # Normalize to [-1, 1]
-        img = torch.from_numpy(img).permute(2, 0, 1)
-        return img, torch.tensor([is_adult], dtype=torch.float32), age
+VARIANTS = {
+    "relu": C3AE_ReLU,
+    "fhe": C3AE_FHE,
+}
 
 
 def asymmetric_loss(pred, target, fpr_weight):
@@ -82,21 +56,31 @@ def evaluate(model, loader, device, fpr_weight):
             all_probs.extend(probs.cpu().squeeze().tolist())
             all_targets.extend(targets.cpu().squeeze().tolist())
 
-    probs = np.array(all_probs)
-    targets = np.array(all_targets)
-    pred_adult = probs >= 0.5
-    true_adult = targets >= 0.5
-    minors_mask = ~true_adult
+    metrics = compute_metrics(np.array(all_probs), np.array(all_targets))
+    return {
+        "loss": total_loss / n,
+        "accuracy": metrics["accuracy"],
+        "fpr": metrics["fpr"],
+        "fnr": metrics["fnr"],
+    }
 
-    fpr = pred_adult[minors_mask].mean() if minors_mask.sum() > 0 else 0
-    fnr = (~pred_adult[true_adult]).mean() if true_adult.sum() > 0 else 0
-    accuracy = (pred_adult == true_adult).mean()
 
-    return {"loss": total_loss / n, "accuracy": accuracy, "fpr": fpr, "fnr": fnr}
+def load_variant(variant: str):
+    """Return the requested C3AE class for the given variant name."""
+    try:
+        return VARIANTS[variant]
+    except KeyError as exc:
+        raise ValueError(f"Unknown variant: {variant!r}") from exc
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--variant",
+        choices=["relu", "fhe"],
+        required=True,
+        help="Model variant: 'relu' (torch.nn) or 'fhe' (orion_compiler.nn + Quad).",
+    )
     parser.add_argument("--stride", type=int, default=2, choices=[1, 2])
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -104,11 +88,20 @@ def main():
     parser.add_argument("--fpr-weight", type=float, default=40.0)
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
     parser.add_argument("--data-dir", type=Path, default=Path("./data/UTKFace"))
-    parser.add_argument("--output", type=Path, default=Path("./weights.pth"))
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output weight path. Defaults to out/weights_<variant>.pth.",
+    )
     args = parser.parse_args()
 
+    if args.output is None:
+        args.output = Path("out") / f"weights_{args.variant}.pth"
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Training C3AE (stride={args.stride}) on {device}")
+    print(f"Training C3AE variant={args.variant} (stride={args.stride}) on {device}")
     print(f"Epochs: {args.epochs}, LR: {args.lr}, FPR weight: {args.fpr_weight}")
 
     # Data
@@ -117,7 +110,8 @@ def main():
     val_size = int(0.15 * len(dataset))
     test_size = len(dataset) - train_size - val_size
     train_set, val_set, test_set = random_split(
-        dataset, [train_size, val_size, test_size],
+        dataset,
+        [train_size, val_size, test_size],
         generator=torch.Generator().manual_seed(42),
     )
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
@@ -126,6 +120,7 @@ def main():
     print(f"Train: {len(train_set)}, Val: {len(val_set)}, Test: {len(test_set)}")
 
     # Model
+    C3AE = load_variant(args.variant)
     model = C3AE(img_size=64, first_stride=args.stride).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Parameters: {n_params:,}")
@@ -175,8 +170,10 @@ def main():
     model.load_state_dict(best_state)
     model = model.to(device)
     test = evaluate(model, test_loader, device, args.fpr_weight)
-    print(f"\nTest: FPR={test['fpr'] * 100:.1f}%, FNR={test['fnr'] * 100:.1f}%, "
-          f"Acc={test['accuracy'] * 100:.1f}%")
+    print(
+        f"\nTest: FPR={test['fpr'] * 100:.1f}%, FNR={test['fnr'] * 100:.1f}%, "
+        f"Acc={test['accuracy'] * 100:.1f}%"
+    )
 
 
 if __name__ == "__main__":

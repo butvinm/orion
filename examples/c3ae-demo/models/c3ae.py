@@ -1,16 +1,21 @@
-"""C3AE Age Verification Model for Orion v2 FHE.
+"""C3AE Age Verification Model — True ReLU variant (cleartext only).
 
-Replaces ReLU with Quad (x^2) activations for CKKS compatibility.
-Based on C3AE architecture with stride-2 optimization for faster FHE inference.
+Uses standard torch.nn primitives with ReLU activations. This variant is
+NOT compiled to .orion (no Quad approximation), so it serves as a cleartext
+quality baseline against the FHE-compatible Quad variant in c3ae_fhe.py.
+
+Architecture mirrors examples/c3ae-demo/model.py:13-86 exactly, with each
+orion_compiler.nn layer swapped for its torch.nn counterpart and Quad
+swapped for ReLU(inplace=False).
 
 Input:  64x64x3 RGB face image
 Output: Single logit (0=minor, 1=adult)
 """
 
-import orion_compiler.nn as on
+import torch.nn as nn
 
 
-class C3AE(on.Module):
+class C3AE(nn.Module):
     """C3AE-style CNN for binary age classification (18+ verification).
 
     Args:
@@ -23,33 +28,33 @@ class C3AE(on.Module):
         super().__init__()
 
         # Block 1: 3->32 channels
-        self.conv1 = on.Conv2d(3, 32, kernel_size=3, stride=first_stride, bias=False)
-        self.bn1 = on.BatchNorm2d(32)
-        self.act1 = on.Quad()
-        self.pool1 = on.AvgPool2d(2)
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=first_stride, bias=False)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.act1 = nn.ReLU(inplace=False)
+        self.pool1 = nn.AvgPool2d(2)
 
         # Block 2: 32->32 channels
-        self.conv2 = on.Conv2d(32, 32, kernel_size=3, bias=False)
-        self.bn2 = on.BatchNorm2d(32)
-        self.act2 = on.Quad()
-        self.pool2 = on.AvgPool2d(2)
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, bias=False)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.act2 = nn.ReLU(inplace=False)
+        self.pool2 = nn.AvgPool2d(2)
 
         # Block 3: 32->32 channels
-        self.conv3 = on.Conv2d(32, 32, kernel_size=3, bias=False)
-        self.bn3 = on.BatchNorm2d(32)
-        self.act3 = on.Quad()
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, bias=False)
+        self.bn3 = nn.BatchNorm2d(32)
+        self.act3 = nn.ReLU(inplace=False)
         self.has_pool3 = first_stride == 1
         if self.has_pool3:
-            self.pool3 = on.AvgPool2d(2)
+            self.pool3 = nn.AvgPool2d(2)
 
         # Block 4: 32->32 channels
-        self.conv4 = on.Conv2d(32, 32, kernel_size=3, bias=False)
-        self.bn4 = on.BatchNorm2d(32)
-        self.act4 = on.Quad()
+        self.conv4 = nn.Conv2d(32, 32, kernel_size=3, bias=False)
+        self.bn4 = nn.BatchNorm2d(32)
+        self.act4 = nn.ReLU(inplace=False)
 
         # Block 5: 1x1 conv (channel mixing)
-        self.conv5 = on.Conv2d(32, 32, kernel_size=1, bias=True)
-        self.act5 = on.Quad()
+        self.conv5 = nn.Conv2d(32, 32, kernel_size=1, bias=True)
+        self.act5 = nn.ReLU(inplace=False)
 
         # Compute flatten size
         # stride=2: 64->31->15->13->6->4->2->2, flat=128
@@ -66,12 +71,10 @@ class C3AE(on.Module):
         flat_size = 32 * s * s
 
         # Classifier
-        self.flatten = on.Flatten()
-        self.fc1 = on.Linear(flat_size, 12)
-        self.act6 = on.Quad()
-        self.fc2 = on.Linear(12, 1)
-
-        self.first_stride = first_stride
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(flat_size, 12)
+        self.act6 = nn.ReLU(inplace=False)
+        self.fc2 = nn.Linear(12, 1)
 
     def forward(self, x):
         x = self.pool1(self.act1(self.bn1(self.conv1(x))))

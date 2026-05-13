@@ -22,6 +22,7 @@ dev-dependencies = [
     "ruff>=0.4",
     "mypy>=1.0",
     "torchvision>=0.17.0",
+    "kagglehub>=0.3.0",
 ]
 
 [tool.uv.workspace]

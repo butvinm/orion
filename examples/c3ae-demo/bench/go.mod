@@ -1,10 +1,11 @@
-module github.com/butvinm/orion/v2/examples/wasm-demo/server
+module github.com/butvinm/orion/v2/examples/c3ae-demo/bench
 
 go 1.24.0
 
-require github.com/butvinm/orion/v2 v2.1.3
-
-require github.com/tuneinsight/lattigo/v6 v6.2.0
+require (
+	github.com/butvinm/orion/v2 v2.0.0-00010101000000-000000000000
+	github.com/tuneinsight/lattigo/v6 v6.2.0
+)
 
 require (
 	github.com/ALTree/bigfloat v0.2.0 // indirect
@@ -17,3 +18,5 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/butvinm/orion/v2 => ../../..
