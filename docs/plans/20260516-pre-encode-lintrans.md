@@ -160,25 +160,25 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 - Modify: `CLAUDE.md` (perf notes section)
 - Modify: `docs/plans/20260516-pre-encode-lintrans.md` (this plan — record results)
 
-- [ ] **Instrument the bench** to record RSS at three lifecycle points instead of only post-Forward `VmHWM`:
+- [x] **Instrument the bench** to record RSS at three lifecycle points instead of only post-Forward `VmHWM`:
       (a) `rss_post_load` — right after `LoadModel`/`NewEvaluatorFromKeySet`, before first `Forward`
       (b) `rss_post_forward1` — after first `Forward` returns
       (c) `rss_post_forward2` — after a second `Forward` on the same evaluator/model
       Sample current RSS (`VmRSS`) at each point and also record `VmHWM` at end. Write all four numbers to the bench's JSON/CSV output.
-- [ ] Commit the bench instrumentation. Tests run locally; then push the feature branch to `origin` (required — `setup-fhe.sh` does `git checkout <branch>` from the origin clone, so the branch must be on the remote before provisioning).
-- [ ] **Provision the VPS** using the `vps` skill (immers.cloud): create a `cpu.16.128.240` flavor instance. Track the instance ID. Cost reminder: this flavor is billed hourly while running — full 4-run bench (logn=15 baseline, logn=16 baseline, logn=15 feature, logn=16 feature) is on the order of several hours; budget accordingly.
-- [ ] Run the provisioning script on the VPS: `bash docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh <feature-branch-name>`. Per CLAUDE.md this takes ~5 min and handles apt deps, Python 3.12, Go 1.24, uv, repo checkout, CGO build, UTKFace symlink.
-- [ ] **Baseline runs:** on the VPS, `git checkout main && python tools/build_lattigo.py && uv sync`, then run `examples/c3ae-demo/scripts/run_fhe.sh logn15` and `... logn16`. Capture all four RSS points + wall time + load time per run. Pull the `results/*/run.jsonl` files back to local.
-- [ ] **Feature runs:** on the VPS, `git checkout <feature-branch> && python tools/build_lattigo.py && uv sync`, then run both configs again. Capture the same numbers. Pull `results/` back.
-- [ ] Use the SSH-resilient pattern from CLAUDE.md for the actual runs: `nohup bash work.sh > log 2>&1 < /dev/null &` and poll the log every 30-60 s. logn=16 runs can take 1-2 h; don't keep an interactive ssh hostage.
-- [ ] **Acceptance gate A** (logn=15 forward-side drop): `rss_post_forward1` (feature) < `rss_post_forward1` (baseline) by ≥ 30 GB. Looser than the 40–60 GB expectation; anything below 30 GB means we missed a churn source.
-- [ ] **Acceptance gate B** (logn=16 load-time guard, critical): `rss_post_load` (feature) ≤ `rss_post_forward1` (baseline). If eager encoding spikes load-time RSS above the old forward-time peak, we net-regress on the memory-constrained config and the plan failed.
-- [ ] **Acceptance gate C** (full-lifetime): `VmHWM` (feature) < `VmHWM` (baseline) at both logn=15 and logn=16.
-- [ ] **Acceptance gate D** (correctness): `verify_fhe.py --tol 0.05` passes — the 6-decimal `|fhe_prob - cleartext_prob|` invariant from CLAUDE.md must hold.
-- [ ] Record load-time wall-clock delta (feature − baseline). No arbitrary bound — just record it. If load time at logn=16 exceeds 10 minutes, flag in the Results section as a follow-up to parallelize encoding (but don't block on it in this plan).
-- [ ] Update CLAUDE.md "FHE Inference Performance Notes" with the measured before/after numbers for both `logn`s, including all three RSS sample points.
-- [ ] Append a "Results" section to this plan with the raw numbers, gate pass/fail per item above, and a one-line conclusion.
-- [ ] **Tear down the VPS** via the `vps` skill (delete the instance — confirm via the dashboard that billing has stopped). Do not leave it running between sessions: `cpu.16.128.240` is expensive on idle.
+- [x] Commit the bench instrumentation. Tests run locally; then push the feature branch to `origin` (required — `setup-fhe.sh` does `git checkout <branch>` from the origin clone, so the branch must be on the remote before provisioning).
+- [x] **Provision the VPS** using the `vps` skill (immers.cloud): create a `cpu.16.128.240` flavor instance. Track the instance ID. Cost reminder: this flavor is billed hourly while running — full 4-run bench (logn=15 baseline, logn=16 baseline, logn=15 feature, logn=16 feature) is on the order of several hours; budget accordingly.
+- [x] Run the provisioning script on the VPS: `bash docs/plans/2026-05-09-c3ae-vps-runs/setup-fhe.sh <feature-branch-name>`. Per CLAUDE.md this takes ~5 min and handles apt deps, Python 3.12, Go 1.24, uv, repo checkout, CGO build, UTKFace symlink.
+- [x] **Baseline runs:** on the VPS, `git checkout main && python tools/build_lattigo.py && uv sync`, then run `examples/c3ae-demo/scripts/run_fhe.sh logn15` and `... logn16`. Capture all four RSS points + wall time + load time per run. Pull the `results/*/run.jsonl` files back to local.
+- [x] **Feature runs:** on the VPS, `git checkout <feature-branch> && python tools/build_lattigo.py && uv sync`, then run both configs again. Capture the same numbers. Pull `results/` back. (feature-logn16 OOM-killed during keygen at 130 GB > 128 GB VPS ceiling — see Results.)
+- [x] Use the SSH-resilient pattern from CLAUDE.md for the actual runs: `nohup bash work.sh > log 2>&1 < /dev/null &` and poll the log every 30-60 s. logn=16 runs can take 1-2 h; don't keep an interactive ssh hostage.
+- [x] **Acceptance gate A** (logn=15 forward-side drop): `rss_post_forward1` (feature) < `rss_post_forward1` (baseline) by ≥ 30 GB. Looser than the 40–60 GB expectation; anything below 30 GB means we missed a churn source. **FAIL** — feature shifts RSS into load phase (post_load=43.7 GB, post_fwd1=45.8 GB) vs baseline (post_load=15.7 GB, post_fwd1=27.3 GB); see Results discussion. Peak-RSS gate (Gate C) is the more faithful comparison.
+- [x] **Acceptance gate B** (logn=16 load-time guard, critical): `rss_post_load` (feature) ≤ `rss_post_forward1` (baseline). If eager encoding spikes load-time RSS above the old forward-time peak, we net-regress on the memory-constrained config and the plan failed. **FAIL** — feature-logn16 OOM-killed during `bench keygen` (130 GB > 128 GB). Pre-encoding regresses on the memory-constrained config exactly as the gate was designed to catch.
+- [x] **Acceptance gate C** (full-lifetime): `VmHWM` (feature) < `VmHWM` (baseline) at both logn=15 and logn=16. **PARTIAL** — logn=15: PASS (feature 49.2 GB < baseline 55.9 GB, ~6.7 GB savings). logn=16: FAIL (feature OOM, no measurement).
+- [x] **Acceptance gate D** (correctness): `verify_fhe.py --tol 0.05` passes — the 6-decimal `|fhe_prob - cleartext_prob|` invariant from CLAUDE.md must hold. **PASS** (logn=15 only; max_diff=0.0000 across all 3 boundary samples).
+- [x] Record load-time wall-clock delta (feature − baseline). No arbitrary bound — just record it. If load time at logn=16 exceeds 10 minutes, flag in the Results section as a follow-up to parallelize encoding (but don't block on it in this plan). **Recorded** — logn=15: feature 136s vs baseline 6.6s = +130s delta (~20x slower). Pre-encoding cost is paid at load.
+- [x] Update CLAUDE.md "FHE Inference Performance Notes" with the measured before/after numbers for both `logn`s, including all three RSS sample points.
+- [x] Append a "Results" section to this plan with the raw numbers, gate pass/fail per item above, and a one-line conclusion.
+- [x] **Tear down the VPS** via the `vps` skill (delete the instance — confirm via the dashboard that billing has stopped). Do not leave it running between sessions: `cpu.16.128.240` is expensive on idle.
 
 ### Task 5: Python regression and full-suite verification
 
@@ -211,3 +211,44 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 
 - Issue #21 update with measured numbers and link to the merged change.
 - If results warrant it, contribute the upstream Lattigo `BRedConstants` / `ModuliChain` caching patch as a separate effort — that fix would benefit per-op steady-state (rotations, mults, rescales), which this plan does not address.
+
+## Results
+
+**Run date:** 2026-05-16, VPS `orion-c3ae-rss-bench` (cpu.16.128.240 / 125 GiB RAM), 3 boundary-band samples per config (idx 12, 35, 44).
+
+### Raw RSS measurements (MB)
+
+Per-sample averages from `results/*/run.jsonl`:
+
+| Config            | rss_post_load | rss_post_forward1 | rss_post_forward2 | peak_rss (VmHWM via /proc, MB) | VmHWM (`time -v`, MB) |
+| ----------------- | ------------: | ----------------: | ----------------: | -----------------------------: | --------------------: |
+| feature × logn15  |        43,599 |            45,701 |            47,713 |                         48,173 |            **49,212** |
+| baseline × logn15 |        15,703 |            27,294 |            55,181 |                         55,919 |            **55,930** |
+| feature × logn16  |             — |                 — |                 — |                              — | **OOM during keygen** |
+| baseline × logn16 |        27,950 |           115,559 |            74,599 |                        117,288 |           **120,103** |
+
+Per-sample raw rows (logn15 / logn16) are stored under `examples/c3ae-demo/results/bench_20260516/{feature,baseline}-{logn15,logn16}/results/run.jsonl`.
+
+### Load-time wall-clock
+
+| Config            | load_s (avg) | keygen_s | compile_peak_rss_mb |
+| ----------------- | -----------: | -------: | ------------------: |
+| feature × logn15  |   **136.35** |    38.93 |              13,183 |
+| baseline × logn15 |     **6.64** |    42.75 |              13,175 |
+| baseline × logn16 |    **13.61** |    72.40 |              26,370 |
+
+Load-time delta (logn15): **+129.7 s** (≈20.5× slower) — encode work moved out of `Forward` into `LoadModel` as designed.
+
+### Gate verdicts
+
+| Gate | Definition                                                    | Measured                                                    | Verdict  |
+| ---- | ------------------------------------------------------------- | ----------------------------------------------------------- | -------- |
+| A    | feature.logn15.post_fwd1 < baseline.logn15.post_fwd1 by ≥30GB | feature 45,701 MB **>** baseline 27,294 MB (delta +18.4 GB) | **FAIL** |
+| B    | feature.logn16.post_load ≤ baseline.logn16.post_fwd1          | feature OOM-killed at 130 GB during `bench keygen`          | **FAIL** |
+| C-15 | feature.logn15.VmHWM < baseline.logn15.VmHWM                  | 49,212 MB < 55,930 MB (saved ~6.7 GB, ~12%)                 | **PASS** |
+| C-16 | feature.logn16.VmHWM < baseline.logn16.VmHWM                  | feature OOM, no data                                        | **FAIL** |
+| D    | `verify_fhe.py --tol 0.05` (logn15 feature, 3 samples)        | max_diff = 0.0000 to 4 decimals; all 3 OK                   | **PASS** |
+
+### Conclusion
+
+**Mixed.** The change works as designed at logn=15 (peak RSS drops ~6.7 GB; forward-time spikes flatten; correctness unchanged), but at logn=16 the eager LT encoding inside `LoadModel` pushes `bench keygen` past the 128 GB ceiling and the process is OOM-killed before any inference runs. Pre-encoding shifts the spike from `Forward` into `LoadModel` (Gate A definition was a poor fit — Gate C is the faithful comparison and it passes at logn15). For logn=16 either (a) `bench keygen` should not call `LoadModel`'s LT-encoding path (split into a lightweight `ParseClientParams` — partially done in Task 3b for the client tools but `bench keygen` here still used the full LoadModel path), or (b) LT encoding needs streaming/external-buffer support to stay under the ceiling. Recommended next step: verify whether `bench keygen` on this branch was using the post-Task-3b lightweight path; if so, Task 3b did not cover the keygen LoadModel call and that's the bug to fix before re-benching logn=16.
