@@ -6,12 +6,39 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 
 	"github.com/butvinm/orion/v2/evaluator"
 )
+
+func dumpHeap(label string) {
+	dir := os.Getenv("ORION_HEAP_DUMP_DIR")
+	if dir == "" {
+		return
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "heap dump mkdir %q: %v\n", dir, err)
+		return
+	}
+	runtime.GC()
+	path := filepath.Join(dir, fmt.Sprintf("heap-%s-%d.pprof", label, time.Now().Unix()))
+	f, err := os.Create(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "heap dump create %q: %v\n", path, err)
+		return
+	}
+	defer f.Close()
+	if err := pprof.WriteHeapProfile(f); err != nil {
+		fmt.Fprintf(os.Stderr, "heap dump write %q: %v\n", path, err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "heap dump written: %s\n", path)
+}
 
 // inferMetrics is the JSONL record emitted per `bench infer` invocation.
 //
@@ -125,6 +152,7 @@ func runInfer(args []string) error {
 	// set; on baseline this captures load-time resident only (no LT
 	// encodings yet — those happen lazily inside Forward).
 	rssPostLoadMB := readVmRSS() / 1024
+	dumpHeap("post_load")
 
 	// --- Measured: first Forward ---
 	t0 := time.Now()
@@ -134,6 +162,7 @@ func runInfer(args []string) error {
 		return fmt.Errorf("eval.Forward: %w", err)
 	}
 	rssPostForward1MB := readVmRSS() / 1024
+	dumpHeap("post_forward1")
 
 	// --- Measured: second Forward on same model + evaluator ---
 	// Re-unmarshal the input ciphertext: Forward consumes/mutates ct
@@ -151,6 +180,7 @@ func runInfer(args []string) error {
 		return fmt.Errorf("eval.Forward (second call): %w", err)
 	}
 	rssPostForward2MB := readVmRSS() / 1024
+	dumpHeap("post_forward2")
 
 	// Touch result2 (just enough to keep the compiler from being
 	// over-eager about elimination — though the slice escapes through
