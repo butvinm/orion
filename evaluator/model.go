@@ -2,34 +2,49 @@ package evaluator
 
 import (
 	"fmt"
+	"math"
+	"runtime"
 
+	"github.com/tuneinsight/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
+	"github.com/tuneinsight/lattigo/v6/ring"
 	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 	"github.com/tuneinsight/lattigo/v6/utils/bignum"
 
 	orion "github.com/butvinm/orion/v2"
 )
 
-// Model holds a parsed compiled model with raw blob data for lazy LT encoding.
-// It is immutable after LoadModel() and safe to share across goroutines.
-// Linear transform diagonals are NOT pre-encoded — the Evaluator encodes them
-// on demand during Forward() to avoid the ~23x memory blowup from CKKS encoding.
+// Model holds a parsed compiled model with eagerly-encoded linear-transform
+// diagonals. It is immutable after LoadModel() and safe to share across
+// goroutines.
+//
+// Memory contract: linear-transform diagonals are CKKS-encoded once at load
+// time and held resident on the Model. This trades steady resident memory
+// (~7 GB at logn=15, ~13 GB at logn=16 for C3AE-class models — measured in
+// docs/plans/20260516-pre-encode-lintrans.md) for elimination of the
+// per-request transient spike inside Forward() (previously ~85 GB for C3AE
+// conv2 at logn=15 from `lintrans.Encode` churn in `embedDouble`).
+//
+// Error contract: malformed `diag_*` blobs surface as LoadModel errors with
+// node name + (row, col) context, not as deferred Forward errors. This is a
+// fail-fast guarantee.
 type Model struct {
 	header      *CompiledHeader
 	clientParam orion.Params // cached for ClientParams()
 	params      ckks.Parameters
 	graph       *Graph
-	rawBlobs    [][]byte                         // raw blob data (sub-slices of input, no copy)
-	biases      map[string][]*rlwe.Plaintext     // node -> per-output-CT biases
-	polys       map[string]bignum.Polynomial     // node -> polynomial
-	ltConfigs   map[string]*LinearTransformConfig // node -> parsed LT config
-	polyConfigs map[string]*PolynomialConfig      // node -> parsed poly config
+	rawBlobs    [][]byte                                 // raw blob data (sub-slices of input, no copy)
+	biases      map[string][]*rlwe.Plaintext             // node -> per-output-CT biases
+	polys       map[string]bignum.Polynomial             // node -> polynomial
+	ltConfigs   map[string]*LinearTransformConfig        // node -> parsed LT config
+	polyConfigs map[string]*PolynomialConfig             // node -> parsed poly config
+	preparedLTs map[string][][]lintrans.LinearTransformation // node -> [col][row] pre-encoded LTs
 }
 
 // LoadModel parses a .orion v2 file, stores raw blob data, and CKKS-encodes
-// only biases and polynomials at load time. Linear transform diagonals are
-// kept as raw blobs and encoded on demand during Forward() to avoid the ~23x
-// memory blowup from CKKS encoding. The returned Model is immutable.
+// biases, polynomials, and all linear-transform diagonals at load time. The
+// returned Model is immutable and shareable across goroutines. See Model's
+// doc comment for the memory/error trade-off.
 func LoadModel(data []byte) (*Model, error) {
 	// 1. Parse container.
 	header, blobs, err := ParseContainer(data)
@@ -70,17 +85,21 @@ func LoadModel(data []byte) (*Model, error) {
 		polys:       make(map[string]bignum.Polynomial),
 		ltConfigs:   make(map[string]*LinearTransformConfig),
 		polyConfigs: make(map[string]*PolynomialConfig),
+		preparedLTs: make(map[string][][]lintrans.LinearTransformation),
 	}
 
-	// Process each node: parse configs, encode biases (small), load polynomials.
-	// Linear transform diagonals are NOT encoded here — they are encoded on
-	// demand during Forward() to avoid ~23x memory blowup from CKKS encoding.
+	// Process each node: parse configs, encode biases (small), load polynomials,
+	// and eagerly CKKS-encode all linear-transform diagonals.
 	for _, node := range graph.Nodes {
 		switch node.Op {
 		case "linear_transform":
 			if err := m.loadLinearTransformMetadata(node, blobs, ckksParams, enc, maxSlots); err != nil {
 				return nil, fmt.Errorf("loading linear_transform %q: %w", node.Name, err)
 			}
+			// Reclaim per-node embedDouble transients before encoding the next
+			// LT node — without this, transients can stack across nodes and
+			// load-time peak RSS becomes the sum rather than the max.
+			runtime.GC()
 		case "polynomial":
 			if err := m.loadPolynomial(node); err != nil {
 				return nil, fmt.Errorf("loading polynomial %q: %w", node.Name, err)
@@ -95,8 +114,14 @@ func LoadModel(data []byte) (*Model, error) {
 	return m, nil
 }
 
-// loadLinearTransformMetadata parses config and encodes bias for a linear_transform node.
-// Diagonal encoding is deferred to Forward() time to avoid ~23x memory blowup.
+// loadLinearTransformMetadata parses config, encodes biases, and eagerly
+// CKKS-encodes all linear-transform diagonals for a single linear_transform
+// node. Diagonals are stored on the Model as preparedLTs[node.Name][col][row]
+// — the exact shape that lintrans.Evaluator.EvaluateManyNew consumes per col.
+//
+// Encoding here moves the ~85 GB transient `embedDouble` spike (issue #21) out
+// of the per-request Forward() path. Errors carry node name + (row, col)
+// context for fail-fast diagnostics.
 func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksParams ckks.Parameters, enc *ckks.Encoder, maxSlots int) error {
 	cfg, err := parseLinearTransformConfig(node.ConfigRaw)
 	if err != nil {
@@ -113,7 +138,8 @@ func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksPara
 		return fmt.Errorf("bsgs_ratio must be positive, got %f", cfg.BSGSRatio)
 	}
 
-	// Validate NumInputCTs/NumOutputCTs are positive.
+	// Validate NumInputCTs/NumOutputCTs are positive. Zero or negative values
+	// from the config default to 1 (preserves prior behavior).
 	if cfg.NumInputCTs <= 0 {
 		cfg.NumInputCTs = 1
 	}
@@ -121,7 +147,8 @@ func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksPara
 		cfg.NumOutputCTs = 1
 	}
 
-	// Validate blob refs point to valid indices (but don't parse/encode diagonals).
+	// Validate blob refs point to valid indices (diagonal blobs are parsed
+	// below; this catches missing/oob refs early).
 	for ref, blobIdx := range node.BlobRefs {
 		if ref == "bias" || len(ref) > 5 && ref[:5] == "bias_" {
 			continue
@@ -132,6 +159,48 @@ func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksPara
 	}
 
 	m.ltConfigs[node.Name] = cfg
+
+	// Pre-encode diagonals. Shape: [NumInputCTs][NumOutputCTs] —
+	// EvaluateManyNew consumes one inner slice per input col.
+	ltParamsTemplate := lintrans.Parameters{
+		LevelQ:                    node.Level,
+		LevelP:                    ckksParams.MaxLevelP(),
+		Scale:                     rlwe.NewScale(ckksParams.Q()[node.Level]),
+		LogDimensions:             ring.Dimensions{Rows: 0, Cols: ckksParams.LogMaxSlots()},
+		LogBabyStepGiantStepRatio: int(math.Log2(cfg.BSGSRatio)),
+	}
+
+	preparedCols := make([][]lintrans.LinearTransformation, cfg.NumInputCTs)
+	for col := 0; col < cfg.NumInputCTs; col++ {
+		rowLTs := make([]lintrans.LinearTransformation, cfg.NumOutputCTs)
+		for row := 0; row < cfg.NumOutputCTs; row++ {
+			ref := fmt.Sprintf("diag_%d_%d", row, col)
+			blobIdx, ok := node.BlobRefs[ref]
+			if !ok {
+				return fmt.Errorf("missing blob ref %q (row=%d, col=%d)", ref, row, col)
+			}
+			if blobIdx < 0 || blobIdx >= len(blobs) {
+				return fmt.Errorf("blob ref %q (row=%d, col=%d) index %d out of range (have %d blobs)", ref, row, col, blobIdx, len(blobs))
+			}
+
+			diagMap, err := ParseDiagonalBlob(blobs[blobIdx], maxSlots)
+			if err != nil {
+				return fmt.Errorf("parsing diagonal blob %q (row=%d, col=%d): %w", ref, row, col, err)
+			}
+
+			diagonals := lintrans.Diagonals[float64](diagMap)
+			ltparams := ltParamsTemplate
+			ltparams.DiagonalsIndexList = diagonals.DiagonalsIndexList()
+
+			lt := lintrans.NewTransformation(ckksParams, ltparams)
+			if err := lintrans.Encode(enc, diagonals, lt); err != nil {
+				return fmt.Errorf("encoding linear transform %q (row=%d, col=%d): %w", ref, row, col, err)
+			}
+			rowLTs[row] = lt
+		}
+		preparedCols[col] = rowLTs
+	}
+	m.preparedLTs[node.Name] = preparedCols
 
 	// Encode per-row biases (biases are small).
 	biasLevel := node.Level - node.Depth

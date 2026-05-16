@@ -100,13 +100,13 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 
 - Modify: `evaluator/model.go`
 
-- [ ] Add `preparedLTs map[string][][]lintrans.LinearTransformation` field to `Model` struct (after `ltConfigs`).
-- [ ] Initialize the map in `LoadModel` alongside `ltConfigs`/`biases`/etc.
-- [ ] In `loadLinearTransformMetadata` (which already receives `enc *ckks.Encoder` — **reuse it; do not allocate a new encoder per node**), after config validation iterate `col ∈ [0, NumInputCTs)` × `row ∈ [0, NumOutputCTs)`: parse the `diag_{row}_{col}` blob, build `lintrans.Parameters` (move the derivation block out of `evalLinearTransform`), call `lintrans.NewTransformation` + `lintrans.Encode`, store into `preparedLTs[node.Name][col][row]`.
-- [ ] Pre-size the outer/inner slices to `NumInputCTs` / `NumOutputCTs` exactly — no append-grow. Both dimensions are known up front.
-- [ ] Surface encode failures as `LoadModel` errors with `node.Name` + `(row, col)` context.
-- [ ] Trigger Go GC explicitly between LT nodes (`runtime.GC()` after each node) so the per-node `embedDouble` transient is reclaimed before the next node starts encoding. Without this, transients can stack and load-time peak RSS becomes the sum of all transients rather than the max of any one. Cheap insurance; document in a one-line comment why it's there.
-- [ ] Update `Model` struct docstring (lines 13-16): flip the "NOT pre-encoded" statement, document the new resident-memory trade-off (~7 GB at logn=15, ~13 GB at logn=16) and the fail-fast load-time error surface.
+- [x] Add `preparedLTs map[string][][]lintrans.LinearTransformation` field to `Model` struct (after `ltConfigs`).
+- [x] Initialize the map in `LoadModel` alongside `ltConfigs`/`biases`/etc.
+- [x] In `loadLinearTransformMetadata` (which already receives `enc *ckks.Encoder` — **reuse it; do not allocate a new encoder per node**), after config validation iterate `col ∈ [0, NumInputCTs)` × `row ∈ [0, NumOutputCTs)`: parse the `diag_{row}_{col}` blob, build `lintrans.Parameters` (move the derivation block out of `evalLinearTransform`), call `lintrans.NewTransformation` + `lintrans.Encode`, store into `preparedLTs[node.Name][col][row]`.
+- [x] Pre-size the outer/inner slices to `NumInputCTs` / `NumOutputCTs` exactly — no append-grow. Both dimensions are known up front.
+- [x] Surface encode failures as `LoadModel` errors with `node.Name` + `(row, col)` context.
+- [x] Trigger Go GC explicitly between LT nodes (`runtime.GC()` after each node) so the per-node `embedDouble` transient is reclaimed before the next node starts encoding. Without this, transients can stack and load-time peak RSS becomes the sum of all transients rather than the max of any one. Cheap insurance; document in a one-line comment why it's there.
+- [x] Update `Model` struct docstring (lines 13-16): flip the "NOT pre-encoded" statement, document the new resident-memory trade-off (~7 GB at logn=15, ~13 GB at logn=16) and the fail-fast load-time error surface.
 
 ### Task 2: Strip the per-request encode path from evalLinearTransform
 
