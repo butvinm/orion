@@ -114,11 +114,11 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 
 - Modify: `evaluator/evaluator.go`
 
-- [ ] In `evalLinearTransform` (evaluator.go:248 onward), delete the inner `row` loop body that calls `ParseDiagonalBlob` / `lintrans.NewTransformation` / `lintrans.Encode`.
-- [ ] Replace the `rowLTs := make(...)` allocation with a lookup: `rowLTs := model.preparedLTs[node.Name][col]`.
-- [ ] Remove the now-unused `math` import if no other site uses it (BSGS ratio computation moved to model.go).
-- [ ] Add a sanity check at entry: if `model.preparedLTs[node.Name] == nil`, return an error with the node name (defensive; should be impossible if LoadModel succeeded).
-- [ ] Verify `outputs[row] = partials[row]` aliasing is still safe (the `partials` come from `EvaluateManyNew` which returns fresh CTs — no shared state with cached LTs). Add a one-line comment if non-obvious to future readers.
+- [x] In `evalLinearTransform` (evaluator.go:248 onward), delete the inner `row` loop body that calls `ParseDiagonalBlob` / `lintrans.NewTransformation` / `lintrans.Encode`.
+- [x] Replace the `rowLTs := make(...)` allocation with a lookup: `rowLTs := model.preparedLTs[node.Name][col]`.
+- [x] Remove the now-unused `math` import if no other site uses it (BSGS ratio computation moved to model.go). Also removed unused `ring` import.
+- [x] Add a sanity check at entry: if `model.preparedLTs[node.Name] == nil`, return an error with the node name (defensive; should be impossible if LoadModel succeeded).
+- [x] Verify `outputs[row] = partials[row]` aliasing is still safe (the `partials` come from `EvaluateManyNew` which returns fresh CTs — no shared state with cached LTs). Add a one-line comment if non-obvious to future readers.
 
 ### Task 3: Tests — Model state, output equivalence, mutation safety, regression guard
 
