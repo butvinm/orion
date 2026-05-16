@@ -196,9 +196,9 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 
 ### Task 6: [Final] Update documentation and close out
 
-- [ ] Update CLAUDE.md "FHE Inference Performance Notes" with the new architectural fact ("encoded LTs are resident from LoadModel onward; per-request `Forward` no longer calls `lintrans.Encode`") plus the measured numbers from Task 4 (all three RSS sample points + load-time delta for both `logn`s).
-- [ ] Post a single follow-up comment on issue #21 referencing this plan, the measured RSS drop (per Acceptance gates A/B/C), and noting that claim 2 (intermediate-results discard) remains open as a separate piece of work. This is the only place issue #21 gets updated (Task 4 records to the plan, Task 6 forwards to the issue) — avoid double-posting.
-- [ ] Move this plan to `docs/plans/completed/`.
+- [x] Update CLAUDE.md "FHE Inference Performance Notes" — added eager-encode bullet, per-diagonal-GC requirement, ParseClientParams rule, GOMEMLIMIT=100GiB recommendation, and heap-profile composition note.
+- [x] Post a single follow-up comment on issue #21 — posted at https://github.com/butvinm/orion/issues/21#issuecomment-4466394830 with measured numbers and claim-2 status (still open as separate work).
+- [x] Move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 
