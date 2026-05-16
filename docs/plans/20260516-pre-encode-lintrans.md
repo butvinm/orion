@@ -266,3 +266,35 @@ Load-time delta:
 **Load-time cost:** 251 s extra at logn=16 (4.4 min). On a server amortizing the cost across many inferences this is negligible; on a cold-start benchmark it dominates wall time. Parallelizing diagonal encoding is left as a separate optimization.
 
 **Ship readiness:** PASS with one caveat. The optimization is correctness-preserving (Gate D), eliminates the per-request encode churn (Gate B + post_fwd1 measurements), and is a clear win at logn=15 (Gate C-15). At logn=16 the peak-RSS gate (C-16) regresses ~7.5 GB / 6%, but the run completes inside the 128 GB ceiling and the transient-allocation pattern is dramatically more favorable for a multi-request server. Recommended next: keep the change, document the logn=16 regression in CLAUDE.md as a known trade-off, follow up separately on the residual transient source if logn=16 ever runs into a tighter RAM ceiling.
+
+### Follow-up experiment: GOMEMLIMIT=100GiB (3 samples)
+
+Hypothesis: forcing Go GC via `GOMEMLIMIT=100GiB` would keep peak RSS under 100 GB even though it's below the unconstrained observed peak (~128 GB). CLAUDE.md warns this can deadlock the allocator. Empirical result: it does NOT deadlock on this code path.
+
+| Sample | Unconstrained peak (MB) | GOMEMLIMIT=100GiB peak (MB) |            Δ |
+| ------ | ----------------------: | --------------------------: | -----------: |
+| 12     |                  97,779 |                      98,669 |         +890 |
+| 35     |                 127,565 |                      99,127 |  **−28,438** |
+| 44     |                 127,609 |                  (~99,101)¹ | **~−28,500** |
+
+¹ measured separately in single-sample heap-profile run.
+
+Forward time was actually **slightly faster** with GOMEMLIMIT (50–52 s vs 58–60 s), not slower. Load time also slightly faster (220–240 s vs 256–271 s). Net: GOMEMLIMIT=100GiB on logn=16 gives a 28 GB peak-RSS reduction, no deadlock, no time regression. **Recommend documenting GOMEMLIMIT=100GiB as the default for logn=16 server deployments.**
+
+### Heap profile: what's actually in 90 GB at logn=16
+
+Captured Go heap profile (`runtime/pprof.WriteHeapProfile`) at three lifecycle points during a single-sample feature×logn16 infer (GOMEMLIMIT=100GiB). Dumps at `examples/c3ae-demo/results/bench_20260516/heap_dumps/` (gitignored).
+
+Post-load composition (Go tracks 76 GB / RSS 90 GB):
+
+| Source                                           |    Size | %           |
+| ------------------------------------------------ | ------: | ----------- |
+| `lattigo/ring.NewPoly` — encoded LT diagonals    | 61.3 GB | 80%         |
+| `MemEvaluationKeySet.ReadFrom` — evk             | 13.0 GB | 17%         |
+| `os.readFileContents` — model.orion bytes in RAM |  1.7 GB | 2%          |
+| Untracked (CGO / runtime / fragmentation)        |  ~13 GB | ~15% of RSS |
+
+The encoded LT cache is the dominant resident cost — **61 GB at logn=16, ~5× CLAUDE.md's earlier "13 GB" estimate**. Two cheap follow-ups would meaningfully shrink it:
+
+1. Release the model bytes buffer after parsing (today they stay alive — `os.ReadFile` result is kept in `LoadModel`'s frame). Worth ~1.7 GB.
+2. Investigate whether the encoded LT diagonals can be stored in NTT-only form (no Montgomery duplicate) — Lattigo's `ring.NewPoly` may be allocating both. Worth potentially 30+ GB if so. Out of scope for this plan.
