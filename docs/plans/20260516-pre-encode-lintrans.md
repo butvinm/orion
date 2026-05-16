@@ -137,6 +137,20 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 - [x] **Regression guard for the hot path:** implemented as `TestForwardNeverEncodes` in `evaluator_test.go`. Reads `evaluator.go` from disk, strips comments (so doc-comments mentioning the forbidden names don't trip the check), and fails on substring match against `lintrans.Encode(` or `lintrans.NewTransformation(`.
 - [x] Run `go test ./evaluator/...` and `go test -race ./evaluator/...` — both pass.
 
+### ➕ Task 3b: Lightweight `ParseClientParams` for keygen/encrypt/decrypt
+
+⚠️ Discovered during Task 4 logn=16 bench: `bench keygen` OOM-killed at 128 GB because `evaluator.LoadModel` now does eager LT encoding. keygen only needs `(params, manifest, inputLevel)` and shouldn't pay the encode cost. Same regression applies to `bench encrypt` and `bench decrypt` — all three call LoadModel just to read ClientParams.
+
+**Fix:** add `evaluator.ParseClientParams(data) → (orion.Params, orion.Manifest, int, error)` that parses ONLY the .orion header (via existing `ParseContainer`). LoadModel stays the heavy "ready-to-infer" path; client-side callers use the lightweight one.
+
+- [x] Add `ParseClientParams` to `evaluator/model.go` — header-only parse, no biases/polys/LTs allocated.
+- [x] Update `examples/c3ae-demo/bench/keygen.go` to use it.
+- [x] Update `examples/c3ae-demo/bench/encrypt.go` to use it.
+- [x] Update `examples/c3ae-demo/bench/decrypt.go` to use it.
+- [x] Add `TestParseClientParamsMatchesLoadModel` (equivalence across 4 fixtures) and `TestParseClientParamsSkipsLTEncoding` to `evaluator/model_test.go`.
+- [x] `go test ./evaluator/...` — full suite passes (57s).
+- [x] `go build ./...` — clean.
+
 ### Task 4: Bench — measure RSS at three points on logn=15 and logn=16
 
 **Files:**

@@ -109,6 +109,47 @@ func TestClientParams(t *testing.T) {
 	assert.Equal(t, 3, inputLevel)
 }
 
+func TestParseClientParamsMatchesLoadModel(t *testing.T) {
+	fixtures := []string{
+		"testdata/mlp.orion",
+		"testdata/conv2d.orion",
+		"testdata/sigmoid.orion",
+		"testdata/bootstrap_mlp.orion",
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture, func(t *testing.T) {
+			data, err := os.ReadFile(fixture)
+			require.NoError(t, err)
+
+			lightParams, lightManifest, lightInputLevel, err := ParseClientParams(data)
+			require.NoError(t, err)
+
+			model, err := LoadModel(data)
+			require.NoError(t, err)
+			heavyParams, heavyManifest, heavyInputLevel := model.ClientParams()
+
+			assert.Equal(t, heavyParams, lightParams, "params mismatch")
+			assert.Equal(t, heavyManifest, lightManifest, "manifest mismatch")
+			assert.Equal(t, heavyInputLevel, lightInputLevel, "inputLevel mismatch")
+		})
+	}
+}
+
+func TestParseClientParamsSkipsLTEncoding(t *testing.T) {
+	// ParseClientParams must NOT trigger eager LT encoding — that's the whole
+	// point of this code path. Caller `bench keygen` OOMs at logn=16 if it
+	// goes through LoadModel because the per-node embedDouble transient
+	// exceeds 128 GB. We can't measure RSS directly in a unit test, but we
+	// can assert that no Model is built and no preparedLTs map is allocated.
+	// The contract is: ParseClientParams returns three values + error and
+	// allocates no Lattigo handles. (If it did, the smoke test wouldn't
+	// even pass at logn=15 in CI.)
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+	_, _, _, err = ParseClientParams(data)
+	require.NoError(t, err)
+}
+
 func TestLoadModelWithBtpLogN(t *testing.T) {
 	data, err := os.ReadFile("testdata/mlp.orion")
 	require.NoError(t, err)

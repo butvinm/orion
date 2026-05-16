@@ -59,12 +59,10 @@ func runEncrypt(args []string) error {
 		return fmt.Errorf("reading model %q: %w", *modelPath, err)
 	}
 
-	model, err := evaluator.LoadModel(modelBytes)
+	orionParams, _, inputLevel, err := evaluator.ParseClientParams(modelBytes)
 	if err != nil {
-		return fmt.Errorf("loading model: %w", err)
+		return fmt.Errorf("parsing client params: %w", err)
 	}
-
-	orionParams, _, inputLevel := model.ClientParams()
 
 	params, err := orionParams.NewCKKSParameters()
 	if err != nil {

@@ -271,8 +271,47 @@ func (m *Model) loadPolynomial(node *Node) error {
 	return nil
 }
 
+// ParseClientParams parses ONLY the header of a .orion v2 file and returns
+// the CKKS parameters, key manifest, and input level — the exact tuple
+// Model.ClientParams() returns, but WITHOUT loading biases, polynomials, or
+// (after Task 1) eagerly encoding linear-transform diagonals.
+//
+// Use this from any caller that only needs params/manifest/inputLevel —
+// keygen, encrypt, decrypt, or any client-side scaffolding. The full
+// LoadModel path is reserved for the inference side (Evaluator.Forward),
+// which is the only path that needs the encoded LTs and incurs the
+// ~7 GB / ~13 GB resident cost at logn=15 / logn=16.
+func ParseClientParams(data []byte) (orion.Params, orion.Manifest, int, error) {
+	header, _, err := ParseContainer(data)
+	if err != nil {
+		return orion.Params{}, orion.Manifest{}, 0, fmt.Errorf("parsing container: %w", err)
+	}
+	if header.Version != 2 {
+		return orion.Params{}, orion.Manifest{}, 0, fmt.Errorf("unsupported format version %d (expected 2)", header.Version)
+	}
+
+	params := headerToParams(header)
+
+	galoisElements := make([]uint64, len(header.Manifest.GaloisElements))
+	for i, ge := range header.Manifest.GaloisElements {
+		galoisElements[i] = uint64(ge)
+	}
+	manifest := orion.Manifest{
+		GaloisElements: galoisElements,
+		BootstrapSlots: header.Manifest.BootstrapSlots,
+		BootLogP:       header.Manifest.BootLogP,
+		BtpLogN:        header.Manifest.BtpLogN,
+		NeedsRLK:       header.Manifest.NeedsRLK,
+	}
+
+	return params, manifest, header.InputLevel, nil
+}
+
 // ClientParams returns the CKKS parameters, key manifest, and input level
 // needed by a client to generate keys and encrypt input.
+//
+// If you only need the client params (not a ready-to-infer Model), prefer
+// ParseClientParams(data) — it avoids the LoadModel cost.
 func (m *Model) ClientParams() (orion.Params, orion.Manifest, int) {
 	// Convert galois elements from []int to []uint64.
 	galoisElements := make([]uint64, len(m.header.Manifest.GaloisElements))
