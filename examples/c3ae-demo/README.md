@@ -176,11 +176,13 @@ The Quad-FHE variant trades ~1–3 percentage points of accuracy for FHE compati
 
 Hardware: 16 vCPUs, 128 GB RAM. Each row averages 3 boundary samples.
 
-| config | compile_s | compile_peak_rss_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB   |
-| ------ | --------- | ------------------- | -------- | ------ | -------------- | ------------- |
-| logn15 | 160.2     | 12.87               | 44.1     | 7.19   | 157.0 ± 2.9    | 54.19 ± 0.29  |
-| logn16 | 386.7     | 25.77               | 68.1     | 12.70  | 543.7 ± 219.4  | 114.37 ± 0.07 |
+| config | load_s | keygen_s | mean_forward_s | peak_rss_GB |
+| ------ | ------ | -------- | -------------- | ----------- |
+| logn15 | 136.3  | 38.9     | 29.0           | 49.2        |
+| logn16 | 264.7  | 53.9     | 60.5           | 127.6       |
 
-`logn=16` fits in 128 GB with roughly 10 GB of headroom — going larger at this multiplicative depth would require a 256 GB box.
+`LoadModel` eagerly encodes all `LinearTransformation` data so each subsequent `Forward` reuses pre-encoded objects. Load time is higher and per-request transient RSS is dramatically lower (`rss_post_load → rss_post_forward1` grows only a few GB even at logn=16). Suited to servers amortizing the load cost across many inferences.
+
+**Recommended env for logn=16 servers: `GOMEMLIMIT=100GiB`.** Drops the peak from ~127 GB to ~99 GB without slowing forward time.
 
 Per-sample timings and cold-cache notes are in [`results/results.md`](results/results.md).

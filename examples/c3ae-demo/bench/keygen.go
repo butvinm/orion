@@ -46,12 +46,10 @@ func runKeygen(args []string) error {
 		return fmt.Errorf("reading model %q: %w", *modelPath, err)
 	}
 
-	model, err := evaluator.LoadModel(modelBytes)
+	orionParams, manifest, _, err := evaluator.ParseClientParams(modelBytes)
 	if err != nil {
-		return fmt.Errorf("loading model: %w", err)
+		return fmt.Errorf("parsing client params: %w", err)
 	}
-
-	orionParams, manifest, _ := model.ClientParams()
 
 	// Defensive: bench is for no-bootstrap configs only.
 	if len(manifest.BootstrapSlots) > 0 {

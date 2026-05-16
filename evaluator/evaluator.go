@@ -2,14 +2,12 @@ package evaluator
 
 import (
 	"fmt"
-	"math"
 	"math/bits"
 
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/lintrans"
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/polynomial"
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
-	"github.com/tuneinsight/lattigo/v6/ring"
 	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
 	"github.com/tuneinsight/lattigo/v6/utils"
 )
@@ -252,13 +250,20 @@ func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error
 // evalLinearTransform evaluates a linear transform node with blocked matrix-vector multiply.
 // For multi-CT inputs, uses EvaluateManyNew to share BSGS rotations across row blocks.
 //
-// Diagonals are parsed from raw blobs and CKKS-encoded on demand for each block,
-// then discarded after evaluation. This avoids the ~23x memory blowup from
-// pre-encoding all diagonals at model load time.
+// Diagonals were CKKS-encoded once at LoadModel time and live on
+// model.preparedLTs[node.Name][col]. This path is now a read-only consumer:
+// the per-request `lintrans.Encode` / `lintrans.NewTransformation` calls have
+// been moved to LoadModel (see model.go). Do not reintroduce them here —
+// TestForwardNeverEncodes guards this invariant.
 func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe.Ciphertext) ([]*rlwe.Ciphertext, error) {
 	cfg, ok := model.ltConfigs[node.Name]
 	if !ok {
 		return nil, fmt.Errorf("no config found for linear_transform node %q", node.Name)
+	}
+
+	preparedCols, ok := model.preparedLTs[node.Name]
+	if !ok || preparedCols == nil {
+		return nil, fmt.Errorf("no pre-encoded LTs for linear_transform node %q (LoadModel should have populated this)", node.Name)
 	}
 
 	maxSlots := model.params.MaxSlots()
@@ -272,39 +277,9 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe
 	outputs := make([]*rlwe.Ciphertext, numOutputCTs)
 
 	for col := 0; col < numInputCTs; col++ {
-		// Gather all row LTs for this column, encode on demand.
-		rowLTs := make([]lintrans.LinearTransformation, numOutputCTs)
-		for row := 0; row < numOutputCTs; row++ {
-			ref := fmt.Sprintf("diag_%d_%d", row, col)
-			blobIdx, ok := node.BlobRefs[ref]
-			if !ok {
-				return nil, fmt.Errorf("missing blob ref %q for node %q", ref, node.Name)
-			}
-			if blobIdx < 0 || blobIdx >= len(model.rawBlobs) {
-				return nil, fmt.Errorf("blob ref %q index %d out of range (have %d blobs)", ref, blobIdx, len(model.rawBlobs))
-			}
-
-			diagMap, err := ParseDiagonalBlob(model.rawBlobs[blobIdx], maxSlots)
-			if err != nil {
-				return nil, fmt.Errorf("parsing diagonal blob %q: %w", ref, err)
-			}
-
-			diagonals := lintrans.Diagonals[float64](diagMap)
-			ltparams := lintrans.Parameters{
-				DiagonalsIndexList:        diagonals.DiagonalsIndexList(),
-				LevelQ:                    node.Level,
-				LevelP:                    model.params.MaxLevelP(),
-				Scale:                     rlwe.NewScale(model.params.Q()[node.Level]),
-				LogDimensions:             ring.Dimensions{Rows: 0, Cols: model.params.LogMaxSlots()},
-				LogBabyStepGiantStepRatio: int(math.Log2(cfg.BSGSRatio)),
-			}
-
-			lt := lintrans.NewTransformation(model.params, ltparams)
-			if err := lintrans.Encode(e.encoder, diagonals, lt); err != nil {
-				return nil, fmt.Errorf("encoding linear transform %q: %w", ref, err)
-			}
-			rowLTs[row] = lt
-		}
+		// Look up pre-encoded LTs for this column. The slice is owned by the
+		// Model and immutable — do not mutate it here.
+		rowLTs := preparedCols[col]
 
 		// EvaluateManyNew shares BSGS rotations across all row blocks for this input CT.
 		partials, err := e.linEval.EvaluateManyNew(inputs[col], rowLTs)
@@ -312,7 +287,9 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe
 			return nil, fmt.Errorf("evaluating LT column %d for node %q: %w", col, node.Name, err)
 		}
 
-		// Accumulate partials into outputs.
+		// Accumulate partials into outputs. EvaluateManyNew returns fresh CTs
+		// (no aliasing with cached LTs), so taking ownership of partials[row]
+		// directly is safe.
 		for row := 0; row < numOutputCTs; row++ {
 			if outputs[row] == nil {
 				outputs[row] = partials[row]
