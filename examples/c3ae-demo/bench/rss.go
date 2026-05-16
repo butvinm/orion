@@ -21,9 +21,27 @@ import (
 // to stderr — non-Linux callers get a sentinel rather than a panic so the
 // rest of the bench remains usable for unit-style sanity checks.
 func readVmHWM() int64 {
+	return readProcStatusField("VmHWM:")
+}
+
+// readVmRSS parses /proc/self/status and returns the VmRSS value in kB.
+//
+// VmRSS is the current resident set size of the process (live, not peak).
+// Sample this between lifecycle phases to attribute RSS deltas to specific
+// operations (e.g. post-load vs post-forward), which VmHWM alone can't
+// distinguish.
+func readVmRSS() int64 {
+	return readProcStatusField("VmRSS:")
+}
+
+// readProcStatusField is the shared parser for kB-valued lines in
+// /proc/self/status. The format is `<prefix>\t<int> kB`. Returns 0 with a
+// stderr warning on any IO/parse failure (consistent with readVmHWM's
+// "sentinel rather than panic" policy).
+func readProcStatusField(prefix string) int64 {
 	f, err := os.Open("/proc/self/status")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: /proc/self/status unavailable (%v); peak_rss_mb will be 0\n", err)
+		fmt.Fprintf(os.Stderr, "warning: /proc/self/status unavailable (%v); %s value will be 0\n", err, prefix)
 		return 0
 	}
 	defer f.Close()
@@ -31,24 +49,24 @@ func readVmHWM() int64 {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if !strings.HasPrefix(line, "VmHWM:") {
+		if !strings.HasPrefix(line, prefix) {
 			continue
 		}
 		fields := strings.Fields(line)
-		// Expected: ["VmHWM:", "<number>", "kB"]
+		// Expected: ["<prefix>", "<number>", "kB"]
 		if len(fields) < 2 {
-			fmt.Fprintf(os.Stderr, "warning: malformed VmHWM line %q; peak_rss_mb will be 0\n", line)
+			fmt.Fprintf(os.Stderr, "warning: malformed %s line %q; value will be 0\n", prefix, line)
 			return 0
 		}
 		v, err := strconv.ParseInt(fields[1], 10, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: cannot parse VmHWM value %q: %v; peak_rss_mb will be 0\n", fields[1], err)
+			fmt.Fprintf(os.Stderr, "warning: cannot parse %s value %q: %v; value will be 0\n", prefix, fields[1], err)
 			return 0
 		}
 		return v
 	}
 	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: scanning /proc/self/status: %v; peak_rss_mb will be 0\n", err)
+		fmt.Fprintf(os.Stderr, "warning: scanning /proc/self/status: %v; %s value will be 0\n", err, prefix)
 	}
 	return 0
 }
