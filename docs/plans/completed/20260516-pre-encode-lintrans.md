@@ -186,13 +186,13 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 
 - No source changes expected; verification only
 
-- [ ] Time `Model.load` wall-clock before and after the change in a Python script (load the bench model, log `time.perf_counter()` deltas). Record both numbers in the plan's Results section.
-- [ ] Check every Python test in `python/tests/test_orion_evaluator.py` for a load-time timeout (`pytest.mark.timeout`, custom deadlines, or implicit CI timeouts). If any timeout is tighter than `2 × new_load_time`, raise it explicitly with a comment referencing this plan.
-- [ ] Run `pytest python/tests/test_orion_evaluator.py` — must pass.
-- [ ] Run `pytest python/tests/` (full Python suite) — no regressions.
-- [ ] Run `go vet ./...` — no new warnings.
-- [ ] Run `go test ./...` (full Go suite) — no regressions.
-- [ ] Run `ruff check python/` and `mypy python/lattigo/ python/orion-compiler/ python/orion-evaluator/` — no new errors.
+- [x] Time `Model.load` wall-clock — conv2d.orion test fixture (180 KB): 198 ms. Bench logn=16 (1.75 GB on cpu.16.128.240): 225 s (recorded in Results table above).
+- [x] Check every Python test in `python/tests/test_orion_evaluator.py` for a load-time timeout — no `pytest.mark.timeout` decorators present, full suite runs in 40s with no timeouts. No changes needed.
+- [x] Run `pytest python/tests/test_orion_evaluator.py` — 14 passed.
+- [x] Run `pytest python/tests/` (full Python suite) — **215 passed, 1 skipped, 0 failed** in 40s.
+- [x] Run `go vet ./...` — clean.
+- [x] Run `go test ./...` (full Go suite) — all pass (81 s evaluator suite).
+- [x] Run `ruff check python/` and `mypy python/lattigo/ python/orion-compiler/ python/orion-evaluator/` — both clean.
 
 ### Task 6: [Final] Update documentation and close out
 
