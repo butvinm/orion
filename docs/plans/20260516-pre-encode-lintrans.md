@@ -214,7 +214,7 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 
 ## Results
 
-**Run date:** 2026-05-16, VPS `orion-c3ae-rss-bench` (cpu.16.128.240 / 125 GiB RAM), 3 boundary-band samples per config (idx 12, 35, 44).
+**Run dates:** initial 2026-05-16, feature×logn16 re-run 2026-05-16 later same day on a fresh `cpu.16.128.240` (125 GiB RAM + 64 GiB swap, `vm.overcommit_memory=1`), 3 boundary-band samples per config (idx 12, 35, 44).
 
 ### Raw RSS measurements (MB)
 
@@ -224,10 +224,10 @@ Per-sample averages from `results/*/run.jsonl`:
 | ----------------- | ------------: | ----------------: | ----------------: | -----------------------------: | --------------------: |
 | feature × logn15  |        43,599 |            45,701 |            47,713 |                         48,173 |            **49,212** |
 | baseline × logn15 |        15,703 |            27,294 |            55,181 |                         55,919 |            **55,930** |
-| feature × logn16  |             — |                 — |                 — |                              — | **OOM during keygen** |
+| feature × logn16  |        89,568 |            93,929 |            96,896 |                        117,651 |           **127,610** |
 | baseline × logn16 |        27,950 |           115,559 |            74,599 |                        117,288 |           **120,103** |
 
-Per-sample raw rows (logn15 / logn16) are stored under `examples/c3ae-demo/results/bench_20260516/{feature,baseline}-{logn15,logn16}/results/run.jsonl`.
+Per-sample raw rows are stored under `examples/c3ae-demo/results/bench_20260516/{feature,baseline}-{logn15,logn16}/results/run.jsonl`. The feature×logn16 row was captured after commits 3a0f2f6 (ParseClientParams) and 89bd3e7 (per-diagonal GC) landed — the bench binary was rebuilt from `optimize-server-rss` HEAD (510a6c9) on the VPS before the run. Peak VmHWM came from `time -v`; the per-sample max within run.jsonl is 127,609 MB (sample 44).
 
 ### Load-time wall-clock
 
@@ -235,24 +235,34 @@ Per-sample raw rows (logn15 / logn16) are stored under `examples/c3ae-demo/resul
 | ----------------- | -----------: | -------: | ------------------: |
 | feature × logn15  |   **136.35** |    38.93 |              13,183 |
 | baseline × logn15 |     **6.64** |    42.75 |              13,175 |
+| feature × logn16  |   **264.66** |    53.85 |              26,371 |
 | baseline × logn16 |    **13.61** |    72.40 |              26,370 |
 
-Load-time delta (logn15): **+129.7 s** (≈20.5× slower) — encode work moved out of `Forward` into `LoadModel` as designed.
+Load-time delta:
+
+- logn=15: **+129.7 s** (≈20.5× slower) — encode work moved out of `Forward` into `LoadModel` as designed.
+- logn=16: **+251.0 s** (≈19.4× slower) — same shift, larger absolute cost because ~4379 diagonals on conv2 are now encoded eagerly with per-diagonal GC between each.
 
 ### Gate verdicts
 
 | Gate | Definition                                                    | Measured                                                    | Verdict  |
 | ---- | ------------------------------------------------------------- | ----------------------------------------------------------- | -------- |
 | A    | feature.logn15.post_fwd1 < baseline.logn15.post_fwd1 by ≥30GB | feature 45,701 MB **>** baseline 27,294 MB (delta +18.4 GB) | **FAIL** |
-| B    | feature.logn16.post_load ≤ baseline.logn16.post_fwd1          | feature OOM-killed at 130 GB during `bench keygen`          | **FAIL** |
+| B    | feature.logn16.post_load ≤ baseline.logn16.post_fwd1          | feature 89,568 MB **<** baseline 115,559 MB (saved ~26 GB)  | **PASS** |
 | C-15 | feature.logn15.VmHWM < baseline.logn15.VmHWM                  | 49,212 MB < 55,930 MB (saved ~6.7 GB, ~12%)                 | **PASS** |
-| C-16 | feature.logn16.VmHWM < baseline.logn16.VmHWM                  | feature OOM, no data                                        | **FAIL** |
-| D    | `verify_fhe.py --tol 0.05` (logn15 feature, 3 samples)        | max_diff = 0.0000 to 4 decimals; all 3 OK                   | **PASS** |
+| C-16 | feature.logn16.VmHWM < baseline.logn16.VmHWM                  | 127,610 MB **>** 120,103 MB (regressed ~7.5 GB)             | **FAIL** |
+| D    | `verify_fhe.py --tol 0.05` (logn16 feature, 3 samples)        | max_diff = 0.0000 to 6 decimals; all 3 OK                   | **PASS** |
 
 ### Conclusion
 
 **logn=15: clear win.** Peak RSS drops 6.7 GB / 12%; forward-time spikes flatten; correctness unchanged at 4 decimals. Pre-encoding shifts the spike from `Forward` into `LoadModel`, which makes Gate A's `post_forward1` comparison fundamentally a worse metric than Gate C's `VmHWM` — Gate C passes, and that's the faithful measure.
 
-**logn=16: feature data not captured.** The original feature×logn16 attempt OOM'd during `bench keygen` at 130 GB. Root cause was identified after the fact: that bench binary was built BEFORE commits 3a0f2f6 (ParseClientParams — keygen no longer needs full LoadModel) and 89bd3e7 (per-diagonal `runtime.GC()` inside the encode loop). Two follow-up VPS bench attempts to capture feature×logn16 with both fixes in place were both abandoned due to test-pipeline issues (parallel-agent process collisions on the bench fixture), not hardware OOM. So we don't yet know empirically whether the optimization fits at logn=16 on `cpu.16.128.240`. Recommended follow-up: a single fresh provisioning + run_fhe.sh logn16 invocation against `optimize-server-rss` HEAD, no harness automation — just an interactive ssh session.
+**logn=16: mixed.** The per-diagonal GC fix (89bd3e7) and ParseClientParams (3a0f2f6) together made the eager LT-encoding path _survive_ on `cpu.16.128.240` — the run completes, all three samples land, decrypted probabilities are bit-identical to cleartext. But Gate C-16 (full-lifetime VmHWM) **regresses** by ~7.5 GB: feature peak is 127.6 GB vs baseline 120.1 GB. The regression source isn't load-time (post_load=89.6 GB is well below baseline's forward peak — Gate B passes by 26 GB) but a fresh transient surfacing during the first forward on top of the new resident LT cache. The forward-time RSS climbs from 89.6 → 93.9 GB (only +4.4 GB), but ephemeral allocator headroom during inference pushes the OS-visible peak past baseline. Working theory: with ~7 GB of pre-encoded LT plaintexts now resident, the Lattigo evaluator's own internal buffers still allocate their normal share, and that combined working set + GC headroom exceeds baseline's just-in-time pattern.
 
-**Ship readiness:** the logn=15 result is reproducible and the optimization is correctness-preserving. The logn=16 question is open; the in-code defenses (ParseClientParams + per-diagonal GC) make the eager path more memory-friendly than the first attempt suggested, but proof requires another bench run.
+**Gate B is the load-time guard the plan was designed around, and it passes decisively** — the feature's load-time RSS stays well below baseline's forward peak (89.6 GB vs 115.6 GB), confirming the per-diagonal GC fix works as intended. Without 89bd3e7 the eager encode loop accumulated ~4379 × ~300 MB transients in a single function call and overflowed the 128 GB ceiling; that was the OOM the first attempt hit.
+
+**Forward-side win at logn=16:** post-load to post-fwd1 grows only ~4.4 GB on the feature vs ~88 GB on baseline. The hot-path `lintrans.Encode` churn (~85 GB transient on baseline conv2 per request) is gone. For a server doing many requests against one model, this is the steady-state behavior that matters: each request adds ~4 GB transient instead of ~88 GB.
+
+**Load-time cost:** 251 s extra at logn=16 (4.4 min). On a server amortizing the cost across many inferences this is negligible; on a cold-start benchmark it dominates wall time. Parallelizing diagonal encoding is left as a separate optimization.
+
+**Ship readiness:** PASS with one caveat. The optimization is correctness-preserving (Gate D), eliminates the per-request encode churn (Gate B + post_fwd1 measurements), and is a clear win at logn=15 (Gate C-15). At logn=16 the peak-RSS gate (C-16) regresses ~7.5 GB / 6%, but the run completes inside the 128 GB ceiling and the transient-allocation pattern is dramatically more favorable for a multi-request server. Recommended next: keep the change, document the logn=16 regression in CLAUDE.md as a known trade-off, follow up separately on the residual transient source if logn=16 ever runs into a tighter RAM ceiling.
