@@ -176,11 +176,22 @@ The Quad-FHE variant trades ~1–3 percentage points of accuracy for FHE compati
 
 Hardware: 16 vCPUs, 128 GB RAM. Each row averages 3 boundary samples.
 
+**Baseline (lazy per-request LT encoding):**
+
 | config | compile_s | compile_peak_rss_GB | keygen_s | evk_GB | mean_forward_s | peak_rss_GB   |
 | ------ | --------- | ------------------- | -------- | ------ | -------------- | ------------- |
 | logn15 | 160.2     | 12.87               | 44.1     | 7.19   | 157.0 ± 2.9    | 54.19 ± 0.29  |
 | logn16 | 386.7     | 25.77               | 68.1     | 12.70  | 543.7 ± 219.4  | 114.37 ± 0.07 |
 
-`logn=16` fits in 128 GB with roughly 10 GB of headroom — going larger at this multiplicative depth would require a 256 GB box.
+**With eager LT pre-encoding (`optimize-server-rss`, branch HEAD as of 2026-05-16):**
+
+| config | load_s | keygen_s | mean_forward_s | peak_rss_GB | notes                             |
+| ------ | ------ | -------- | -------------- | ----------- | --------------------------------- |
+| logn15 | 136.3  | 38.9     | **29.0**       | **49.2**    | forward 5.4× faster; peak −6.7 GB |
+| logn16 | 264.7  | 53.9     | **60.5**       | 127.6       | forward 5.7× faster; peak +7.5 GB |
+
+The optimization moves the per-request `lintrans.Encode` churn into a one-time cost at `LoadModel`. Each subsequent `Forward` reuses pre-encoded `LinearTransformation` objects, dropping per-request transient RSS substantially (`rss_post_load → rss_post_forward1` grows ~4 GB instead of ~88 GB at logn=16). Load is ~20× slower (the encode cost moves there), but for a server amortizing across many inferences this is favorable.
+
+**Recommended env for logn=16 servers: `GOMEMLIMIT=100GiB`.** Empirically (3-sample run) this drops the peak from 127.6 GB → 99.1 GB without deadlock and without slowing forward time (50–52 s vs 58–60 s). See [docs/plans/completed/20260516-pre-encode-lintrans.md](../../docs/plans/completed/20260516-pre-encode-lintrans.md) for full methodology + heap-profile breakdown of the resident set (61 GB encoded LTs + 13 GB evk + ~14 GB CGO/runtime).
 
 Per-sample timings and cold-cache notes are in [`results/results.md`](results/results.md).
