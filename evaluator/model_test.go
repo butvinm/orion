@@ -28,7 +28,7 @@ func TestLoadModelMLP(t *testing.T) {
 	assert.Contains(t, model.ltConfigs, "fc1")
 	assert.Contains(t, model.ltConfigs, "fc2")
 
-	// Verify raw blobs are stored (diagonals are NOT pre-encoded).
+	// Verify raw blobs are stored.
 	assert.Greater(t, len(model.rawBlobs), 0)
 
 	// Verify diagonal blob refs point to valid raw blobs.
@@ -73,7 +73,7 @@ func TestLoadModelSigmoid(t *testing.T) {
 	// The polynomial should have non-zero degree.
 	assert.Greater(t, poly.Degree(), 0, "polynomial should have non-zero degree")
 
-	// Verify 2 LT configs still present (diagonals not pre-encoded).
+	// Verify 2 LT configs still present.
 	assert.Equal(t, 2, len(model.ltConfigs))
 
 	// Verify 2 biases.
@@ -179,6 +179,212 @@ func rebuildContainer(t *testing.T, header *CompiledHeader, blobs [][]byte) []by
 	}
 
 	return buf
+}
+
+// TestPreparedLTsCachePresence verifies that LoadModel eagerly encodes all
+// linear-transform diagonals into preparedLTs with the correct [col][row]
+// shape and the correct LevelQ. This is the cache-presence half of Task 3.
+func TestPreparedLTsCachePresence(t *testing.T) {
+	for _, fname := range []string{"mlp.orion", "conv2d.orion", "sigmoid.orion", "sigmoid_unfused.orion"} {
+		t.Run(fname, func(t *testing.T) {
+			data, err := os.ReadFile("testdata/" + fname)
+			require.NoError(t, err)
+
+			model, err := LoadModel(data)
+			require.NoError(t, err)
+
+			require.NotNil(t, model.preparedLTs)
+
+			ltNodes := 0
+			for _, node := range model.graph.Nodes {
+				if node.Op != "linear_transform" {
+					continue
+				}
+				ltNodes++
+				cfg := model.ltConfigs[node.Name]
+				require.NotNil(t, cfg, "ltConfigs[%q] missing", node.Name)
+
+				preparedCols, ok := model.preparedLTs[node.Name]
+				require.True(t, ok, "preparedLTs[%q] missing", node.Name)
+
+				// Shape: [NumInputCTs][NumOutputCTs].
+				assert.Equal(t, cfg.NumInputCTs, len(preparedCols),
+					"preparedLTs[%q] outer length must equal NumInputCTs", node.Name)
+				for col, rowLTs := range preparedCols {
+					assert.Equal(t, cfg.NumOutputCTs, len(rowLTs),
+						"preparedLTs[%q][%d] inner length must equal NumOutputCTs", node.Name, col)
+					for row, lt := range rowLTs {
+						assert.Equal(t, node.Level, lt.LevelQ,
+							"preparedLTs[%q][%d][%d] LevelQ should match node.Level", node.Name, col, row)
+					}
+				}
+			}
+			assert.Greater(t, ltNodes, 0, "fixture %s should contain at least one linear_transform node", fname)
+			assert.Equal(t, ltNodes, len(model.preparedLTs),
+				"preparedLTs should have one entry per linear_transform node")
+		})
+	}
+}
+
+// TestPreparedLTsHighLevelEncoding exercises the bootstrap-adjacent path where
+// node.Level == params.MaxLevel(). The bootstrap_mlp fixture has fc1 at the
+// top of its (logq=4) chain, which is the only fixture in the testdata set
+// that reaches MaxLevel for any LT node.
+func TestPreparedLTsHighLevelEncoding(t *testing.T) {
+	data, err := os.ReadFile("testdata/bootstrap_mlp.orion")
+	require.NoError(t, err)
+
+	model, err := LoadModel(data)
+	require.NoError(t, err)
+
+	maxLevel := model.params.MaxLevel()
+	require.Greater(t, maxLevel, 0)
+
+	sawMax := false
+	for _, node := range model.graph.Nodes {
+		if node.Op != "linear_transform" {
+			continue
+		}
+		preparedCols, ok := model.preparedLTs[node.Name]
+		require.True(t, ok, "preparedLTs[%q] missing", node.Name)
+		for _, rowLTs := range preparedCols {
+			for _, lt := range rowLTs {
+				assert.Equal(t, node.Level, lt.LevelQ)
+				if node.Level == maxLevel {
+					sawMax = true
+				}
+			}
+		}
+	}
+	assert.True(t, sawMax,
+		"bootstrap_mlp fixture should have at least one LT node at params.MaxLevel(); "+
+			"if this fixture changes, pick another high-level model to keep the path covered")
+}
+
+// TestLoadModelCorruptedDiagonalBlob verifies that a malformed diag_* blob
+// surfaces as a LoadModel error with node name + (row, col) context. The
+// per-request Forward path can no longer produce these errors (Task 2).
+func TestLoadModelCorruptedDiagonalBlob(t *testing.T) {
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	header, blobs, err := ParseContainer(data)
+	require.NoError(t, err)
+
+	// Find fc1's diag_0_0 blob index.
+	var diagIdx int = -1
+	for _, n := range header.Graph.Nodes {
+		if n.Name == "fc1" {
+			diagIdx = n.BlobRefs["diag_0_0"]
+		}
+	}
+	require.GreaterOrEqual(t, diagIdx, 0, "fc1.diag_0_0 ref not found")
+
+	// Corrupt: replace the blob with 3 bytes (less than the 4-byte num_diags
+	// header that ParseDiagonalBlob requires).
+	corruptedBlobs := make([][]byte, len(blobs))
+	copy(corruptedBlobs, blobs)
+	corruptedBlobs[diagIdx] = []byte{0x01, 0x02, 0x03}
+
+	newData := rebuildContainer(t, header, corruptedBlobs)
+	_, err = LoadModel(newData)
+	require.Error(t, err)
+
+	msg := err.Error()
+	assert.Contains(t, msg, "fc1", "error should mention the failing node name")
+	assert.Contains(t, msg, "row=0", "error should mention the failing (row, col)")
+	assert.Contains(t, msg, "col=0", "error should mention the failing (row, col)")
+}
+
+// TestLoadModelZeroNumCTsDefaultsToOne pins the negative-path-2 contract from
+// the plan: zero NumInputCTs / NumOutputCTs defaults to 1 rather than
+// erroring. This preserves the pre-Task-1 behavior at lines 117-122 of
+// model.go.
+func TestLoadModelZeroNumCTsDefaultsToOne(t *testing.T) {
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	header, blobs, err := ParseContainer(data)
+	require.NoError(t, err)
+
+	// Rewrite fc1's config to have num_input_cts=0, num_output_cts=0.
+	// The 1x1 diag_0_0 / bias_0 blobs already in the fixture satisfy the
+	// defaulted-to-1 case.
+	for i, n := range header.Graph.Nodes {
+		if n.Name == "fc1" {
+			var cfg LinearTransformConfig
+			require.NoError(t, json.Unmarshal(n.Config, &cfg))
+			cfg.NumInputCTs = 0
+			cfg.NumOutputCTs = 0
+			raw, err := json.Marshal(cfg)
+			require.NoError(t, err)
+			header.Graph.Nodes[i].Config = raw
+			break
+		}
+	}
+
+	newData := rebuildContainer(t, header, blobs)
+	model, err := LoadModel(newData)
+	require.NoError(t, err, "zero NumInputCTs/NumOutputCTs should default to 1, not error")
+
+	cfg := model.ltConfigs["fc1"]
+	require.NotNil(t, cfg)
+	assert.Equal(t, 1, cfg.NumInputCTs)
+	assert.Equal(t, 1, cfg.NumOutputCTs)
+
+	preparedCols, ok := model.preparedLTs["fc1"]
+	require.True(t, ok)
+	assert.Equal(t, 1, len(preparedCols))
+	assert.Equal(t, 1, len(preparedCols[0]))
+}
+
+// TestLoadModelMissingDiagonalBlobRef verifies that a missing diag_{row}_{col}
+// ref surfaces at LoadModel (not Forward) with full (row, col) context.
+func TestLoadModelMissingDiagonalBlobRef(t *testing.T) {
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	header, blobs, err := ParseContainer(data)
+	require.NoError(t, err)
+
+	// Drop fc1's diag_0_0 ref entirely.
+	for _, n := range header.Graph.Nodes {
+		if n.Name == "fc1" {
+			delete(n.BlobRefs, "diag_0_0")
+		}
+	}
+
+	newData := rebuildContainer(t, header, blobs)
+	_, err = LoadModel(newData)
+	require.Error(t, err)
+
+	msg := err.Error()
+	assert.Contains(t, msg, "fc1")
+	assert.Contains(t, msg, "diag_0_0")
+}
+
+// TestLoadModelOutOfRangeNodeLevel guards the level-validation path added in
+// loadLinearTransformMetadata.
+func TestLoadModelOutOfRangeNodeLevel(t *testing.T) {
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	header, blobs, err := ParseContainer(data)
+	require.NoError(t, err)
+
+	// fc1's level is 3 in the fixture; bump it to 999 (clearly OOB).
+	for i, n := range header.Graph.Nodes {
+		if n.Name == "fc1" {
+			header.Graph.Nodes[i].Level = 999
+			break
+		}
+	}
+
+	newData := rebuildContainer(t, header, blobs)
+	_, err = LoadModel(newData)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fc1")
+	assert.Contains(t, err.Error(), "node level")
 }
 
 func TestLoadModelInvalidData(t *testing.T) {

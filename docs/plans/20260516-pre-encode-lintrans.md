@@ -127,15 +127,15 @@ Eliminate per-request CKKS encoding of linear-transform diagonals by pre-encodin
 - Modify: `evaluator/model_test.go`
 - Modify: `evaluator/evaluator_test.go`
 
-- [ ] **Cache presence:** in `model_test.go`, load the existing test fixture model and assert `len(model.preparedLTs[name]) == cfg.NumInputCTs` and `len(model.preparedLTs[name][0]) == cfg.NumOutputCTs` for every linear_transform node. If Lattigo exposes a public non-zero check on `lintrans.LinearTransformation`, assert it; otherwise just assert the slice lengths.
-- [ ] **Negative path 1 (corrupted blob):** corrupt a `diag_*` blob and assert `LoadModel` returns an error mentioning the node name and `(row, col)` index. This validates that errors moved from `Forward` to `LoadModel`.
-- [ ] **Negative path 2 (zero CT counts):** a config with `NumInputCTs = 0` should either error cleanly at `LoadModel` or default-to-1 consistently with today's behavior (lines 117-122 in model.go). Pick one, document, test it.
-- [ ] **High-level / bootstrap-adjacent encoding:** synthesize (or build a minimal fixture for) an LT node with `node.Level = params.MaxLevel()` and assert `LoadModel` succeeds and the resulting LT has `LevelQ == MaxLevel()`. The C3AE fixture doesn't exercise this — without the synthetic test, the high-level path is untested.
-- [ ] **Output equivalence (regression):** confirm existing `evaluator_test.go` output-equivalence tests still pass unchanged. If any test implicitly depended on errors surfacing in `Forward`, retarget it to `LoadModel`.
-- [ ] **Mutation safety (double-forward):** run the same input through `Forward` twice in one test and assert byte-equal outputs. If any Lattigo internal mutates the cached LTs, the second call will diverge.
-- [ ] **Race detector:** `go test -race ./evaluator/...` must pass with the same fixtures.
-- [ ] **Regression guard for the hot path:** add `TestForwardNeverEncodes` that reads `evaluator/evaluator.go` as a file and fails if it contains the substrings `lintrans.Encode(` or `lintrans.NewTransformation(`. Cheap, brittle in the right way (catches accidental reintroduction).
-- [ ] Run `go test ./evaluator/...` and `go test -race ./evaluator/...` — both must pass before Task 4.
+- [x] **Cache presence:** in `model_test.go`, load the existing test fixture model and assert `len(model.preparedLTs[name]) == cfg.NumInputCTs` and `len(model.preparedLTs[name][0]) == cfg.NumOutputCTs` for every linear_transform node. Implemented as `TestPreparedLTsCachePresence` covering mlp/conv2d/sigmoid/sigmoid_unfused fixtures and asserting `LevelQ == node.Level` per LT.
+- [x] **Negative path 1 (corrupted blob):** corrupt a `diag_*` blob and assert `LoadModel` returns an error mentioning the node name and `(row, col)` index. Implemented as `TestLoadModelCorruptedDiagonalBlob` (corrupts fc1.diag_0_0 to a 3-byte truncated blob, asserts the error string contains "fc1", "row=0", "col=0"). Bonus: `TestLoadModelMissingDiagonalBlobRef` covers the missing-ref case.
+- [x] **Negative path 2 (zero CT counts):** documented and tested. Chose default-to-1 (matches the existing model.go:117-122 behavior, no error surface). Implemented as `TestLoadModelZeroNumCTsDefaultsToOne`.
+- [x] **High-level / bootstrap-adjacent encoding:** picked `bootstrap_mlp.orion` as the high-level fixture — its `fc1` is at `level=3 = MaxLevel()` (logq has 4 entries). Implemented as `TestPreparedLTsHighLevelEncoding`, with a guard assertion that documents to swap the fixture if this property changes.
+- [x] **Output equivalence (regression):** confirmed existing `TestForwardMLP`, `TestForwardSigmoid`, `TestForwardSigmoidUnfused`, `TestForwardConv2d`, `TestMultipleEvaluatorsShareModel` all still pass.
+- [x] **Mutation safety (double-forward):** implemented as `TestDoubleForwardMutationSafety` — encrypts one input ciphertext, runs `Forward` twice on the same CT, and asserts the decoded output slots are **bit-identical** across all slots (not just within tolerance). Same input + no randomized op = deterministic forward, so any divergence implies state mutation.
+- [x] **Race detector:** `go test -race ./evaluator/...` passed in 566s on the local machine (1M-context Opus run, 2026-05-16).
+- [x] **Regression guard for the hot path:** implemented as `TestForwardNeverEncodes` in `evaluator_test.go`. Reads `evaluator.go` from disk, strips comments (so doc-comments mentioning the forbidden names don't trip the check), and fails on substring match against `lintrans.Encode(` or `lintrans.NewTransformation(`.
+- [x] Run `go test ./evaluator/...` and `go test -race ./evaluator/...` — both pass.
 
 ### Task 4: Bench — measure RSS at three points on logn=15 and logn=16
 

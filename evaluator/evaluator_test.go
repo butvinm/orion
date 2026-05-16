@@ -1,9 +1,11 @@
 package evaluator
 
 import (
+	"bytes"
 	"encoding/json"
 	"math"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
@@ -524,4 +526,125 @@ func TestMultipleEvaluatorsShareModel(t *testing.T) {
 		assert.InDelta(t, v, decoded2[i], tolerance,
 			"eval2 slot %d: expected %f, got %f", i, v, decoded2[i])
 	}
+}
+
+// TestDoubleForwardMutationSafety calls Forward() twice on the SAME input
+// ciphertext and asserts the decrypted+decoded outputs are byte-identical.
+// Using one input ciphertext eliminates the CKKS encryption-noise term that
+// would otherwise show up between two fresh encryptions; this isolates
+// "did anything in the model state change between calls?" as the sole
+// signal. If preparedLTs (or any other cached encoded data) gets mutated by
+// EvaluateManyNew, the second forward will diverge.
+//
+// Forward does not document mutating its inputs, and the implementation routes
+// inputs through `results[virtualInput] = inputs` then operates on those via
+// CopyNew/*New variants. So reusing the same input CT across two calls is
+// safe.
+func TestDoubleForwardMutationSafety(t *testing.T) {
+	data, err := os.ReadFile("testdata/mlp.orion")
+	require.NoError(t, err)
+
+	model, err := LoadModel(data)
+	require.NoError(t, err)
+
+	params, manifest, inputLevel := model.ClientParams()
+	ckksParams, err := params.NewCKKSParameters()
+	require.NoError(t, err)
+
+	eval, ctx := setupEvaluator(t, ckksParams, manifest.GaloisElements, manifest.NeedsRLK)
+	defer eval.Close()
+
+	inputValues := loadJSONFloats(t, "testdata/mlp.input.json")
+	maxSlots := ctx.ckksParams.MaxSlots()
+	padded := make([]float64, maxSlots)
+	copy(padded, inputValues)
+
+	// Encrypt once, reuse across both Forward calls.
+	ct := encryptVector(t, ctx, padded, inputLevel)
+
+	results1, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
+	require.NoError(t, err)
+	require.Len(t, results1, 1)
+	decoded1 := decryptVector(t, ctx, results1[0])
+
+	results2, err := eval.Forward(model, []*rlwe.Ciphertext{ct})
+	require.NoError(t, err)
+	require.Len(t, results2, 1)
+	decoded2 := decryptVector(t, ctx, results2[0])
+
+	// Strict bit-identical check across all slots. With the same input CT and
+	// (allegedly) immutable model state, the entire forward should be
+	// deterministic — no encryption randomness, no rotation reordering.
+	require.Equal(t, len(decoded1), len(decoded2))
+	for i := range decoded1 {
+		if decoded1[i] != decoded2[i] {
+			t.Fatalf("slot %d: two Forwards on the same input ciphertext diverged: "+
+				"%.17g vs %.17g (diff=%.2e). This means model state was mutated "+
+				"between calls — likely preparedLTs in evalLinearTransform.",
+				i, decoded1[i], decoded2[i], math.Abs(decoded1[i]-decoded2[i]))
+		}
+	}
+}
+
+// TestForwardNeverEncodes is the regression guard from Task 3 of the
+// 20260516-pre-encode-lintrans plan. It reads evaluator.go directly and
+// fails if the per-request hot path ever reintroduces lintrans.Encode or
+// lintrans.NewTransformation. Deliberately brittle: if either substring
+// reappears (even as a typo or partial revert), the test fails immediately.
+func TestForwardNeverEncodes(t *testing.T) {
+	src, err := os.ReadFile("evaluator.go")
+	require.NoError(t, err)
+
+	// Strip Go comments before scanning so doc-comments mentioning the
+	// forbidden symbols (which are load-bearing for humans) don't trip the
+	// regression guard. We do this with a tolerant line-by-line filter
+	// rather than a full Go parser; it's enough for this file's style.
+	scanned := stripGoComments(src)
+
+	for _, banned := range []string{"lintrans.Encode(", "lintrans.NewTransformation("} {
+		if bytes.Contains(scanned, []byte(banned)) {
+			t.Fatalf("evaluator.go contains forbidden call %q in the per-request Forward path. "+
+				"Pre-encoding happens in model.go's loadLinearTransformMetadata, not in Forward. "+
+				"See docs/plans/20260516-pre-encode-lintrans.md Task 3.", banned)
+		}
+	}
+}
+
+// stripGoComments removes // line comments and /* ... */ block comments
+// from Go source. Good enough for the TestForwardNeverEncodes guard;
+// it does not need full parser fidelity.
+func stripGoComments(src []byte) []byte {
+	lines := strings.Split(string(src), "\n")
+	out := make([]string, 0, len(lines))
+	inBlock := false
+	for _, line := range lines {
+		if inBlock {
+			if idx := strings.Index(line, "*/"); idx >= 0 {
+				line = line[idx+2:]
+				inBlock = false
+			} else {
+				continue
+			}
+		}
+		// Strip /* ... */ on the same line (could be multiple).
+		for {
+			start := strings.Index(line, "/*")
+			if start < 0 {
+				break
+			}
+			end := strings.Index(line[start:], "*/")
+			if end < 0 {
+				line = line[:start]
+				inBlock = true
+				break
+			}
+			line = line[:start] + line[start+end+2:]
+		}
+		// Strip // to end of line. (Not handling strings — fine for this file.)
+		if idx := strings.Index(line, "//"); idx >= 0 {
+			line = line[:idx]
+		}
+		out = append(out, line)
+	}
+	return []byte(strings.Join(out, "\n"))
 }
