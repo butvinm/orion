@@ -197,6 +197,16 @@ func (m *Model) loadLinearTransformMetadata(node *Node, blobs [][]byte, ckksPara
 				return fmt.Errorf("encoding linear transform %q (row=%d, col=%d): %w", ref, row, col, err)
 			}
 			rowLTs[row] = lt
+
+			// Reclaim per-diagonal embedDouble transients (BRedConstants /
+			// ModuliChain / NewPoly slices that Lattigo allocates inside
+			// each lintrans.Encode call — see issue #21). Without per-
+			// diagonal GC, transients accumulate within one node's encode
+			// loop and load-time peak RSS scales with N_diagonals × per-
+			// diagonal transient. On logn=16 conv2 (~4379 diagonals) the
+			// accumulated transient OOMs a 128 GB box.
+			diagMap = nil
+			runtime.GC()
 		}
 		preparedCols[col] = rowLTs
 	}
