@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
+	"strings"
 
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/lintrans"
@@ -26,6 +27,110 @@ type Evaluator struct {
 	// Bootstrap support: keys stored for lazy bootstrapper initialization.
 	btpKeys       *bootstrapping.EvaluationKeys
 	bootstrappers map[int]*bootstrapping.Evaluator // logSlots -> bootstrapper
+
+	// OpCounters tracks the number of FHE ops performed. Increments are not
+	// goroutine-safe (Evaluator itself is single-threaded).
+	Counters OpCounters
+
+	// PerNode holds counters keyed by graph node name. Populated during Forward.
+	PerNode map[string]*OpCounters
+	// NodeOrder is the order in which nodes were first touched, for stable printing.
+	NodeOrder []string
+	// currentNode is the graph node currently being evaluated (set by Forward).
+	currentNode string
+}
+
+// incAdd, etc. — internal helpers that bump both the global counter and the
+// per-node counter for the current graph node.
+func (e *Evaluator) bump(field func(*OpCounters)) {
+	field(&e.Counters)
+	if e.currentNode == "" {
+		return
+	}
+	c, ok := e.PerNode[e.currentNode]
+	if !ok {
+		if e.PerNode == nil {
+			e.PerNode = make(map[string]*OpCounters)
+		}
+		c = &OpCounters{}
+		e.PerNode[e.currentNode] = c
+		e.NodeOrder = append(e.NodeOrder, e.currentNode)
+	}
+	field(c)
+}
+
+// OpCounters tallies low-level CKKS operations executed by an Evaluator.
+type OpCounters struct {
+	AddCT        uint64 // ct + ct
+	AddPT        uint64 // ct + plaintext (bias)
+	AddScalar    uint64 // ct + float scalar
+	MulRelin     uint64 // ct * ct + relinearize
+	MulPT        uint64 // ct * plaintext
+	MulScalar    uint64 // ct * scalar (float or int)
+	Rescale      uint64
+	Rotate       uint64
+	Bootstrap    uint64
+	LinearXform  uint64 // EvaluateManyNew calls (diagonal BSGS)
+	LTBlocks     uint64 // number of LT blocks evaluated (NumInputCTs * NumOutputCTs per LT node)
+	LTDiagonals  uint64 // total non-zero diagonals summed across all LT blocks evaluated
+	PolyEval     uint64 // polynomial.Evaluate calls
+}
+
+// Reset zeroes all counters.
+func (c *OpCounters) Reset() { *c = OpCounters{} }
+
+// ResetAll zeroes both global and per-node counters.
+func (e *Evaluator) ResetAll() {
+	e.Counters.Reset()
+	e.PerNode = nil
+	e.NodeOrder = nil
+}
+
+// FormatPerNode returns a per-node breakdown table.
+func (e *Evaluator) FormatPerNode(model *Model) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%-32s %-18s %6s %6s %6s %6s %6s %6s %6s %6s %4s %4s %8s %10s %4s %14s\n",
+		"node", "op", "AddCT", "AddPT", "AddS", "MulR", "MulPT", "MulS", "Resc", "Rot",
+		"Btp", "LT", "LTBlocks", "LTDiag", "Poly", "LT[in×out;logS;bsgs]")
+	for _, name := range e.NodeOrder {
+		c := e.PerNode[name]
+		op := ""
+		detail := ""
+		if model != nil && model.graph != nil {
+			if n, ok := model.graph.Nodes[name]; ok {
+				op = n.Op
+			}
+			if cfg, ok := model.ltConfigs[name]; ok {
+				detail = fmt.Sprintf("%dx%d;bsgs=%g", cfg.NumInputCTs, cfg.NumOutputCTs, cfg.BSGSRatio)
+			}
+		}
+		fmt.Fprintf(&b, "%-32s %-18s %6d %6d %6d %6d %6d %6d %6d %6d %4d %4d %8d %10d %4d %14s\n",
+			name, op,
+			c.AddCT, c.AddPT, c.AddScalar, c.MulRelin, c.MulPT, c.MulScalar,
+			c.Rescale, c.Rotate, c.Bootstrap, c.LinearXform,
+			c.LTBlocks, c.LTDiagonals, c.PolyEval, detail)
+	}
+	return b.String()
+}
+
+// String returns a human-readable multi-line summary.
+func (c OpCounters) String() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "FHE op counters:\n")
+	fmt.Fprintf(&b, "  AddCT       = %d\n", c.AddCT)
+	fmt.Fprintf(&b, "  AddPT       = %d\n", c.AddPT)
+	fmt.Fprintf(&b, "  AddScalar   = %d\n", c.AddScalar)
+	fmt.Fprintf(&b, "  MulRelin    = %d\n", c.MulRelin)
+	fmt.Fprintf(&b, "  MulPT       = %d\n", c.MulPT)
+	fmt.Fprintf(&b, "  MulScalar   = %d\n", c.MulScalar)
+	fmt.Fprintf(&b, "  Rescale     = %d\n", c.Rescale)
+	fmt.Fprintf(&b, "  Rotate      = %d\n", c.Rotate)
+	fmt.Fprintf(&b, "  Bootstrap   = %d\n", c.Bootstrap)
+	fmt.Fprintf(&b, "  LinearXform = %d (EvaluateManyNew calls)\n", c.LinearXform)
+	fmt.Fprintf(&b, "  LTBlocks    = %d\n", c.LTBlocks)
+	fmt.Fprintf(&b, "  LTDiagonals = %d (sum of non-zero diagonals across all blocks)\n", c.LTDiagonals)
+	fmt.Fprintf(&b, "  PolyEval    = %d\n", c.PolyEval)
+	return b.String()
 }
 
 // NewEvaluatorFromKeySet creates an Evaluator from Lattigo types directly.
@@ -96,6 +201,7 @@ func (e *Evaluator) Forward(model *Model, inputs []*rlwe.Ciphertext) ([]*rlwe.Ci
 		var err error
 		var result []*rlwe.Ciphertext
 
+		e.currentNode = name
 		switch node.Op {
 		case "flatten":
 			if len(predNames) != 1 {
@@ -149,6 +255,7 @@ func (e *Evaluator) Forward(model *Model, inputs []*rlwe.Ciphertext) ([]*rlwe.Ci
 
 		results[name] = result
 	}
+	e.currentNode = ""
 
 	out, ok := results[model.graph.Output]
 	if !ok {
@@ -190,9 +297,11 @@ func (e *Evaluator) evalQuad(ct *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
 	if err != nil {
 		return nil, fmt.Errorf("MulRelin: %w", err)
 	}
+	e.bump(func(c *OpCounters) { c.MulRelin++ })
 	if err := e.eval.Rescale(result, result); err != nil {
 		return nil, fmt.Errorf("Rescale: %w", err)
 	}
+	e.bump(func(c *OpCounters) { c.Rescale++ })
 	return result, nil
 }
 
@@ -218,6 +327,7 @@ func (e *Evaluator) evalAdd(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error)
 	if err != nil {
 		return nil, fmt.Errorf("Add: %w", err)
 	}
+	e.bump(func(c *OpCounters) { c.AddCT++ })
 	return result, nil
 }
 
@@ -243,9 +353,11 @@ func (e *Evaluator) evalMult(ct0, ct1 *rlwe.Ciphertext) (*rlwe.Ciphertext, error
 	if err != nil {
 		return nil, fmt.Errorf("MulRelin: %w", err)
 	}
+	e.bump(func(c *OpCounters) { c.MulRelin++ })
 	if err := e.eval.Rescale(result, result); err != nil {
 		return nil, fmt.Errorf("Rescale: %w", err)
 	}
+	e.bump(func(c *OpCounters) { c.Rescale++ })
 	return result, nil
 }
 
@@ -311,6 +423,16 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe
 		if err != nil {
 			return nil, fmt.Errorf("evaluating LT column %d for node %q: %w", col, node.Name, err)
 		}
+		var diagSum uint64
+		for _, lt := range rowLTs {
+			diagSum += uint64(len(lt.Vec))
+		}
+		blocks := uint64(len(rowLTs))
+		e.bump(func(c *OpCounters) {
+			c.LinearXform++
+			c.LTBlocks += blocks
+			c.LTDiagonals += diagSum
+		})
 
 		// Accumulate partials into outputs.
 		for row := 0; row < numOutputCTs; row++ {
@@ -321,6 +443,7 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe
 				if err != nil {
 					return nil, fmt.Errorf("accumulating LT block (%d,%d): %w", row, col, err)
 				}
+				e.bump(func(c *OpCounters) { c.AddCT++ })
 			}
 		}
 	}
@@ -331,6 +454,7 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe
 		if err := e.eval.Rescale(outputs[row], outputs[row]); err != nil {
 			return nil, fmt.Errorf("rescale after LT (row %d): %w", row, err)
 		}
+		e.bump(func(c *OpCounters) { c.Rescale++ })
 
 		if biases != nil && row < len(biases) && biases[row] != nil {
 			var err error
@@ -338,6 +462,7 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe
 			if err != nil {
 				return nil, fmt.Errorf("adding bias (row %d): %w", row, err)
 			}
+			e.bump(func(c *OpCounters) { c.AddPT++ })
 		}
 
 		if cfg.OutputRotations > 0 {
@@ -347,10 +472,12 @@ func (e *Evaluator) evalLinearTransform(model *Model, node *Node, inputs []*rlwe
 				if err != nil {
 					return nil, fmt.Errorf("output rotation step %d (rot=%d, row %d): %w", i, rotation, row, err)
 				}
+				e.bump(func(c *OpCounters) { c.Rotate++ })
 				outputs[row], err = e.eval.AddNew(outputs[row], rotated)
 				if err != nil {
 					return nil, fmt.Errorf("accumulating output rotation step %d (row %d): %w", i, row, err)
 				}
+				e.bump(func(c *OpCounters) { c.AddCT++ })
 			}
 		}
 	}
@@ -405,9 +532,11 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 			if err != nil {
 				return nil, fmt.Errorf("prescale mul: %w", err)
 			}
+			e.bump(func(c *OpCounters) { c.MulScalar++ })
 			if err = e.eval.Rescale(work, work); err != nil {
 				return nil, fmt.Errorf("prescale rescale: %w", err)
 			}
+			e.bump(func(c *OpCounters) { c.Rescale++ })
 		}
 
 		// Apply constant offset (scalar add, no level consumed).
@@ -416,6 +545,7 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 			if err != nil {
 				return nil, fmt.Errorf("constant add: %w", err)
 			}
+			e.bump(func(c *OpCounters) { c.AddScalar++ })
 		}
 	}
 
@@ -425,6 +555,7 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 	if err != nil {
 		return nil, fmt.Errorf("polynomial evaluate: %w", err)
 	}
+	e.bump(func(c *OpCounters) { c.PolyEval++ })
 
 	// Apply postscale if needed (scalar multiply + rescale, consumes 1 level).
 	if cfg.Postscale != 1 {
@@ -432,9 +563,11 @@ func (e *Evaluator) evalPolynomial(model *Model, node *Node, ct *rlwe.Ciphertext
 		if err != nil {
 			return nil, fmt.Errorf("postscale mul: %w", err)
 		}
+		e.bump(func(c *OpCounters) { c.MulScalar++ })
 		if err := e.eval.Rescale(result, result); err != nil {
 			return nil, fmt.Errorf("postscale rescale: %w", err)
 		}
+		e.bump(func(c *OpCounters) { c.Rescale++ })
 	}
 
 	return result, nil
@@ -529,6 +662,7 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 		if err != nil {
 			return nil, fmt.Errorf("bootstrap constant shift: %w", err)
 		}
+		e.bump(func(c *OpCounters) { c.AddScalar++ })
 	}
 
 	// Step 3: Prescale — map values to [-1, 1] and zero inactive slots.
@@ -553,9 +687,11 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 		if err != nil {
 			return nil, fmt.Errorf("prescale mul: %w", err)
 		}
+		e.bump(func(c *OpCounters) { c.MulPT++ })
 		if err = e.eval.Rescale(work, work); err != nil {
 			return nil, fmt.Errorf("prescale rescale: %w", err)
 		}
+		e.bump(func(c *OpCounters) { c.Rescale++ })
 	}
 
 	// Step 4: Set sparse LogDimensions for bootstrap.
@@ -566,6 +702,7 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: %w", err)
 	}
+	e.bump(func(c *OpCounters) { c.Bootstrap++ })
 
 	// Step 6: Sparse-slot postscale — compensate for sparse slot packing.
 	sparsePostscale := 1 << (e.params.LogMaxSlots() - bootstrapper.LogMaxSlots())
@@ -574,6 +711,7 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 		if err != nil {
 			return nil, fmt.Errorf("sparse postscale mul: %w", err)
 		}
+		e.bump(func(c *OpCounters) { c.MulScalar++ })
 	}
 
 	// Restore full LogDimensions.
@@ -589,6 +727,7 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 		if err != nil {
 			return nil, fmt.Errorf("range postscale mul: %w", err)
 		}
+		e.bump(func(c *OpCounters) { c.MulScalar++ })
 	}
 
 	// Step 8: Un-shift constant.
@@ -597,6 +736,7 @@ func (e *Evaluator) evalBootstrap(model *Model, node *Node, ct *rlwe.Ciphertext)
 		if err != nil {
 			return nil, fmt.Errorf("bootstrap constant un-shift: %w", err)
 		}
+		e.bump(func(c *OpCounters) { c.AddScalar++ })
 	}
 
 	return work, nil

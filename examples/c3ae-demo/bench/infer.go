@@ -107,6 +107,8 @@ func runInfer(args []string) error {
 	if err != nil {
 		return fmt.Errorf("eval.Forward: %w", err)
 	}
+	fmt.Fprintf(os.Stderr, "[counters/forward totals]\n%s", eval.Counters.String())
+	fmt.Fprintf(os.Stderr, "[counters/forward per-node]\n%s", eval.FormatPerNode(model))
 	peakRSSMB := readVmHWM() / 1024
 	// --- End measured section ---
 
