@@ -19,17 +19,24 @@ logger = logging.getLogger(__name__)
 
 
 def _shift_layer_level(layer: str, shift: int) -> str:
-    """Rewrite a ``"<name>@level=<N>"`` entry, bumping N by ``shift``.
+    """Rewrite a ``"<name>@<label>=<N>"`` entry, bumping N by ``shift``.
 
-    Used by the protocol-reserve shift in ``BootstrapSolver``. The entry
-    string format is produced by ``LevelDAG`` when it builds nodes with
-    embedded level annotations; this helper is the single place that
-    parses-then-rewrites that format.
+    ``LevelDAG`` emits entries in one of two formats — ``name@level=N``
+    in some paths, ``name@l=N`` in others. This helper preserves
+    whichever label was present and only mutates the integer suffix.
+    Matches the parsing pattern in ``assign_levels_to_layers``
+    (``layer.split("@")[0]`` for the name, ``layer.split("=")[-1]`` for
+    the level).
     """
-    name, _, level_part = layer.partition("@level=")
-    if not _:
-        raise ValueError(f"layer entry missing '@level=' separator: {layer!r}")
-    return f"{name}@level={int(level_part) + shift}"
+    name, at_sep, rest = layer.partition("@")
+    if not at_sep:
+        raise ValueError(f"layer entry missing '@' separator: {layer!r}")
+    # rpartition so the integer suffix is grabbed from the LAST '=' —
+    # mirrors the existing `layer.split("=")[-1]` parse pattern.
+    label, eq_sep, level_str = rest.rpartition("=")
+    if not eq_sep:
+        raise ValueError(f"layer entry missing '=' separator: {layer!r}")
+    return f"{name}@{label}={int(level_str) + shift}"
 
 
 class BootstrapSolver:
