@@ -18,6 +18,20 @@ from .network_dag import NetworkDAG
 logger = logging.getLogger(__name__)
 
 
+def _shift_layer_level(layer: str, shift: int) -> str:
+    """Rewrite a ``"<name>@level=<N>"`` entry, bumping N by ``shift``.
+
+    Used by the protocol-reserve shift in ``BootstrapSolver``. The entry
+    string format is produced by ``LevelDAG`` when it builds nodes with
+    embedded level annotations; this helper is the single place that
+    parses-then-rewrites that format.
+    """
+    name, _, level_part = layer.partition("@level=")
+    if not _:
+        raise ValueError(f"layer entry missing '@level=' separator: {layer!r}")
+    return f"{name}@level={int(level_part) + shift}"
+
+
 class BootstrapSolver:
     def __init__(
         self,
@@ -25,11 +39,15 @@ class BootstrapSolver:
         network_dag: NetworkDAG,
         l_eff: int,
         context: CompilationContext | None = None,
+        reserve_output_levels: int = 0,
     ) -> None:
+        if reserve_output_levels < 0:
+            raise ValueError(f"reserve_output_levels must be >= 0, got {reserve_output_levels}")
         self.net = net
         self.network_dag = network_dag
         self.l_eff = l_eff
         self.context = context
+        self.reserve_output_levels = reserve_output_levels
         self.full_level_dag = LevelDAG(l_eff=l_eff, network_dag=network_dag)
         self.shortest_path: set[str] = set()
 
@@ -135,9 +153,34 @@ class BootstrapSolver:
             edge = self.full_level_dag[u][v]
             reconstructed_path.update(edge["path"])
 
+        # Protocol-reserve shift: bump every node's level annotation up by
+        # `reserve_output_levels` so the compiled circuit's plaintexts are
+        # encoded at the higher moduli and the final node ends at level
+        # `reserve_output_levels` rather than 0. The user must have provided
+        # at least that many extra primes in CKKSParams.logq; otherwise the
+        # bumped input_level would exceed l_eff and we raise.
+        if self.reserve_output_levels > 0:
+            reconstructed_path = {
+                _shift_layer_level(entry, self.reserve_output_levels)
+                for entry in reconstructed_path
+            }
+            shortest_path = [
+                _shift_layer_level(entry, self.reserve_output_levels)
+                if "@level=" in entry
+                else entry
+                for entry in shortest_path
+            ]
+
         self.shortest_path = reconstructed_path
 
         input_level = int(shortest_path[1].split("=")[-1])
+        if input_level > self.l_eff:
+            raise ValueError(
+                f"BootstrapSolver: reserve_output_levels={self.reserve_output_levels} "
+                f"pushes input_level={input_level} beyond l_eff={self.l_eff}; "
+                f"extend CKKSParams.logq by at least "
+                f"{input_level - self.l_eff} more prime(s)"
+            )
         return input_level
 
     def solve(self) -> tuple[int, int, list[int]]:

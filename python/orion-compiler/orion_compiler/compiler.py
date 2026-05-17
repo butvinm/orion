@@ -328,7 +328,13 @@ class Compiler:
         logger.info("[4/5] Running bootstrap placement...")
         start = time.time()
         l_eff = len(self.params.get_logq()) - 1
-        btp_solver = BootstrapSolver(net, network_dag, l_eff=l_eff, context=self._context)
+        btp_solver = BootstrapSolver(
+            net,
+            network_dag,
+            l_eff=l_eff,
+            context=self._context,
+            reserve_output_levels=self.config.reserve_output_levels,
+        )
         input_level, num_bootstraps, bootstrapper_slots = btp_solver.solve()
         logger.info("Bootstrap placement done! [%.3f secs.]", time.time() - start)
         logger.info(
