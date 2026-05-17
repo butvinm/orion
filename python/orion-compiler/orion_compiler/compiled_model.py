@@ -368,6 +368,7 @@ class CompiledModel:
                 "margin": self.config.margin,
                 "embedding_method": self.config.embedding_method,
                 "fuse_modules": self.config.fuse_modules,
+                "reserve_output_levels": self.config.reserve_output_levels,
             },
             "manifest": self.manifest.to_dict(),
             "input_level": self.input_level,
@@ -421,6 +422,7 @@ class CompiledModel:
             margin=c["margin"],
             embedding_method=c["embedding_method"],
             fuse_modules=c["fuse_modules"],
+            reserve_output_levels=c.get("reserve_output_levels", 0),
         )
 
         manifest = KeyManifest.from_dict(metadata["manifest"])

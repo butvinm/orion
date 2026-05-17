@@ -142,10 +142,28 @@ class CompilerConfig:
     margin: int = 2
     embedding_method: Literal["hybrid", "square"] = "hybrid"
     fuse_modules: bool = True
+    reserve_output_levels: int = 0
+    """Extra Q-chain levels to leave free at the *output* of the compiled
+    circuit. The bootstrap solver normally picks the minimum ``input_level``
+    that fits the graph and schedules every layer so the final node lands
+    at level 0. When ``reserve_output_levels > 0`` the solver bumps
+    ``input_level`` by this amount and shifts every node's level annotation
+    up by the same amount, so the final node lands at level
+    ``reserve_output_levels`` instead. Callers that need to perform extra
+    operations on ``result_ct`` after ``Model.Forward`` (e.g. an
+    authenticator's slot-mask multiply that requires ``Level() >= 1``)
+    should set this to the number of multiplicative levels their
+    post-processing consumes. The user's ``CKKSParams.logq`` must have at
+    least ``reserve_output_levels`` more primes than the un-reserved model
+    would need, or compilation will raise."""
 
     def __post_init__(self) -> None:
         valid_methods = {"hybrid", "square"}
         if self.embedding_method not in valid_methods:
             raise ValidationError(
                 f"embedding_method must be one of {valid_methods}, got '{self.embedding_method}'"
+            )
+        if self.reserve_output_levels < 0:
+            raise ValidationError(
+                f"reserve_output_levels must be >= 0, got {self.reserve_output_levels}"
             )
