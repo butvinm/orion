@@ -171,11 +171,12 @@ class BootstrapSolver:
                 _shift_layer_level(entry, self.reserve_output_levels)
                 for entry in reconstructed_path
             }
+            # Every entry remaining after the [1:-1] strip is a node-with-
+            # level annotation (`name@<label>=N`). Shift unconditionally so
+            # the bumped value propagates into `input_level` below and the
+            # `assign_levels_to_layers` walk over `self.shortest_path`.
             shortest_path = [
-                _shift_layer_level(entry, self.reserve_output_levels)
-                if "@level=" in entry
-                else entry
-                for entry in shortest_path
+                _shift_layer_level(entry, self.reserve_output_levels) for entry in shortest_path
             ]
 
         self.shortest_path = reconstructed_path
